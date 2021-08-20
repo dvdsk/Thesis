@@ -7,4 +7,6 @@ edition = "2018"
 
 [dependencies]
 protocol = { path = "../protocol" }
-typed-builder = "0.9"
+thiserror = "1.0"
+# typed-builder = "0.9"
+

@@ -1,34 +1,56 @@
-use std::io::{Read, Write};
 use std::io::Result as IoResult;
+use std::io::{Read, Write};
 use std::path::PathBuf;
 
 mod connection;
-pub use connection::Conn;
+use protocol::Request;
+pub use connection::{WriteServer, ReadServer, Conn};
+pub use protocol::{ ServerList, Existence };
 
 mod builder;
-pub use builder::OpenOptions;
 
 // TODO split into Writable and ReadOnly
-pub struct File {
-    meta_conn: Conn,
+pub struct WriteableFile {
+    meta_conn: WriteServer,
 }
 
-impl File {
-    /// attempts to open a file in read-only mode.
-    ///
-    /// see the [`OpenOptions::open`] method for details.
-    pub fn open(conn: impl Into<Conn>, path: impl Into<PathBuf>) -> Result<Self, ()> {
-        OpenOptions::new().read(true).open(conn, path)
+pub struct ReadOnlyFile {
+    meta_conn: ReadServer,
+}
+
+impl WriteableFile {
+    pub fn open(
+        conn: impl Into<WriteServer>,
+        path: impl Into<PathBuf>,
+        existance: Existence,
+    ) -> Result<Self, ()> {
+        let mut conn = conn.into();
+        conn.send(Request::OpenReadWrite(path.into(), existance))
+            .unwrap();
+        Ok(WriteableFile { meta_conn: conn })
     }
 }
 
-impl Read for File {
+impl ReadOnlyFile {
+    pub fn open(
+        conn: impl Into<ReadServer>,
+        path: impl Into<PathBuf>,
+        existance: Existence,
+    ) -> Result<Self, ()> {
+        let mut conn = conn.into();
+        conn.send(Request::OpenReadOnly(path.into(), existance))
+            .unwrap();
+        Ok(ReadOnlyFile { meta_conn: conn })
+    }
+}
+
+impl Read for ReadOnlyFile {
     fn read(&mut self, _buf: &mut [u8]) -> IoResult<usize> {
         todo!();
     }
 }
 
-impl Write for File {
+impl Write for WriteableFile {
     fn write(&mut self, _buf: &[u8]) -> IoResult<usize> {
         todo!()
     }
