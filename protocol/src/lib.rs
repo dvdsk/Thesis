@@ -1,8 +1,10 @@
-use serde::{Serialize, Deserialize};
-use std::path::PathBuf;
+use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
+use std::path::PathBuf;
 
-#[derive(Serialize, Deserialize)]
+pub mod connection;
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ServerList {
     /// write server a client should contact
     pub write_serv: SocketAddr,
@@ -12,14 +14,24 @@ pub struct ServerList {
     pub fallback: Vec<SocketAddr>,
 }
 
-#[derive(Serialize, Deserialize)]
+pub trait Message<'de>: Serialize + Deserialize<'de> {
+    fn from_buf(buf: &'de [u8]) -> Self {
+        bincode::deserialize(buf).unwrap()
+    }
+    fn serialize_into(&self, buf: &mut [u8]) -> usize {
+        bincode::serialize_into(buf, self).expect("could not serialize");
+        todo!()
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub enum Existence {
     Needed,
     Allowed,
     Forbidden,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum Request {
     GetAssignedServers(ServerList),
     OpenReadOnly(PathBuf, Existence),
@@ -27,22 +39,31 @@ pub enum Request {
     Truncate(PathBuf),
 }
 
-macro_rules! from_bytes {
-    ($Enum:ident) => {
-        impl From<&[u8]> for $Enum {
-            fn from(buf: &[u8]) -> Self {
-                bincode::deserialize(buf).unwrap()
-            }
-        }
-    };
-}
+impl Message<'_> for Request {}
+impl Message<'_> for Response {}
 
-from_bytes!(Request);
-from_bytes!(Response);
+// macro_rules! from_bytes {
+//     ($Enum:ident) => {
+//         impl From<&[u8]> for $Enum {
+//             fn from(buf: &[u8]) -> Self {
+//                 bincode::deserialize(buf).unwrap()
+//             }
+//         }
+//     };
+// }
+
+// impl Request {
+//     pub fn serialize_into(&self, buf: &mut [u8]) -> usize {
+//         bincode::serialize_into(buf, self).expect("could not serialize");
+//         todo!()
+//     }
+// }
+
+// from_bytes!(Request);
+// from_bytes!(Response);
 
 #[derive(Serialize, Deserialize)]
-pub enum Response {
-}
+pub enum Response {}
 
 #[cfg(test)]
 mod tests {

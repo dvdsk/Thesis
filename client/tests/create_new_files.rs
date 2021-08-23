@@ -14,6 +14,6 @@ fn test_serverlist() -> ServerList {
 
 #[test]
 fn create_in_root() {
-    let conn = WriteServer::from_serverlist(test_serverlist());
+    let conn = WriteServer::from_serverlist(test_serverlist()).unwrap();
     let _f = WriteableFile::open(conn, "testfile", Existence::Forbidden).unwrap();
 }

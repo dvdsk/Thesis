@@ -8,3 +8,8 @@ edition = "2018"
 [dependencies]
 bincode = "1"
 serde = { version = "1", features = ["derive"] }
+
+futures = "0.3"
+tokio = {version = "^1.10", features = ["net", "macros", "rt-multi-thread"]}
+tokio-util = { version = "0.6", features = ["codec"] }
+tokio-serde = { version = "0.8", features = ["bincode"] }
