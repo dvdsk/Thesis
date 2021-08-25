@@ -1,108 +1,129 @@
-use protocol::{Request, Response, Message, ServerList};
-use protocol::connection;
-use std::convert::TryInto;
+use async_trait::async_trait;
+use futures::prelude::*;
 use std::io;
-use std::io::{Read, Write};
-use std::net::TcpStream;
+use tokio::net::TcpStream;
 
-fn msg_len(stream: &mut TcpStream, buf: &mut [u8]) -> Result<usize, io::Error> {
-    let buf: &mut [u8; 2] = buf.try_into().unwrap();
-    stream.read_exact(buf)?;
-    let len = u16::from_ne_bytes(*buf) as usize;
-    Ok(len)
-}
+use protocol::connection::{self, MsgStream};
+use protocol::{Request, Response, ServerList};
 
-fn send_recieve(req: &Request, stream: &mut TcpStream) -> Result<Response, io::Error> {
-    let mut buf = [0u8; 512];
-    let len = req.serialize_into(&mut buf[2..]);
-    buf[0..2].copy_from_slice(&len.to_ne_bytes());
-    stream.write_all(&[0])?;
+type ClientStream = MsgStream<Response, Request>;
+async fn send_recieve(req: Request, stream: &mut ClientStream) -> Result<Response, ConnError> {
+    use ConnError::*;
+    stream.send(req).await.map_err(RequestIo)?;
 
-    let len = msg_len(stream, &mut buf[0..2])?;
-    stream.read_exact(&mut buf[0..len])?;
-    Ok(Response::from_buf(&buf[0..len]))
+    let response = stream
+        .try_next()
+        .await
+        .map_err(ResponseIo)?
+        .ok_or(NoResponse)?;
+    Ok(response)
 }
 
 #[derive(thiserror::Error, Debug)]
 pub enum ConnError {
-    #[error("Could not contact metadata server")]
-    IoError(#[from] std::io::Error),
+    #[error("Could not connect to any read server")]
+    NoReadServers(std::io::Error),
+    #[error("Could not connect to write server")]
+    NoWriteServer(std::io::Error),
+    #[error("IO-error while sending resuest to metadata server")]
+    RequestIo(std::io::Error),
+    #[error("IO-error while listening for metadata server response")]
+    ResponseIo(std::io::Error),
+    #[error("There was no response to the request")]
+    NoResponse,
 }
 
+#[async_trait]
 pub trait Conn: Sized {
-    fn from_serverlist(list: ServerList) -> Result<Self, ConnError>;
-    fn re_connect(&mut self) -> Result<(), ConnError>;
-    fn get_stream_mut(&mut self) -> &mut TcpStream;
+    async fn from_serverlist(list: ServerList) -> Result<Self, ConnError>;
+    async fn re_connect(&mut self) -> Result<(), ConnError>;
+    fn get_stream_mut(&mut self) -> &mut ClientStream;
 
-    fn send(&mut self, req: Request) -> Result<Response, ConnError> {
+    async fn request(&mut self, req: Request) -> Result<Response, ConnError> {
         loop {
             use io::ErrorKind::*;
             let stream = self.get_stream_mut();
-            let res = send_recieve(&req, stream);
+            let res = send_recieve(req.clone(), stream).await;
             match res {
-                Ok(resp) => return Ok(resp),
-                Err(e) => match e.kind() {
-                    ConnectionReset | ConnectionAborted | ConnectionRefused => (),
-                    _ => return Err(e.into()),
+                Ok(Response::Todo(req)) => {
+                    panic!("server reports it can not yet handle: {:?}", req)
                 }
+                Ok(resp) => return Ok(resp),
+                Err(ConnError::RequestIo(e)) => match e.kind() {
+                    ConnectionReset | ConnectionAborted | ConnectionRefused => (),
+                    _ => return Err(ConnError::RequestIo(e)),
+                },
+                Err(ConnError::ResponseIo(e)) => match e.kind() {
+                    ConnectionReset | ConnectionAborted | ConnectionRefused => (),
+                    _ => return Err(ConnError::ResponseIo(e)),
+                },
+                Err(e) => return Err(e),
             }
-            self.re_connect()?;
+            self.re_connect().await?;
         }
     }
 }
 
 pub struct WriteServer {
     list: ServerList,
-    stream: TcpStream,
+    stream: ClientStream,
 }
 
 impl WriteServer {
-fn connect(list: &ServerList) -> Result<TcpStream, ConnError> {
-        let stream = TcpStream::connect(list.write_serv)?; 
-        let msg_stream = connection::wrap(stream);
-        Ok(stream)
+    async fn connect(list: &ServerList) -> Result<ClientStream, ConnError> {
+        let tcp_stream = TcpStream::connect(list.write_serv)
+            .await
+            .map_err(ConnError::NoWriteServer)?;
+        let msg_stream = connection::wrap(tcp_stream);
+        Ok(msg_stream)
     }
 }
 
+#[async_trait]
 impl Conn for WriteServer {
-    fn from_serverlist(list: ServerList) -> Result<Self, ConnError> {
-        let stream = Self::connect(&list)?;
+    async fn from_serverlist(list: ServerList) -> Result<Self, ConnError> {
+        let stream = Self::connect(&list).await?;
         Ok(Self { list, stream })
     }
 
-    fn re_connect(&mut self) -> Result<(), ConnError> {
-        self.stream = Self::connect(&self.list)?;
+    async fn re_connect(&mut self) -> Result<(), ConnError> {
+        self.stream = Self::connect(&self.list).await?;
         Ok(())
     }
 
-    fn get_stream_mut(&mut self) -> &mut TcpStream {
+    fn get_stream_mut(&mut self) -> &mut ClientStream {
         &mut self.stream
     }
 }
 
 pub struct ReadServer {
     list: ServerList,
-    stream: TcpStream,
+    stream: ClientStream,
 }
 
 impl ReadServer {
-fn connect(list: &ServerList) -> Result<TcpStream, ConnError> {
-        Ok(TcpStream::connect(list.read_serv)?)
+    async fn connect(list: &ServerList) -> Result<ClientStream, ConnError> {
+        let tcp_stream = TcpStream::connect(list.read_serv)
+            .await
+            .map_err(ConnError::NoReadServers)?;
+        let msg_stream = connection::wrap(tcp_stream);
+        Ok(msg_stream)
     }
 }
 
+#[async_trait]
 impl Conn for ReadServer {
-    fn from_serverlist(list: ServerList) -> Result<Self, ConnError> {
-        let stream = Self::connect(&list)?;
+    async fn from_serverlist(list: ServerList) -> Result<Self, ConnError> {
+        let stream = Self::connect(&list).await?;
         Ok(Self { list, stream })
     }
 
-    fn re_connect(&mut self) -> Result<(), ConnError> {
-        self.stream = Self::connect(&self.list)?;
+    async fn re_connect(&mut self) -> Result<(), ConnError> {
+        self.stream = Self::connect(&self.list).await?;
         Ok(())
     }
 
-    fn get_stream_mut(&mut self) -> &mut TcpStream {
+    fn get_stream_mut(&mut self) -> &mut ClientStream {
         &mut self.stream
     }
 }

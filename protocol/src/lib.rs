@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 pub mod connection;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ServerList {
     /// write server a client should contact
     pub write_serv: SocketAddr,
@@ -24,46 +24,27 @@ pub trait Message<'de>: Serialize + Deserialize<'de> {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum Existence {
     Needed,
     Allowed,
     Forbidden,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum Request {
     GetAssignedServers(ServerList),
     OpenReadOnly(PathBuf, Existence),
     OpenReadWrite(PathBuf, Existence),
     Truncate(PathBuf),
+    Test,
 }
 
-impl Message<'_> for Request {}
-impl Message<'_> for Response {}
-
-// macro_rules! from_bytes {
-//     ($Enum:ident) => {
-//         impl From<&[u8]> for $Enum {
-//             fn from(buf: &[u8]) -> Self {
-//                 bincode::deserialize(buf).unwrap()
-//             }
-//         }
-//     };
-// }
-
-// impl Request {
-//     pub fn serialize_into(&self, buf: &mut [u8]) -> usize {
-//         bincode::serialize_into(buf, self).expect("could not serialize");
-//         todo!()
-//     }
-// }
-
-// from_bytes!(Request);
-// from_bytes!(Response);
-
 #[derive(Serialize, Deserialize)]
-pub enum Response {}
+pub enum Response {
+    Test,
+    Todo(Request),
+}
 
 #[cfg(test)]
 mod tests {

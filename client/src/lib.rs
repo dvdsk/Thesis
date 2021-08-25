@@ -19,27 +19,27 @@ pub struct ReadOnlyFile {
 }
 
 impl WriteableFile {
-    pub fn open(
+    pub async fn open(
         conn: impl Into<WriteServer>,
         path: impl Into<PathBuf>,
         existance: Existence,
     ) -> Result<Self, ()> {
         let mut conn = conn.into();
-        conn.send(Request::OpenReadWrite(path.into(), existance))
-            .unwrap();
+        conn.request(Request::OpenReadWrite(path.into(), existance))
+            .await.unwrap();
         Ok(WriteableFile { meta_conn: conn })
     }
 }
 
 impl ReadOnlyFile {
-    pub fn open(
+    pub async fn open(
         conn: impl Into<ReadServer>,
         path: impl Into<PathBuf>,
         existance: Existence,
     ) -> Result<Self, ()> {
         let mut conn = conn.into();
-        conn.send(Request::OpenReadOnly(path.into(), existance))
-            .unwrap();
+        conn.request(Request::OpenReadOnly(path.into(), existance))
+            .await.unwrap();
         Ok(ReadOnlyFile { meta_conn: conn })
     }
 }

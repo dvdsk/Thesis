@@ -1,19 +1,36 @@
 use tokio::net::TcpStream;
-use tokio_serde::formats::{Bincode, SymmetricalBincode};
-use tokio_util::codec::{FramedRead, LengthDelimitedCodec};
+use tokio_serde::formats::Bincode;
+use tokio_util::codec::{Framed, LengthDelimitedCodec};
 
-type ReadFrame = FramedRead<tokio::net::TcpStream, LengthDelimitedCodec>;
-type Codec<I,S> = Bincode<I, S>;
-pub type ReadStream<I, S> = tokio_serde::Framed<ReadFrame, I, S, Codec<I,S>>;
 
-// I is the item being recieved, S the item being send
-pub fn wrap<I, S>(socket: TcpStream) -> ReadStream<I, S> {
-    let length_delimited = FramedRead::new(socket, LengthDelimitedCodec::new());
+type FrameType = Framed<TcpStream, LengthDelimitedCodec>;
+type Codec<I, O> = Bincode<I, O>;
 
-    let deserialized_stream = tokio_serde::Framed::new(
-        length_delimited,
-        Bincode::<I,S>::default(),
-    );
+/// A stream recieving: I: incoming item, O: outgoing
+pub type MsgStream<I, O> = tokio_serde::Framed<FrameType, I, O, Codec<I, O>>;
+
+/// I: incoming item, O: outgoing
+pub fn wrap<I, O>(socket: TcpStream) -> MsgStream<I, O> {
+    let length_delimited = Framed::new(socket, LengthDelimitedCodec::new());
+
+    let deserialized_stream =
+        tokio_serde::Framed::new(length_delimited, Bincode::<I, O>::default());
 
     deserialized_stream
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::{Request, Response};
+
+    #[tokio::test]
+    async fn it_compiles() {
+        use futures::SinkExt;
+
+        let tcp = TcpStream::connect("127.0.0.1:1234").await.unwrap();
+        let mut msgs: MsgStream<Response, Request> = wrap(tcp);
+
+        msgs.send(Request::Test).await.unwrap();
+    }
 }
