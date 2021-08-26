@@ -1,6 +1,5 @@
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
-use std::path::PathBuf;
 
 pub mod connection;
 
@@ -31,17 +30,24 @@ pub enum Existence {
     Forbidden,
 }
 
+pub type PathString = String; // easier to serialize then Path obj
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum Request {
     GetAssignedServers(ServerList),
-    OpenReadOnly(PathBuf, Existence),
-    OpenReadWrite(PathBuf, Existence),
-    Truncate(PathBuf),
+    OpenReadOnly(PathString, Existence),
+    OpenReadWrite(PathString, Existence),
+    /// no writes allowed, reads can go on, read server needs no update
+    OpenAppend(PathString, Existence),
+    Close(PathString),
+    AddDir(PathString),
+    Remove(PathString),
+
     Test,
 }
 
 #[derive(Serialize, Deserialize)]
 pub enum Response {
+    Ok,
     Test,
     Todo(Request),
 }

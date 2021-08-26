@@ -4,6 +4,9 @@ use std::net::{IpAddr, Ipv4Addr};
 use structopt::StructOpt;
 use tokio::net::TcpListener;
 
+mod db;
+mod read_servers;
+
 #[derive(Debug, StructOpt)]
 enum MetaRole {
     ReadServer,
@@ -13,7 +16,10 @@ enum MetaRole {
 #[derive(Debug, StructOpt)]
 struct Opt {
     #[structopt(short, long)]
-    port: u16,
+    client_port: u16,
+
+    #[structopt(short, long)]
+    control_port: u16,
 
     #[structopt(subcommand)]
     role: MetaRole,
@@ -23,6 +29,8 @@ async fn handle_client(mut stream: ClientStream) {
     while let Some(msg) = stream.try_next().await.unwrap() {
         let response = match msg {
             Request::Test => Response::Test,
+            // Request::AddDir(path) => 
+            // Request::OpenReadWrite(path, policy) => open_rw(path, policy).await,
             _e => {
                 println!("TODO: responding to {:?}", _e);
                 Response::Todo(_e)
@@ -51,5 +59,7 @@ async fn write_server(port: u16) {
 #[tokio::main]
 async fn main() {
     let opt = Opt::from_args();
-    write_server(opt.port).await;
+    let db = db::Directory::new();
+
+    write_server(opt.client_port).await;
 }
