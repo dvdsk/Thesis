@@ -1,24 +1,19 @@
-use protocol::connection;
+use client_protocol::connection;
+use futures::SinkExt;
 use std::net::{IpAddr, Ipv4Addr};
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use tokio::sync::Mutex;
-use futures::{SinkExt, TryStreamExt};
 
-enum RsMsg {}
-
-enum WsMsg {
-    DirectoryChange(Change),
-    Test,
-}
+use crate::server_conn::protocol::{RsMsg,WsMsg,Change};
 
 pub type ServerStream = connection::MsgStream<RsMsg, WsMsg>;
 pub type ConnList = Arc<Mutex<Vec<ServerStream>>>;
-pub struct ReadServers {
-    conns: ConnList,
-}
 
-pub enum Change {}
+#[derive(Clone)]
+pub struct ReadServers {
+    pub conns: ConnList,
+}
 
 impl ReadServers {
     pub fn new() -> Self {
@@ -35,16 +30,15 @@ impl ReadServers {
             let (socket, _) = listener.accept().await.unwrap();
             let conns = conns.clone();
             tokio::spawn(async move {
-                let mut stream: ServerStream = connection::wrap(socket);
-                stream.send(WsMsg::Test);
+                let stream: ServerStream = connection::wrap(socket);
                 conns.lock_owned().await.push(stream);
             });
         }
     }
     pub async fn publish(&self, change: Change) {
         let mut conns = self.conns.lock().await;
-        for conn in &mut*conns {
-            // conn.send(WsMsg::DirectoryChange(change));
+        for conn in &mut *conns {
+            conn.send(WsMsg::DirectoryChange(change.clone())).await.unwrap();
         }
     }
 }

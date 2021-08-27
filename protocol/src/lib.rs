@@ -48,6 +48,7 @@ pub enum Request {
 #[derive(Serialize, Deserialize)]
 pub enum Response {
     Ok,
+    FileExists,
     Test,
     Todo(Request),
 }

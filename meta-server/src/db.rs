@@ -1,8 +1,11 @@
 use std::time::Instant;
 
-use protocol::PathString;
-use thiserror::Error;
+use client_protocol::PathString;
 
+use crate::server_conn::protocol::Change;
+use crate::server_conn::read::ReadServers;
+
+#[derive(Debug)]
 pub enum DbError {
     FileExists,
 }
@@ -18,26 +21,31 @@ pub fn folder() -> sled::IVec {
     sled::IVec::default()
 }
 
+#[derive(Clone)]
 pub struct Directory {
     tree: sled::Db,
+    servers: ReadServers,
 }
 
 impl Directory {
-    pub fn new() -> Self {
+    pub fn new(servers: ReadServers) -> Self {
         Self {
             tree: sled::open("writeserv").unwrap(),
+            servers,
         }
     }
 
-    pub async fn publish_mkdir(&self) {
+    pub async fn publish_mkdir(&self, path: PathString) {
         let flush_tree = self.tree.flush_async();
-        let notify_reader_servs = todo!();
+        let notify_reader_servs = self.servers.publish(Change::DirAdded(path));
 
-        futures::join!(flush_tree, notify_reader_servs);
+        let (res_a, _) = futures::join!(flush_tree, notify_reader_servs);
+        res_a.unwrap();
     }
 
     pub async fn mkdir(&mut self, path: PathString) -> Result<(), DbError> {
-        let res = self.tree
+        let res = self
+            .tree
             .compare_and_swap(&path, None as Option<&[u8]>, Some(folder()))
             .unwrap(); // crash on any internal/io db error
 
@@ -47,7 +55,7 @@ impl Directory {
             } // no error if dir exists
         }
 
-        self.publish_mkdir().await;
+        self.publish_mkdir(path).await;
         Ok(())
     }
 }
@@ -55,6 +63,4 @@ impl Directory {
 #[cfg(test)]
 mod tests {
     use super::*;
-
 }
-
