@@ -10,7 +10,7 @@ use crate::server_conn::protocol::{RsMsg,WsMsg,Change};
 pub type ServerStream = connection::MsgStream<RsMsg, WsMsg>;
 pub type ConnList = Arc<Mutex<Vec<ServerStream>>>;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ReadServers {
     pub conns: ConnList,
 }

@@ -45,7 +45,7 @@ pub enum Request {
     Test,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum Response {
     Ok,
     FileExists,

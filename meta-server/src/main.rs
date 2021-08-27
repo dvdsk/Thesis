@@ -1,80 +1,95 @@
-use futures::{SinkExt, TryStreamExt};
-use client_protocol::{connection, Request, Response, PathString};
-use std::net::{IpAddr, Ipv4Addr};
 use structopt::StructOpt;
-use tokio::net::TcpListener;
+use tracing::{info, span, Level};
 
-mod db;
-use db::{Directory, DbError};
+pub mod db;
+pub mod server_conn;
+mod write_meta;
 
-mod server_conn;
-use server_conn::read::ReadServers;
-
-#[derive(Debug, StructOpt)]
+#[derive(Debug, Clone, StructOpt)]
 enum MetaRole {
     ReadServer,
     WriteServer,
 }
 
-#[derive(Debug, StructOpt)]
+#[derive(Debug, Clone, StructOpt)]
 struct Opt {
-    #[structopt(short, long)]
+    #[structopt(long)]
     client_port: u16,
 
-    #[structopt(short, long)]
+    #[structopt(long)]
     control_port: u16,
 
     #[structopt(subcommand)]
     role: MetaRole,
 }
 
-async fn mkdir(mut directory: Directory, path: PathString) -> Response {
-    match directory.mkdir(path).await {
-        Ok(_) => Response::Ok,
-        Err(DbError::FileExists) => Response::FileExists,
-    }
-}
+async fn host_write_meta(opt: Opt) {
+    use write_meta::{server, Directory, ReadServers};
 
-async fn handle_client(mut stream: ClientStream, directory: Directory) {
-    if let Some(msg) = stream.try_next().await.unwrap() {
-        let response = match msg {
-            Request::Test => Response::Test,
-            Request::AddDir(path) => mkdir(directory, path).await,
-            // Request::OpenReadWrite(path, policy) => open_rw(path, policy).await,
-            _e => {
-                println!("TODO: responding to {:?}", _e);
-                Response::Todo(_e)
-            }
-        };
-        if let Err(_) = stream.send(response).await {
-            return;
-        }
-    }
-}
-
-type ClientStream = connection::MsgStream<Request, Response>;
-async fn write_server(port: u16, directory: Directory) {
-    let addr = (IpAddr::V4(Ipv4Addr::UNSPECIFIED), port);
-    let listener = TcpListener::bind(addr).await.unwrap();
-
-    loop {
-        let dir = directory.clone();
-        let (socket, _) = listener.accept().await.unwrap();
-        tokio::spawn(async move {
-            let stream: ClientStream = connection::wrap(socket);
-            handle_client(stream, dir).await;
-        });
-    }
-}
-
-#[tokio::main]
-async fn main() {
-    let opt = Opt::from_args();
     let servers = ReadServers::new();
     let db = Directory::new(servers.clone());
 
     let maintain_conns = ReadServers::maintain(servers.conns.clone(), opt.control_port);
-    let handle_req = write_server(opt.client_port, db);
+    let handle_req = server(opt.client_port, db);
 
+    info!("starting write server");
     futures::join!(maintain_conns, handle_req);
 }
+
+async fn host_read_meta(opt: Opt) {}
+
+use opentelemetry::global;
+use opentelemetry::trace::Tracer;
+use tracing_opentelemetry::OpenTelemetryLayer;
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::Registry;
+use tracing::{error};
+fn setup_tracing() -> () {
+    // use tracing_opentelemetry::OpenTelemetryLayer;
+    // use tracing_subscriber::layer::SubscriberExt;
+    // use tracing_subscriber::Registry;
+    global::set_text_map_propagator(opentelemetry_jaeger::Propagator::new());
+    let tracer = opentelemetry_jaeger::new_pipeline()
+        .with_service_name("report_example")
+        .with_collector_endpoint("http://localhost:14268/api/traces")
+        // .install_batch(opentelemetry::runtime::Tokio)
+        .install_simple()
+        .unwrap();
+
+    use tracing_subscriber::prelude::*;
+    let opt = tracing_opentelemetry::layer().with_tracer(tracer);
+    tracing_subscriber::registry().with(opt).try_init().unwrap();
+
+    let root = span!(tracing::Level::INFO, "app_start");
+    let _enter = root.enter();
+}
+
+// #[tokio::main]
+// async fn main() {
+fn main() {
+    // setup_stdout_logger();
+    setup_tracing();
+    let root = span!(tracing::Level::INFO, "app_start3");
+    let _enter = root.enter();
+    info!("yo");
+
+    opentelemetry::global::shutdown_tracer_provider(); // sending remaining spans
+    std::thread::sleep_ms(1000);
+    // tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+}
+
+// #[tokio::main]
+// async fn main() {
+//     // let opt = Opt::from_args();
+//     test();
+
+//     // let _span = span!(Level::TRACE, "shaving_yaks").entered();
+//     // info!("test");
+
+//     // if let MetaRole::ReadServer = opt.role {
+//     //     host_read_meta(opt.clone()).await;
+//     //     info!("Promoted to write meta server");
+//     // }
+
+//     // host_write_meta(opt).await;
+// }

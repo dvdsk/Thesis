@@ -21,7 +21,7 @@ pub fn folder() -> sled::IVec {
     sled::IVec::default()
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct Directory {
     tree: sled::Db,
     servers: ReadServers,
