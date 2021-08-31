@@ -7,12 +7,6 @@ pub mod server_conn;
 mod write_meta;
 
 #[derive(Debug, Clone, StructOpt)]
-enum MetaRole {
-    ReadServer,
-    WriteServer,
-}
-
-#[derive(Debug, Clone, StructOpt)]
 struct Opt {
     #[structopt(long)]
     client_port: u16,
@@ -20,8 +14,8 @@ struct Opt {
     #[structopt(long)]
     control_port: u16,
 
-    #[structopt(subcommand)]
-    role: MetaRole,
+    #[structopt(long)]
+    cluster_size: u16,
 }
 
 async fn host_write_meta(opt: Opt) {
@@ -57,19 +51,31 @@ async fn main() {
     setup_tracing();
 
     let _span = span!(Level::TRACE, "server started").entered();
+    // newly joining the cluster 
+    // need to figure out ips of > 50% of the cluster. If we can not 
+    // the entire cluster has failed or we have a bad connection. 
+    discover_peers();
 
-    if let MetaRole::ReadServer = opt.role {
-        loop {
-            host_read_meta(opt.clone()).await;
-            match todo!("elections") {
-                Won => {
-                    info!("Promoted to write meta server");
-                    break;
-                }
-                Lost => continue,
-            }
+    loop {
+        // use discoverd peer adresses to run election, keep open for 
+        // recieving more peers (might have only found 51% or cluster is healing)
+        let res = futures::select! {
+            res = host_election() => {info!("election result"); res}
+            err = maintain_discovery() => panic!("error while maintaining discovery: {:?}", err),
+        };
+
+        if let Winner = res {
+            break;
+        }
+
+        futures::select! {
+            err = host_read_meta() => info!("heartbeat timeout, starting election"),
+            res = standby_elections() => info!("new leader elected: {}", res),
+            err = maintain_discovery() => panic!("error while maintaining discovery: {:?}", err),
         }
     }
 
-    host_write_meta(opt).await;
+    let send_hb = send_heartbeats();
+    let host = host_write_meta(opt);
+    futures::join!(send_hb, host);
 }
