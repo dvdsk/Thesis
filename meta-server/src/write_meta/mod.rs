@@ -6,7 +6,7 @@ use tracing::instrument;
 
 pub use crate::db::DbError;
 pub use crate::db::Directory;
-pub use crate::server_conn::read::ReadServers;
+pub use crate::server_conn::to_readserv::ReadServers;
 
 async fn mkdir(mut directory: Directory, path: PathString) -> Response {
     match directory.mkdir(path).await {

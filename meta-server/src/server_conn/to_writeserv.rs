@@ -1,6 +1,6 @@
-use crate::server_conn::protocol::{Change, RsMsg, WsMsg};
+use crate::server_conn::protocol::{RsMsg, WsMsg};
 use client_protocol::connection;
-use futures::{SinkExt, TryStreamExt};
+use futures::{TryStreamExt};
 use tokio::net::{TcpStream, ToSocketAddrs};
 
 #[derive(thiserror::Error, Debug)]

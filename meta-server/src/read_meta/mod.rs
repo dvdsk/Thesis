@@ -1,27 +1,30 @@
-use futures_util::{pin_mut, StreamExt};
-use tokio::net::TcpStream;
+use futures_util::TryStreamExt;
+use tokio::net::TcpListener;
 use std::net::IpAddr;
-use std::time::Duration;
+use std::net::Ipv4Addr;
 
-use crate::server_conn::{MDNS_NAME, write::WriteServer};
+use client_protocol::connection;
+use crate::server_conn::protocol::{RsMsg, WsMsg};
 
-pub async fn discover_ws() -> IpAddr {
-    loop {
-        let query_interval = Duration::from_secs(1);
-        let stream = mdns::discover::all(MDNS_NAME, query_interval)
-            .unwrap()
-            .listen();
-
-        pin_mut!(stream);
-        while let Some(Ok(response)) = stream.next().await {
-            if let Some(addr) = response.ip_addr() {
-                return addr;
-            }
-        }
-    }
+pub async fn meta_server(port: u16) {
 }
 
-pub async fn server(port: u16) {
-    let addr = discover_ws().await;
-    let ws = WriteServer::from_addr((addr, port)).await;
+pub async fn cmd_server(port: u16) {
+    let addr = (IpAddr::V4(Ipv4Addr::UNSPECIFIED), port);
+    let listener = TcpListener::bind(addr).await.unwrap();
+
+    loop {
+        let (socket, _) = listener.accept().await.unwrap();
+        tokio::spawn(async move {
+            type RsStream = connection::MsgStream<WsMsg, RsMsg>;
+            let mut stream: RsStream = connection::wrap(socket);
+            match stream.try_next().await.unwrap() {
+                Some(WsMsg::HeartBeat) => (),
+                Some(WsMsg::GetServerList) => (),
+                Some(WsMsg::DirectoryChange(change)) => (),
+                Some(msg) => todo!("not yet handling: {:?}",msg),
+                None => panic!("should never recieve empty msg"),
+            }
+        });
+    }
 }

@@ -1,12 +1,15 @@
 use structopt::StructOpt;
-use tracing::{info, span, Level};
+use tracing::{info, warn, span, Level};
+use futures::future::FutureExt;
 
 pub mod db;
 mod read_meta;
-pub mod server_conn;
 mod write_meta;
+pub mod server_conn;
+use server_conn::election::{self, host_election, maintain_heartbeat};
+use server_conn::discovery::{discover_peers, maintain_discovery};
 
-#[derive(Debug, Clone, StructOpt)]
+#[derive(Debug, Clone, Copy, StructOpt)]
 struct Opt {
     #[structopt(long)]
     client_port: u16,
@@ -18,7 +21,15 @@ struct Opt {
     cluster_size: u16,
 }
 
-async fn host_write_meta(opt: Opt) {
+fn setup_tracing() {
+    use tracing_subscriber::prelude::*;
+    let fmt_sub = tracing_subscriber::fmt::subscriber().with_target(false);
+
+    let subscriber = tracing_subscriber::Registry::default().with(fmt_sub);
+    tracing::collect::set_global_default(subscriber).unwrap();
+}
+
+async fn write_server(opt: Opt) {
     use write_meta::{server, Directory, ReadServers};
 
     let servers = ReadServers::new();
@@ -31,18 +42,31 @@ async fn host_write_meta(opt: Opt) {
     futures::join!(maintain_conns, handle_req);
 }
 
-async fn host_read_meta(opt: Opt) {
-    use read_meta::server;
+async fn elect_and_cmd_server(port: u16) {
+    use election::ElectionResult::Winner;
+    use election::monitor_heartbeat;
+    use read_meta::cmd_server;
 
-    server(opt.client_port).await;
+    loop {
+        futures::select! {
+            () = cmd_server(port).fuse() => warn!("could not reach write server"),
+            () = monitor_heartbeat().fuse() => warn!("heartbeat timed out")
+        }
+
+        if let Winner = host_election(port).await {
+            info!("won election");
+            break;
+        }
+    }
 }
 
-fn setup_tracing() {
-    use tracing_subscriber::prelude::*;
-    let fmt_sub = tracing_subscriber::fmt::subscriber().with_target(false);
+async fn read_server(opt: Opt) {
+    use read_meta::meta_server;
 
-    let subscriber = tracing_subscriber::Registry::default().with(fmt_sub);
-    tracing::collect::set_global_default(subscriber).unwrap();
+    futures::select! {
+        _res = meta_server(opt.client_port).fuse() => (),
+        _res = elect_and_cmd_server(opt.control_port).fuse() => (),
+    }
 }
 
 #[tokio::main]
@@ -51,31 +75,17 @@ async fn main() {
     setup_tracing();
 
     let _span = span!(Level::TRACE, "server started").entered();
-    // newly joining the cluster 
-    // need to figure out ips of > 50% of the cluster. If we can not 
-    // the entire cluster has failed or we have a bad connection. 
-    discover_peers();
+    // newly joining the cluster
+    // need to figure out ips of > 50% of the cluster. If we can not
+    // the entire cluster has failed or we have a bad connection.
+    discover_peers().await;
 
-    loop {
-        // use discoverd peer adresses to run election, keep open for 
-        // recieving more peers (might have only found 51% or cluster is healing)
-        let res = futures::select! {
-            res = host_election() => {info!("election result"); res}
-            err = maintain_discovery() => panic!("error while maintaining discovery: {:?}", err),
-        };
+    futures::select! {
+        () = read_server(opt).fuse() => (), // must have won election 
+        err = maintain_discovery().fuse() => panic!("error while maintaining discovery: {:?}", err),
+    };
 
-        if let Winner = res {
-            break;
-        }
-
-        futures::select! {
-            err = host_read_meta() => info!("heartbeat timeout, starting election"),
-            res = standby_elections() => info!("new leader elected: {}", res),
-            err = maintain_discovery() => panic!("error while maintaining discovery: {:?}", err),
-        }
-    }
-
-    let send_hb = send_heartbeats();
-    let host = host_write_meta(opt);
+    let send_hb = maintain_heartbeat();
+    let host = write_server(opt);
     futures::join!(send_hb, host);
 }

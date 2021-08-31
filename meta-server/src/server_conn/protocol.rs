@@ -6,6 +6,8 @@ pub enum RsMsg {}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum WsMsg {
+    HeartBeat,
+    GetServerList,
     DirectoryChange(Change),
     Test,
 }
