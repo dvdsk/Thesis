@@ -2,6 +2,7 @@ use structopt::StructOpt;
 use tracing::{info, span, Level};
 
 pub mod db;
+mod read_meta;
 pub mod server_conn;
 mod write_meta;
 
@@ -36,60 +37,39 @@ async fn host_write_meta(opt: Opt) {
     futures::join!(maintain_conns, handle_req);
 }
 
-async fn host_read_meta(opt: Opt) {}
+async fn host_read_meta(opt: Opt) {
+    use read_meta::server;
 
-use opentelemetry::global;
-use opentelemetry::trace::Tracer;
-use tracing_opentelemetry::OpenTelemetryLayer;
-use tracing_subscriber::layer::SubscriberExt;
-use tracing_subscriber::Registry;
-use tracing::{error};
-fn setup_tracing() -> () {
-    // use tracing_opentelemetry::OpenTelemetryLayer;
-    // use tracing_subscriber::layer::SubscriberExt;
-    // use tracing_subscriber::Registry;
-    global::set_text_map_propagator(opentelemetry_jaeger::Propagator::new());
-    let tracer = opentelemetry_jaeger::new_pipeline()
-        .with_service_name("report_example")
-        .with_collector_endpoint("http://localhost:14268/api/traces")
-        // .install_batch(opentelemetry::runtime::Tokio)
-        .install_simple()
-        .unwrap();
+    server(opt.client_port).await;
+}
 
+fn setup_tracing() {
     use tracing_subscriber::prelude::*;
-    let opt = tracing_opentelemetry::layer().with_tracer(tracer);
-    tracing_subscriber::registry().with(opt).try_init().unwrap();
+    let fmt_sub = tracing_subscriber::fmt::subscriber().with_target(false);
 
-    let root = span!(tracing::Level::INFO, "app_start");
-    let _enter = root.enter();
+    let subscriber = tracing_subscriber::Registry::default().with(fmt_sub);
+    tracing::collect::set_global_default(subscriber).unwrap();
 }
 
-// #[tokio::main]
-// async fn main() {
-fn main() {
-    // setup_stdout_logger();
+#[tokio::main]
+async fn main() {
+    let opt = Opt::from_args();
     setup_tracing();
-    let root = span!(tracing::Level::INFO, "app_start3");
-    let _enter = root.enter();
-    info!("yo");
 
-    opentelemetry::global::shutdown_tracer_provider(); // sending remaining spans
-    std::thread::sleep_ms(1000);
-    // tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+    let _span = span!(Level::TRACE, "server started").entered();
+
+    if let MetaRole::ReadServer = opt.role {
+        loop {
+            host_read_meta(opt.clone()).await;
+            match todo!("elections") {
+                Won => {
+                    info!("Promoted to write meta server");
+                    break;
+                }
+                Lost => continue,
+            }
+        }
+    }
+
+    host_write_meta(opt).await;
 }
-
-// #[tokio::main]
-// async fn main() {
-//     // let opt = Opt::from_args();
-//     test();
-
-//     // let _span = span!(Level::TRACE, "shaving_yaks").entered();
-//     // info!("test");
-
-//     // if let MetaRole::ReadServer = opt.role {
-//     //     host_read_meta(opt.clone()).await;
-//     //     info!("Promoted to write meta server");
-//     // }
-
-//     // host_write_meta(opt).await;
-// }

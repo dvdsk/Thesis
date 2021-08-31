@@ -7,8 +7,8 @@ use tokio::sync::Mutex;
 
 use crate::server_conn::protocol::{RsMsg,WsMsg,Change};
 
-pub type ServerStream = connection::MsgStream<RsMsg, WsMsg>;
-pub type ConnList = Arc<Mutex<Vec<ServerStream>>>;
+type RsStream = connection::MsgStream<RsMsg, WsMsg>;
+type ConnList = Arc<Mutex<Vec<RsStream>>>;
 
 #[derive(Clone, Debug)]
 pub struct ReadServers {
@@ -30,7 +30,7 @@ impl ReadServers {
             let (socket, _) = listener.accept().await.unwrap();
             let conns = conns.clone();
             tokio::spawn(async move {
-                let stream: ServerStream = connection::wrap(socket);
+                let stream: RsStream = connection::wrap(socket);
                 conns.lock_owned().await.push(stream);
             });
         }
