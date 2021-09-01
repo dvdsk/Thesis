@@ -1,4 +1,4 @@
-use crate::server_conn::protocol::{RsMsg, WsMsg};
+use crate::server_conn::protocol::{ToWs, ToRs};
 use client_protocol::connection;
 use futures::{TryStreamExt};
 use tokio::net::{TcpStream, ToSocketAddrs};
@@ -9,7 +9,7 @@ pub enum Error {
     Io(#[from] std::io::Error),
 }
 
-type WsStream = connection::MsgStream<WsMsg, RsMsg>;
+type WsStream = connection::MsgStream<ToRs, ToWs>;
 pub struct WriteServer {
     conn: WsStream,
 }
@@ -27,7 +27,6 @@ impl WriteServer {
             let msg = self.conn.try_next().await?.expect("the write meta server never sends empty msg");
 
             match msg {
-                WsMsg::DirectoryChange(e) => todo!(),
                 _ => todo!(),
             }
         }

@@ -1,4 +1,5 @@
 use structopt::StructOpt;
+use tokio::sync::mpsc;
 use tracing::{info, warn, span, Level};
 use futures::future::FutureExt;
 
@@ -6,8 +7,12 @@ pub mod db;
 mod read_meta;
 mod write_meta;
 pub mod server_conn;
-use server_conn::election::{self, host_election, maintain_heartbeat};
-use server_conn::discovery::{discover_peers, maintain_discovery};
+use server_conn::election::election_cycle;
+use server_conn::discovery::{discover_cluster, maintain_discovery};
+
+use crate::server_conn::election::maintain_heartbeat;
+
+use self::server_conn::election;
 
 #[derive(Debug, Clone, Copy, StructOpt)]
 struct Opt {
@@ -42,30 +47,17 @@ async fn write_server(opt: Opt) {
     futures::join!(maintain_conns, handle_req);
 }
 
-async fn elect_and_cmd_server(port: u16) {
-    use election::ElectionResult::Winner;
-    use election::monitor_heartbeat;
-    use read_meta::cmd_server;
-
-    loop {
-        futures::select! {
-            () = cmd_server(port).fuse() => warn!("could not reach write server"),
-            () = monitor_heartbeat().fuse() => warn!("heartbeat timed out")
-        }
-
-        if let Winner = host_election(port).await {
-            info!("won election");
-            break;
-        }
-    }
-}
-
-async fn read_server(opt: Opt) {
+async fn read_server(opt: Opt, state: &mut election::State) {
     use read_meta::meta_server;
+    // the cmd server forwards election related msgs to the
+    // election_cycle. This is better then stopping the cmd server
+    // and starting a election server as that risks losing packages
+    let (tx, rx) = mpsc::channel(10);
 
     futures::select! {
-        _res = meta_server(opt.client_port).fuse() => (),
-        _res = elect_and_cmd_server(opt.control_port).fuse() => (),
+        () = read_meta::cmd_server(opt.control_port, tx).fuse() => todo!(),
+        _res = meta_server(opt.client_port).fuse() => panic!("meta server should not return"),
+        _won = election_cycle(rx, state).fuse() => info!("won the election"),
     }
 }
 
@@ -75,17 +67,15 @@ async fn main() {
     setup_tracing();
 
     let _span = span!(Level::TRACE, "server started").entered();
-    // newly joining the cluster
-    // need to figure out ips of > 50% of the cluster. If we can not
-    // the entire cluster has failed or we have a bad connection.
-    discover_peers().await;
+    let cluster = discover_cluster().await;
 
+    let mut state = election::State::new();
     futures::select! {
-        () = read_server(opt).fuse() => (), // must have won election 
+        () = read_server(opt, &mut state).fuse() => (), // must have won election 
         err = maintain_discovery().fuse() => panic!("error while maintaining discovery: {:?}", err),
     };
 
-    let send_hb = maintain_heartbeat();
+    let send_hb = maintain_heartbeat(state);
     let host = write_server(opt);
     futures::join!(send_hb, host);
 }

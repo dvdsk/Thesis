@@ -5,9 +5,11 @@ use std::sync::Arc;
 use tokio::net::TcpListener;
 use tokio::sync::Mutex;
 
-use crate::server_conn::protocol::{RsMsg,WsMsg,Change};
+use crate::server_conn::protocol::{ToWs,ToRs,Change};
 
-type RsStream = connection::MsgStream<RsMsg, WsMsg>;
+use super::protocol::ControlMsg;
+
+type RsStream = connection::MsgStream<ToWs, ToRs>;
 type ConnList = Arc<Mutex<Vec<RsStream>>>;
 
 #[derive(Clone, Debug)]
@@ -37,8 +39,9 @@ impl ReadServers {
     }
     pub async fn publish(&self, change: Change) {
         let mut conns = self.conns.lock().await;
+        let msg = ToRs::Control(ControlMsg::DirectoryChange(change));
         for conn in &mut *conns {
-            conn.send(WsMsg::DirectoryChange(change.clone())).await.unwrap();
+            conn.send(msg.clone()).await.unwrap();
         }
     }
 }
