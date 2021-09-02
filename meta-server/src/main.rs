@@ -61,21 +61,26 @@ async fn read_server(opt: Opt, state: &mut election::State) {
     }
 }
 
+async fn server(opt: Opt, mut state: election::State) {
+    discover_cluster(opt.cluster_size).await;
+    info!("finished discovery");
+    read_server(opt, &mut state).await;
+
+    info!("promoted to readserver");
+    let send_hb = maintain_heartbeat(state);
+    let host = write_server(opt);
+    futures::join!(send_hb, host);
+}
+
 #[tokio::main]
 async fn main() {
     let opt = Opt::from_args();
     setup_tracing();
 
+    let state = election::State::new();
     let _span = span!(Level::TRACE, "server started").entered();
-    let cluster = discover_cluster().await;
 
-    let mut state = election::State::new();
-    futures::select! {
-        () = read_server(opt, &mut state).fuse() => (), // must have won election 
-        err = maintain_discovery().fuse() => panic!("error while maintaining discovery: {:?}", err),
-    };
-
-    let send_hb = maintain_heartbeat(state);
-    let host = write_server(opt);
-    futures::join!(send_hb, host);
+    let f1 = server(opt, state);
+    let f2 = maintain_discovery(8083);
+    futures::join!(f1,f2);
 }

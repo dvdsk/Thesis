@@ -57,6 +57,7 @@ pub async fn election_cycle(mut rx: mpsc::Receiver<ElectionMsg>, state: &mut ele
 
     loop {
         monitor_heartbeat(&mut rx).await;
+        todo!("ensure win possible: connected to > 50% of cluster");
 
         // TODO get cmd server listener in here
         if let Winner = host_election(&mut rx, state).await {
