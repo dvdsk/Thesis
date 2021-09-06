@@ -31,7 +31,7 @@ pub async fn discover_cluster(size: u16) {
 
 pub async fn maintain_discovery(port: u16) {
     let (responder, task) = Responder::with_default_handle().unwrap();
-    let _srv = responder.register(MDNS_NAME.into(), "my test".into(), port, &["lol"]);
+    let _srv = responder.register(MDNS_NAME.into(), MDNS_NAME.into(), port, &["lol"]);
     task.await;
     dbg!("mmm");
 }

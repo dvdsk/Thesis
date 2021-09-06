@@ -31,7 +31,7 @@ function run_in_tmux_splits()
 {
 	local nodes="${@:2}"
 	local base_cmd="$1"
-	local tmux_cmd="tmux new"
+	local tmux_cmd="tmux new -s run_in_splits"
 	for node in $nodes; do
 		tmux_cmd="$tmux_cmd \"$(cmd $node "$base_cmd")\" ';' split"
 	done
@@ -50,10 +50,8 @@ function deploy()
 	wait_for_allocation $resv_numb
 
 	local nodes=$(node_list $resv_numb)
-	echo "$nodes"
+	echo "got nodes: $nodes"
 
-	# TODO concurrent tmux creation? 
-	# https://unix.stackexchange.com/questions/387666/run-commands-in-tmux-from-terminal
 	for node in $nodes; do
 		ssh -t $node <<- EOF # TODO run in parallel
 		mkdir -p /tmp/mock-fs
@@ -63,10 +61,7 @@ EOF
 
 	local base_cmd="/tmp/mock-fs/meta-server --client-port 8080 --cluster-size $numb_nodes --control-port 8081" 
 	run_in_tmux_splits "$base_cmd" $nodes
-	echo $resv_numb
+	tmux kill-session -t "run_in_splits" 
 }
 
-
 deploy
-# base_cmd="/tmp/mock-fs/meta-server --arg 80" 
-# run_in_tmux_splits "$base_cmd" node11
