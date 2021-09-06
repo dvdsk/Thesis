@@ -2,15 +2,17 @@
 
 function node_list()
 {
+	local resv_numb=$1
 	preserve -long-list \
-		| grep ${resv_numb} \
+		| grep $resv_numb \
 		| cut -f 9-
 }
 
 function wait_for_allocation()
 {
+	local resv_numb=$1
 	printf "waiting for nodes " >&2
-	while [ "$(node_list)" == "-" ]
+	while [ "$(node_list $resv_numb)" == "-" ]
 	do
 		sleep 0.25
 		printf "." >&2
@@ -18,21 +20,53 @@ function wait_for_allocation()
 	echo "" >&2
 }
 
+function cmd()
+{
+	local node=$1
+	local base_cmd="$2"
+	echo "ssh $node \\\"$base_cmd\\\"; sleep 90"
+}
+
+function run_in_tmux_splits()
+{
+	local nodes="${@:2}"
+	local base_cmd="$1"
+	local tmux_cmd="tmux new"
+	for node in $nodes; do
+		tmux_cmd="$tmux_cmd \"$(cmd $node "$base_cmd")\" ';' split"
+	done
+
+	eval ${tmux_cmd::-9} # print with last split removed
+}
+
 function deploy()
 {
-	duration=3
-	resv_numb=$(preserve -# ${numb_nodes} -t 00:${duration}:05 | head -n 1 | cut -d ' ' -f 3)
-	wait_for_allocation
-	nodes=$(node_list)
+	local duration=0
+	local numb_nodes=3
+	local resv_numb=$(preserve -# ${numb_nodes} -t 00:${duration}:05 | head -n 1 | cut -d ' ' -f 3)
+	local resv_numb=${resv_numb::-1}
 
+	node_list $resv_numb
+	wait_for_allocation $resv_numb
+
+	local nodes=$(node_list $resv_numb)
+	echo "$nodes"
+
+	# TODO concurrent tmux creation? 
+	# https://unix.stackexchange.com/questions/387666/run-commands-in-tmux-from-terminal
 	for node in $nodes; do
-		ssh_output=$(ssh $node <<- EOF
-		mkdir /tmp/mock-fs
-		cp ${PWD}/meta-server/target/debug/meta-server /tmp/mock-fs
-		./tmp/mock-fs
+		ssh -t $node <<- EOF # TODO run in parallel
+		mkdir -p /tmp/mock-fs
+		cp ${PWD}/bin/meta-server /tmp/mock-fs/
 EOF
-)
 	done
-)
+
+	local base_cmd="/tmp/mock-fs/meta-server --client-port 8080 --cluster-size $numb_nodes --control-port 8081" 
+	run_in_tmux_splits "$base_cmd" $nodes
 	echo $resv_numb
 }
+
+
+deploy
+# base_cmd="/tmp/mock-fs/meta-server --arg 80" 
+# run_in_tmux_splits "$base_cmd" node11
