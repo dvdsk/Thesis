@@ -41,8 +41,11 @@ function run_in_tmux_splits()
 
 function deploy()
 {
+	local numb_nodes=$1
+	local bin=$2
+	local args="${@:3}"
+
 	local duration=0
-	local numb_nodes=3
 	local resv_numb=$(preserve -# ${numb_nodes} -t 00:${duration}:05 | head -n 1 | cut -d ' ' -f 3)
 	local resv_numb=${resv_numb::-1}
 
@@ -55,13 +58,10 @@ function deploy()
 	for node in $nodes; do
 		ssh -t $node <<- EOF # TODO run in parallel
 		mkdir -p /tmp/mock-fs
-		cp ${PWD}/bin/meta-server /tmp/mock-fs/
+		cp ${PWD}/bin/$bin /tmp/mock-fs/
 EOF
 	done
 
-	local base_cmd="/tmp/mock-fs/meta-server --client-port 8080 --cluster-size $numb_nodes --control-port 8081" 
-	run_in_tmux_splits "$base_cmd" $nodes
+	run_in_tmux_splits "/tmp/mock-fs/$bin $args" $nodes
 	tmux kill-session -t "run_in_splits" 
 }
-
-deploy
