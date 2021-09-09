@@ -29,14 +29,30 @@ function cmd()
 
 function run_in_tmux_splits()
 {
-	local nodes="${@:2}"
 	local base_cmd="$1"
-	local tmux_cmd="tmux new -s run_in_splits"
+	local nodes="${@:2}"
+	local tmux_cmd="tmux new -s deployed"
 	for node in $nodes; do
-		tmux_cmd="$tmux_cmd \"$(cmd $node "$base_cmd")\" ';' split"
+		local cmd=\"$(cmd $node "$base_cmd")\"
+		tmux_cmd="$tmux_cmd "$cmd" ';' split"
 	done
 
 	eval ${tmux_cmd::-9} # print with last split removed
+}
+
+function run_in_tmux_windows()
+{
+	local base_cmd="$1"
+	local nodes=(${@:2})
+	local cmd="ssh ${nodes[0]} \"/tmp/mock-fs/discovery-exchange-id 3\"; sleep 90"
+	tmux new-session -s "deployed" -n ${nodes[0]} -d "$cmd"
+	local len=${#nodes[@]}
+	for (( i = 1; i < $len; i++ )); do
+		local name=${nodes[$i]}
+		local cmd="ssh ${nodes[$i]} \"/tmp/mock-fs/discovery-exchange-id 3\"; sleep 90"
+		tmux new-window -t "deployed:$i" -n $name -d "$cmd"
+	done
+	tmux attach-session -t "deployed"
 }
 
 function deploy()
@@ -62,6 +78,7 @@ function deploy()
 EOF
 	done
 
-	run_in_tmux_splits "/tmp/mock-fs/$bin $args" $nodes
-	tmux kill-session -t "run_in_splits" 
+	# run_in_tmux_splits "/tmp/mock-fs/$bin $args" $nodes
+	run_in_tmux_windows "/tmp/mock-fs/$bin $args" $nodes
+	tmux kill-session -t "deployed" 
 }
