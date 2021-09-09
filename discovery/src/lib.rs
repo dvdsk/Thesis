@@ -27,7 +27,7 @@ impl Chart {
         }
         let old_key = self.map.insert(id, addr);
         if old_key.is_none() {
-            info!("found new address: {:?}", addr);
+            info!("added new address: {:?}, total: ({})", addr, self.len());
         }
     }
     pub fn len(&self) -> usize {
@@ -36,7 +36,7 @@ impl Chart {
 }
 
 #[tracing::instrument]
-async fn awnser_incoming(sock: Arc<UdpSocket>, chart: &Chart) {
+async fn awnser_incoming(sock: &UdpSocket, chart: &Chart) {
     let mut buf = [0; 1024];
     loop {
         let (len, addr) = sock.recv_from(&mut buf).await.unwrap();
@@ -46,24 +46,24 @@ async fn awnser_incoming(sock: Arc<UdpSocket>, chart: &Chart) {
 }
 
 #[tracing::instrument]
-async fn sleep_then_request_responses(sock: Arc<UdpSocket>, period: Duration, id: &str) {
+async fn sleep_then_request_responses(sock: &UdpSocket, period: Duration, id: &str) {
     use rand::{Rng, SeedableRng};
     let mut rng = rand::rngs::SmallRng::from_entropy();
     let random_sleep = rng.gen_range(Duration::from_secs(0)..period);
 
     sleep(random_sleep).await;
-    request_responses(sock.clone(), period, id).await;
+    request_responses(&sock, period, id).await;
 }
 
 #[tracing::instrument]
-pub async fn maintain(sock: Arc<UdpSocket>, chart: &Chart) {
-    let f1 = awnser_incoming(sock.clone(), &chart);
-    let f2 = sleep_then_request_responses(sock.clone(), Duration::from_secs(5), &chart.id);
+pub async fn maintain(sock: &UdpSocket, chart: &Chart) {
+    let f1 = awnser_incoming(sock, &chart);
+    let f2 = sleep_then_request_responses(sock, Duration::from_secs(5), &chart.id);
     futures::join!(f1, f2);
 }
 
 #[tracing::instrument]
-async fn request_responses(sock: Arc<UdpSocket>, period: Duration, id: &str) {
+async fn request_responses(sock: &UdpSocket, period: Duration, id: &str) {
     let multiaddr = Ipv4Addr::from([224, 0, 0, 251]);
     loop {
         sleep(period).await;
@@ -75,7 +75,7 @@ async fn request_responses(sock: Arc<UdpSocket>, period: Duration, id: &str) {
 }
 
 #[tracing::instrument]
-async fn listen_for_response(sock: Arc<UdpSocket>, chart: &Chart, cluster_majority: usize) {
+async fn listen_for_response(sock: &UdpSocket, chart: &Chart, cluster_majority: usize) {
     let mut buf = [0; 1024];
     while chart.len() < cluster_majority {
         let (len, addr) = sock.recv_from(&mut buf).await.unwrap();
@@ -84,12 +84,12 @@ async fn listen_for_response(sock: Arc<UdpSocket>, chart: &Chart, cluster_majori
 }
 
 #[tracing::instrument]
-pub async fn cluster(sock: Arc<UdpSocket>, chart: &Chart, full_size: u16) {
+pub async fn cluster(sock: &UdpSocket, chart: &Chart, full_size: u16) {
     assert!(full_size > 2, "minimal cluster size is 3");
     let cluster_majority = (full_size as f32 * 0.5).ceil() as usize;
 
-    let f1 = request_responses(sock.clone(), Duration::from_millis(500), &chart.id);
-    let f2 = listen_for_response(sock, &chart, cluster_majority);
+    let f1 = request_responses(&sock, Duration::from_millis(500), &chart.id);
+    let f2 = listen_for_response(&sock, &chart, cluster_majority);
 
     use futures::FutureExt;
     futures::select!(
@@ -99,7 +99,7 @@ pub async fn cluster(sock: Arc<UdpSocket>, chart: &Chart, full_size: u16) {
     info!("found majority of cluster, ({} nodes)", chart.len());
 }
 
-pub async fn setup(id: Id) -> (Arc<UdpSocket>, Chart) {
+pub async fn setup(id: Id) -> (UdpSocket, Chart) {
     let interface = Ipv4Addr::from([0, 0, 0, 0]);
     let multiaddr = Ipv4Addr::from([224, 0, 0, 251]);
 
@@ -111,5 +111,5 @@ pub async fn setup(id: Id) -> (Arc<UdpSocket>, Chart) {
         id,
         map: dashmap::DashMap::new(),
     };
-    (Arc::new(sock), chart)
+    (sock, chart)
 }

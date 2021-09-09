@@ -22,8 +22,8 @@ async fn main() {
         .to_string();
 
     let (sock, chart) = discovery::setup(id).await;
-    let discover = discovery::cluster(sock.clone(), &chart, cluster_size);
-    let maintain = discovery::maintain(sock, &chart);
+    let discover = discovery::cluster(&sock, &chart, cluster_size);
+    let maintain = discovery::maintain(&sock, &chart);
 
     futures::join!(discover, maintain);
 }

@@ -1,14 +1,15 @@
 use structopt::StructOpt;
 use tokio::sync::mpsc;
+use tokio::net::UdpSocket;
 use tracing::{info, warn, span, Level};
 use futures::future::FutureExt;
+use mac_address::get_mac_address;
 
 pub mod db;
 mod read_meta;
 mod write_meta;
 pub mod server_conn;
 use server_conn::election::election_cycle;
-use server_conn::discovery::{discover_cluster, maintain_discovery};
 
 use crate::server_conn::election::maintain_heartbeat;
 
@@ -61,8 +62,8 @@ async fn read_server(opt: Opt, state: &mut election::State) {
     }
 }
 
-async fn server(opt: Opt, mut state: election::State) {
-    discover_cluster(opt.cluster_size).await;
+async fn server(opt: Opt, mut state: election::State, sock: &UdpSocket, chart: &discovery::Chart) {
+    discovery::cluster(sock, chart, opt.cluster_size).await;
     info!("finished discovery");
     read_server(opt, &mut state).await;
 
@@ -78,9 +79,10 @@ async fn main() {
     setup_tracing();
 
     let state = election::State::new();
+    let (sock, chart) = discovery::setup(state.id.to_string()).await;
     let _span = span!(Level::TRACE, "server started").entered();
 
-    let f1 = server(opt, state);
-    let f2 = maintain_discovery(8083);
+    let f1 = server(opt, state, &sock, &chart);
+    let f2 = discovery::maintain(&sock, &chart);
     futures::join!(f1,f2);
 }

@@ -32,7 +32,7 @@ async fn monitor_heartbeat(rx: &mut mpsc::Receiver<ElectionMsg>) {
 
 pub struct State {
     term: u64,
-    id: MacAddress,
+    pub id: MacAddress,
 }
 
 impl State {

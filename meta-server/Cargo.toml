@@ -5,6 +5,8 @@ edition = "2018"
 
 [dependencies]
 client_protocol = { package = "protocol", path = "../protocol" }
+discovery = { package = "discovery", path = "../discovery" }
+
 structopt = "0.3"
 futures = "0.3"
 tokio = {version = "^1.10", features = ["sync", "time", "net", "macros", "rt-multi-thread"]}
