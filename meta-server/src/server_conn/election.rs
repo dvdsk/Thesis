@@ -14,7 +14,7 @@ pub enum ElectionResult {
     Loser,
 }
 
-pub async fn maintain_heartbeat(state: State) {}
+pub async fn maintain_heartbeat(state: &'_ State<'_>) {}
 
 /// future that returns if no heartbeat has been recieved for 
 async fn monitor_heartbeat(rx: &mut mpsc::Receiver<ElectionMsg>) {
@@ -30,29 +30,26 @@ async fn monitor_heartbeat(rx: &mut mpsc::Receiver<ElectionMsg>) {
     }
 }
 
-pub struct State {
+pub struct State<'a> {
     term: u64,
-    pub id: MacAddress,
+    pub chart: &'a discovery::Chart,
 }
 
-impl State {
-    pub fn new() -> Self {
-        let mac_addr = get_mac_address()
-            .unwrap()
-            .expect("there should be at least one network decive");
+impl<'a> State<'a> {
+    pub fn new(chart: &'a discovery::Chart) -> Self {
         Self {
             term: 0,
-            id: mac_addr,
+            chart
         }
     }
 }
 
-async fn host_election(rx: &mut mpsc::Receiver<ElectionMsg>, state: &mut State) -> ElectionResult {
+async fn host_election(rx: &mut mpsc::Receiver<ElectionMsg>, state: &'_ mut State<'_>) -> ElectionResult {
     info!("hosting leader election");
     ElectionResult::Loser
 }
 
-pub async fn election_cycle(mut rx: mpsc::Receiver<ElectionMsg>, state: &mut election::State) {
+pub async fn election_cycle(mut rx: mpsc::Receiver<ElectionMsg>, state: &'_ mut State<'_>) {
     use election::ElectionResult::Winner;
 
     loop {

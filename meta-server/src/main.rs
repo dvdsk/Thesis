@@ -48,7 +48,7 @@ async fn write_server(opt: Opt) {
     futures::join!(maintain_conns, handle_req);
 }
 
-async fn read_server(opt: Opt, state: &mut election::State) {
+async fn read_server(opt: Opt, state: &'_ mut election::State<'_>) {
     use read_meta::meta_server;
     // the cmd server forwards election related msgs to the
     // election_cycle. This is better then stopping the cmd server
@@ -62,13 +62,13 @@ async fn read_server(opt: Opt, state: &mut election::State) {
     }
 }
 
-async fn server(opt: Opt, mut state: election::State, sock: &UdpSocket, chart: &discovery::Chart) {
+async fn server(opt: Opt, mut state: election::State<'_>, sock: &UdpSocket, chart: &discovery::Chart) {
     discovery::cluster(sock, chart, opt.cluster_size).await;
     info!("finished discovery");
     read_server(opt, &mut state).await;
 
     info!("promoted to readserver");
-    let send_hb = maintain_heartbeat(state);
+    let send_hb = maintain_heartbeat(&state);
     let host = write_server(opt);
     futures::join!(send_hb, host);
 }
@@ -78,8 +78,12 @@ async fn main() {
     let opt = Opt::from_args();
     setup_tracing();
 
-    let state = election::State::new();
-    let (sock, chart) = discovery::setup(state.id.to_string()).await;
+    let id = get_mac_address()
+        .unwrap()
+        .expect("there should be at least one network decive")
+        .to_string();
+    let (sock, chart) = discovery::setup(id).await;
+    let state = election::State::new(&chart);
     let _span = span!(Level::TRACE, "server started").entered();
 
     let f1 = server(opt, state, &sock, &chart);
