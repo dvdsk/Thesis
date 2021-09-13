@@ -31,14 +31,14 @@ struct Opt {
 fn setup_tracing(endpoint: &str) {
     opentelemetry::global::set_text_map_propagator(opentelemetry_jaeger::Propagator::new());
     let url = format!("http://{}:14268/api/traces", endpoint);
-    let tracer = opentelemetry_jaeger::new_pipeline()
-        .with_service_name("minimal-example")
-        .with_collector_endpoint(url)
-        .install_simple()
-        .unwrap();
+    // let tracer = opentelemetry_jaeger::new_pipeline()
+    //     .with_service_name("minimal-example")
+    //     .with_collector_endpoint(url)
+    //     .install_simple()
+    //     .unwrap();
     
-    // use opentelemetry::sdk::export::trace;
-    // let tracer = trace::stdout::new_pipeline().install_simple();
+    use opentelemetry::sdk::export::trace;
+    let tracer = trace::stdout::new_pipeline().install_simple();
 
     use tracing_subscriber::prelude::*;
     let telemetry = tracing_opentelemetry::subscriber().with_tracer(tracer);
@@ -78,9 +78,7 @@ async fn read_server(opt: &Opt, state: &'_ mut election::State<'_>) {
 }
 
 async fn server(opt: Opt, mut state: election::State<'_>, sock: &UdpSocket, chart: &discovery::Chart) {
-    println!("mmmmmmmmmmmmm");
     discovery::cluster(sock, chart, opt.cluster_size).await;
-    println!("discovery done");
     info!("finished discovery");
     read_server(&opt, &mut state).await;
 
@@ -92,12 +90,11 @@ async fn server(opt: Opt, mut state: election::State<'_>, sock: &UdpSocket, char
 
 #[tokio::main]
 async fn main() {
-    println!("hello world");
     let opt = Opt::from_args();
-    // setup_tracing(&opt.tracing_endpoint);
+    setup_tracing(&opt.tracing_endpoint);
 
-    // let sp = info_span!("setup");
-    // let ro = sp.enter();
+    let sp = info_span!("setup");
+    let ro = sp.enter();
 
     let id = get_mac_address()
         .unwrap()
@@ -106,12 +103,13 @@ async fn main() {
     let (sock, chart) = discovery::setup(id).await;
     let state = election::State::new(opt.cluster_size, &chart);
 
-    // std::mem::drop(ro);
-    // std::mem::drop(sp);
+    info!("test");
+    std::mem::drop(ro);
+    std::mem::drop(sp);
 
-    let f1 = server(opt, state, &sock, &chart);
-    let f2 = discovery::maintain(&sock, &chart);
-    futures::join!(f1,f2);
+    // let f1 = server(opt, state, &sock, &chart);
+    // let f2 = discovery::maintain(&sock, &chart);
+    // futures::join!(f1,f2);
 
     opentelemetry::global::shutdown_tracer_provider();
 }

@@ -1,9 +1,12 @@
 use std::net::SocketAddr;
+use std::sync::atomic::{AtomicU16, Ordering};
 
 use client_protocol::connection;
 use tokio::net::TcpStream;
 use tokio::time::Duration;
+use tokio::time::timeout;
 use tokio::time::Instant;
+use tokio::time;
 use futures::FutureExt;
 
 use tokio::sync::mpsc;
@@ -35,6 +38,7 @@ async fn send_hb(addr: SocketAddr, term: u64) -> Option<()> {
     Some(())
 }
 
+const HB_TIMEOUT: Duration = Duration::from_secs(2);
 pub async fn maintain_heartbeat(state: &'_ State<'_>) {
     loop {
         let heartbeats = state
@@ -45,21 +49,27 @@ pub async fn maintain_heartbeat(state: &'_ State<'_>) {
             .map(|addr| send_hb(addr, state.term));
 
         // TODO add timeout
-        futures::future::join_all(heartbeats).await;
+        let send_all = futures::future::join_all(heartbeats);
+        let _ = timeout(Duration::from_millis(500), send_all).await;
+        time::sleep(HB_TIMEOUT/2).await;
     }
 }
 
 
 /// future that returns if no heartbeat has been recieved for
 async fn monitor_heartbeat(state: &'_ mut State<'_>, rx: &mut mpsc::Receiver<(SocketAddr, ElectionMsg)>) {
-    const HB_TIMEOUT: Duration = Duration::from_secs(2);
-    let mut hb_deadline = Instant::now() + HB_TIMEOUT;
+    use rand::{Rng, SeedableRng};
+    let mut rng = rand::rngs::SmallRng::from_entropy();
+
+    let random_dur = rng.gen_range(Duration::from_secs(0)..HB_TIMEOUT);
+    let mut hb_deadline = Instant::now() + HB_TIMEOUT + random_dur;
     loop {
         match timeout_at(hb_deadline, rx.recv()).await {
             Ok(Some((_, ElectionMsg::HeartBeat(term)))) => {
                 if term >= state.term {
                     state.term = term;
-                    hb_deadline += HB_TIMEOUT;
+                    let random_dur = rng.gen_range(Duration::from_secs(0)..HB_TIMEOUT);
+                    hb_deadline += HB_TIMEOUT + random_dur;
                 }
             }
             Ok(Some(msg)) => todo!("unhandled electionmsg: {:?}", msg),
@@ -90,7 +100,7 @@ impl<'a> State<'a> {
     }
 }
 
-async fn request_vote(addr: SocketAddr, term: u64) -> Option<()> {
+async fn request_and_count(addr: SocketAddr, term: u64, count: &AtomicU16) -> Option<()> {
     use futures::{SinkExt, TryStreamExt};
     type RsStream = connection::MsgStream<ToWs, ToRs>;
 
@@ -101,29 +111,28 @@ async fn request_vote(addr: SocketAddr, term: u64) -> Option<()> {
         .await
         .ok()?;
 
-    match stream.try_next().await {
-        Ok(Some(ToWs::Election(ElectionMsg::VotedForYou(t)))) if t == term => Some(()),
-        _ => None,
+    if let Ok(Some(ToWs::Election(ElectionMsg::VotedForYou(t)))) = stream.try_next().await {
+        if t == term {
+            count.fetch_add(1, Ordering::Relaxed);
+        }
     }
+    Some(())
 }
 
+// TODO rewrite, as soon as we have enough votes continue and declear win
 async fn request_and_count_votes(state: &State<'_>) -> ElectionResult {
+    let count = AtomicU16::new(1); // we vote for ourself
     let requests = state
         .chart
         .map
         .iter()
         .map(|m| m.value().clone())
-        .map(|addr| request_vote(addr, state.term));
+        .map(|addr| request_and_count(addr, state.term, &count));
 
-    // TODO add timeout
-    let votes: usize = futures::future::join_all(requests)
-        .await
-        .iter()
-        .map(Option::is_some)
-        .map(|b| b as usize)
-        .sum();
+    let geather_votes = futures::future::join_all(requests);
+    let _ = timeout(Duration::from_millis(500), geather_votes).await;
 
-    match state.is_majority(votes) {
+    match state.is_majority(count.into_inner() as usize) {
         true => ElectionResult::WeWon,
         false => ElectionResult::Stale,
     }
