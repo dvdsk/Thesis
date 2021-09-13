@@ -1,5 +1,6 @@
 use futures_util::TryStreamExt;
 use tokio::net::TcpListener;
+use std::net::SocketAddr;
 use tokio::sync::mpsc::Sender;
 use std::net::IpAddr;
 use std::net::Ipv4Addr;
@@ -28,25 +29,26 @@ async fn handle_connection(msg: ControlMsg) {
     use ControlMsg::*;
     match msg {
         GetServerList => todo!(),
-        DirectoryChange(change) => todo!(),
+        DirectoryChange(change) => todo!("{:?}", change),
         other => todo!("not yet handling: {:?}", other),
     }
 }
 
 
-pub async fn cmd_server(port: u16, tx: Sender<ElectionMsg>) {
+pub async fn cmd_server(port: u16, tx: Sender<(SocketAddr, ElectionMsg)>) {
     let addr = (IpAddr::V4(Ipv4Addr::UNSPECIFIED), port);
     let listener = TcpListener::bind(addr).await.unwrap();
 
     loop {
-        let (socket, _) = listener.accept().await.unwrap();
+        let (socket, source) = listener.accept().await.unwrap();
+        let tx = tx.clone();
         tokio::spawn(async move {
             type RsStream = connection::MsgStream<ToRs, ToWs>;
             let mut stream: RsStream = connection::wrap(socket);
             loop {
                 match stream.try_next().await.unwrap() {
-                    Some(ToRs::Election(msg)) => todo!("send to election cycle"),
-                    Some(ToRs::Control(msg)) => todo!("handle here"),
+                    Some(ToRs::Election(msg)) => tx.send((source, msg)).await.unwrap(),
+                    Some(ToRs::Control(msg)) => todo!("handle {:?} here", msg),
                     None => panic!("empty msgs are not allowed"),
                 }
             }

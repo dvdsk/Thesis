@@ -1,6 +1,5 @@
 use std::net::Ipv4Addr;
 use std::net::SocketAddr;
-use std::sync::Arc;
 use std::time::Duration;
 
 use tokio::net::UdpSocket;
@@ -14,7 +13,7 @@ type Id = String;
 #[derive(Debug)]
 pub struct Chart {
     id: Id,
-    map: dashmap::DashMap<Id, SocketAddr>,
+    pub map: dashmap::DashMap<Id, SocketAddr>,
 }
 
 impl Chart {
@@ -67,7 +66,7 @@ async fn request_responses(sock: &UdpSocket, period: Duration, id: &str) {
     let multiaddr = Ipv4Addr::from([224, 0, 0, 251]);
     loop {
         sleep(period).await;
-        let len = sock
+        let _len = sock
             .send_to(id.as_bytes(), (multiaddr, 8080))
             .await
             .unwrap();
