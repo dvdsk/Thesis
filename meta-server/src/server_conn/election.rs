@@ -2,12 +2,12 @@ use std::net::SocketAddr;
 use std::sync::atomic::{AtomicU16, Ordering};
 
 use client_protocol::connection;
-use tokio::net::TcpStream;
-use tokio::time::Duration;
-use tokio::time::timeout;
-use tokio::time::Instant;
-use tokio::time;
 use futures::FutureExt;
+use tokio::net::TcpStream;
+use tokio::time;
+use tokio::time::timeout;
+use tokio::time::Duration;
+use tokio::time::Instant;
 
 use tokio::sync::mpsc;
 use tokio::time::timeout_at;
@@ -51,13 +51,15 @@ pub async fn maintain_heartbeat(state: &'_ State<'_>) {
         // TODO add timeout
         let send_all = futures::future::join_all(heartbeats);
         let _ = timeout(Duration::from_millis(500), send_all).await;
-        time::sleep(HB_TIMEOUT/2).await;
+        time::sleep(HB_TIMEOUT / 2).await;
     }
 }
 
-
 /// future that returns if no heartbeat has been recieved for
-async fn monitor_heartbeat(state: &'_ mut State<'_>, rx: &mut mpsc::Receiver<(SocketAddr, ElectionMsg)>) {
+async fn monitor_heartbeat(
+    state: &'_ mut State<'_>,
+    rx: &mut mpsc::Receiver<(SocketAddr, ElectionMsg)>,
+) {
     use rand::{Rng, SeedableRng};
     let mut rng = rand::rngs::SmallRng::from_entropy();
 
@@ -79,6 +81,7 @@ async fn monitor_heartbeat(state: &'_ mut State<'_>, rx: &mut mpsc::Receiver<(So
     }
 }
 
+#[derive(Debug)]
 pub struct State<'a> {
     term: u64,
     cluster_size: u16,
@@ -86,7 +89,6 @@ pub struct State<'a> {
 }
 
 impl<'a> State<'a> {
-
     pub fn new(cluster_size: u16, chart: &'a discovery::Chart) -> Self {
         Self {
             term: 0,
@@ -100,6 +102,7 @@ impl<'a> State<'a> {
     }
 }
 
+#[tracing::instrument]
 async fn request_and_count(addr: SocketAddr, term: u64, count: &AtomicU16) -> Option<()> {
     use futures::{SinkExt, TryStreamExt};
     type RsStream = connection::MsgStream<ToWs, ToRs>;
@@ -120,6 +123,7 @@ async fn request_and_count(addr: SocketAddr, term: u64, count: &AtomicU16) -> Op
 }
 
 // TODO rewrite, as soon as we have enough votes continue and declear win
+#[tracing::instrument]
 async fn request_and_count_votes(state: &State<'_>) -> ElectionResult {
     let count = AtomicU16::new(1); // we vote for ourself
     let requests = state
@@ -133,12 +137,22 @@ async fn request_and_count_votes(state: &State<'_>) -> ElectionResult {
     let _ = timeout(Duration::from_millis(500), geather_votes).await;
 
     match state.is_majority(count.into_inner() as usize) {
-        true => ElectionResult::WeWon,
-        false => ElectionResult::Stale,
+        true => {
+            info!("won election");
+            ElectionResult::WeWon
+        }
+        false => {
+            info!("stale election");
+            ElectionResult::Stale
+        }
     }
 }
 
-async fn monitor_elections(rx: &mut mpsc::Receiver<(SocketAddr, ElectionMsg)>, our_term: u64) -> ElectionResult {
+#[tracing::instrument]
+async fn monitor_elections(
+    rx: &mut mpsc::Receiver<(SocketAddr, ElectionMsg)>,
+    our_term: u64,
+) -> ElectionResult {
     loop {
         if let Some((source, ElectionMsg::HeartBeat(term))) = rx.recv().await {
             if term > our_term {
@@ -148,6 +162,7 @@ async fn monitor_elections(rx: &mut mpsc::Receiver<(SocketAddr, ElectionMsg)>, o
     }
 }
 
+#[tracing::instrument]
 async fn host_election(
     rx: &mut mpsc::Receiver<(SocketAddr, ElectionMsg)>,
     state: &'_ mut State<'_>,
@@ -160,8 +175,8 @@ async fn host_election(
     }
 }
 
-pub async fn cycle(mut rx: mpsc::Receiver<(SocketAddr,ElectionMsg)>, state: &'_ mut State<'_>) {
-
+#[tracing::instrument]
+pub async fn cycle(mut rx: mpsc::Receiver<(SocketAddr, ElectionMsg)>, state: &'_ mut State<'_>) {
     loop {
         monitor_heartbeat(state, &mut rx).await;
 

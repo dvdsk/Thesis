@@ -1,44 +1,46 @@
+use futures::future::FutureExt;
+use gethostname::gethostname;
+use mac_address::get_mac_address;
 use structopt::StructOpt;
-use tokio::sync::mpsc;
 use tokio::net::UdpSocket;
+use tokio::sync::mpsc;
 use tracing::{info, info_span};
 use tracing_futures::Instrument;
-use futures::future::FutureExt;
-use mac_address::get_mac_address;
 
 pub mod db;
 mod read_meta;
-mod write_meta;
 pub mod server_conn;
+mod write_meta;
 use server_conn::election;
 use server_conn::election::maintain_heartbeat;
 
 #[derive(Debug, Clone, StructOpt)]
 struct Opt {
+    /// Name used to identify this instance in distributed tracing solutions
     #[structopt(long)]
+    name: Option<String>,
+
+    #[structopt(long, default_value = "23811")]
     client_port: u16,
 
-    #[structopt(long)]
+    #[structopt(long, default_value = "23812")]
     control_port: u16,
 
     #[structopt(long)]
     cluster_size: u16,
 
-    #[structopt(long, default_value="localhost")]
+    /// ip/host dns of the opentelemetry tracing endpoint
+    #[structopt(long, default_value = "localhost")]
     tracing_endpoint: String,
 }
 
-fn setup_tracing(endpoint: &str) {
+fn setup_tracing(instance_name: &str, endpoint: &str) {
     opentelemetry::global::set_text_map_propagator(opentelemetry_jaeger::Propagator::new());
-    let url = format!("http://{}:14268/api/traces", endpoint);
-    // let tracer = opentelemetry_jaeger::new_pipeline()
-    //     .with_service_name("minimal-example")
-    //     .with_collector_endpoint(url)
-    //     .install_simple()
-    //     .unwrap();
-    
-    use opentelemetry::sdk::export::trace;
-    let tracer = trace::stdout::new_pipeline().install_simple();
+    let tracer = opentelemetry_jaeger::new_pipeline()
+        .with_service_name(format!("mock-fs {}", instance_name))
+        .with_agent_endpoint(format!("{}:6831", endpoint))
+        .install_simple()
+        .unwrap();
 
     use tracing_subscriber::prelude::*;
     let telemetry = tracing_opentelemetry::subscriber().with_tracer(tracer);
@@ -50,6 +52,7 @@ fn setup_tracing(endpoint: &str) {
     tracing::collect::set_global_default(subscriber).unwrap();
 }
 
+#[tracing::instrument]
 async fn write_server(opt: &Opt) {
     use write_meta::{server, Directory, ReadServers};
 
@@ -63,6 +66,7 @@ async fn write_server(opt: &Opt) {
     futures::join!(maintain_conns, handle_req);
 }
 
+#[tracing::instrument]
 async fn read_server(opt: &Opt, state: &'_ mut election::State<'_>) {
     use read_meta::meta_server;
     // the cmd server forwards election related msgs to the
@@ -77,7 +81,13 @@ async fn read_server(opt: &Opt, state: &'_ mut election::State<'_>) {
     }
 }
 
-async fn server(opt: Opt, mut state: election::State<'_>, sock: &UdpSocket, chart: &discovery::Chart) {
+#[tracing::instrument]
+async fn server(
+    opt: Opt,
+    mut state: election::State<'_>,
+    sock: &UdpSocket,
+    chart: &discovery::Chart,
+) {
     discovery::cluster(sock, chart, opt.cluster_size).await;
     info!("finished discovery");
     read_server(&opt, &mut state).await;
@@ -91,7 +101,12 @@ async fn server(opt: Opt, mut state: election::State<'_>, sock: &UdpSocket, char
 #[tokio::main]
 async fn main() {
     let opt = Opt::from_args();
-    setup_tracing(&opt.tracing_endpoint);
+    let instance_name = opt.name.clone().unwrap_or(
+        gethostname()
+            .into_string()
+            .expect("hostname is not valid utf8"),
+    );
+    setup_tracing(&instance_name, &opt.tracing_endpoint);
 
     let sp = info_span!("setup");
     let ro = sp.enter();
@@ -103,13 +118,11 @@ async fn main() {
     let (sock, chart) = discovery::setup(id).await;
     let state = election::State::new(opt.cluster_size, &chart);
 
-    info!("test");
+    let f1 = server(opt, state, &sock, &chart);
+    let f2 = discovery::maintain(&sock, &chart);
+    futures::join!(f1, f2);
+
     std::mem::drop(ro);
     std::mem::drop(sp);
-
-    // let f1 = server(opt, state, &sock, &chart);
-    // let f2 = discovery::maintain(&sock, &chart);
-    // futures::join!(f1,f2);
-
     opentelemetry::global::shutdown_tracer_provider();
 }

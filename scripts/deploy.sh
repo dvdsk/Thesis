@@ -49,7 +49,7 @@ function run_in_tmux_windows()
 	local len=${#nodes[@]}
 	for (( i = 1; i < $len; i++ )); do
 		local name=${nodes[$i]}
-		local cmd="ssh ${nodes[$i]} \"$base_cmd\"; sleep 90"
+		local cmd="ssh $name \"$base_cmd\"; sleep 90"
 		tmux new-window -t "deployed:$i" -n $name -d "$cmd"
 	done
 	tmux attach-session -t "deployed"
