@@ -2,6 +2,7 @@ use structopt::StructOpt;
 use tokio::sync::mpsc;
 use tokio::net::UdpSocket;
 use tracing::{info, info_span};
+use tracing_futures::Instrument;
 use futures::future::FutureExt;
 use mac_address::get_mac_address;
 
@@ -77,7 +78,9 @@ async fn read_server(opt: &Opt, state: &'_ mut election::State<'_>) {
 }
 
 async fn server(opt: Opt, mut state: election::State<'_>, sock: &UdpSocket, chart: &discovery::Chart) {
+    println!("mmmmmmmmmmmmm");
     discovery::cluster(sock, chart, opt.cluster_size).await;
+    println!("discovery done");
     info!("finished discovery");
     read_server(&opt, &mut state).await;
 
@@ -89,11 +92,12 @@ async fn server(opt: Opt, mut state: election::State<'_>, sock: &UdpSocket, char
 
 #[tokio::main]
 async fn main() {
+    println!("hello world");
     let opt = Opt::from_args();
-    setup_tracing(&opt.tracing_endpoint);
+    // setup_tracing(&opt.tracing_endpoint);
 
-    let sp = info_span!("setup");
-    let ro = sp.enter();
+    // let sp = info_span!("setup");
+    // let ro = sp.enter();
 
     let id = get_mac_address()
         .unwrap()
@@ -102,8 +106,8 @@ async fn main() {
     let (sock, chart) = discovery::setup(id).await;
     let state = election::State::new(opt.cluster_size, &chart);
 
-    std::mem::drop(ro);
-    std::mem::drop(sp);
+    // std::mem::drop(ro);
+    // std::mem::drop(sp);
 
     let f1 = server(opt, state, &sock, &chart);
     let f2 = discovery::maintain(&sock, &chart);

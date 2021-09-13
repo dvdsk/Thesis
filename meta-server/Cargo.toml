@@ -24,6 +24,7 @@ futures-util = "0.3"
 thiserror = "1"
 
 tracing = {git = "https://github.com/tokio-rs/tracing" }
+tracing-futures = {git = "https://github.com/tokio-rs/tracing" }
 tracing-subscriber = {git = "https://github.com/tokio-rs/tracing" }
 tracing-opentelemetry = {git = "https://github.com/tokio-rs/tracing" }
 opentelemetry = { version = "0.16", features = ["trace"] }
