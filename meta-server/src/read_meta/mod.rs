@@ -7,7 +7,7 @@ use std::net::Ipv4Addr;
 
 use client_protocol::{Request, Response, connection};
 use crate::server_conn::protocol::ElectionMsg;
-use crate::server_conn::protocol::{ControlMsg, ToWs, ToRs};
+use crate::server_conn::protocol::{ControlMsg, FromRS, ToRs};
 
 pub async fn meta_server(port: u16) {
     let addr = (IpAddr::V4(Ipv4Addr::UNSPECIFIED), port);
@@ -29,11 +29,10 @@ async fn handle_connection(msg: ControlMsg) {
     use ControlMsg::*;
     match msg {
         GetServerList => todo!(),
-        DirectoryChange(change) => todo!("{:?}", change),
+        DirectoryChange(change, idx) => todo!("{:?}", change),
         other => todo!("not yet handling: {:?}", other),
     }
 }
-
 
 pub async fn cmd_server(port: u16, tx: Sender<(SocketAddr, ElectionMsg)>) {
     let addr = (IpAddr::V4(Ipv4Addr::UNSPECIFIED), port);
@@ -43,7 +42,7 @@ pub async fn cmd_server(port: u16, tx: Sender<(SocketAddr, ElectionMsg)>) {
         let (socket, source) = listener.accept().await.unwrap();
         let tx = tx.clone();
         tokio::spawn(async move {
-            type RsStream = connection::MsgStream<ToRs, ToWs>;
+            type RsStream = connection::MsgStream<ToRs, FromRS>;
             let mut stream: RsStream = connection::wrap(socket);
             loop {
                 match stream.try_next().await.unwrap() {

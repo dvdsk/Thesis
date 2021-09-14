@@ -1,4 +1,4 @@
-use crate::server_conn::protocol::{ToWs, ToRs};
+use crate::server_conn::protocol::{FromRS, ToRs};
 use client_protocol::connection;
 use futures::{TryStreamExt};
 use tokio::net::{TcpStream, ToSocketAddrs};
@@ -9,7 +9,7 @@ pub enum Error {
     Io(#[from] std::io::Error),
 }
 
-type WsStream = connection::MsgStream<ToRs, ToWs>;
+type WsStream = connection::MsgStream<ToRs, FromRS>;
 pub struct WriteServer {
     conn: WsStream,
 }

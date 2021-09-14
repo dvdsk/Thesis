@@ -11,11 +11,11 @@ use tokio::time::Instant;
 
 use tokio::sync::mpsc;
 use tokio::time::timeout_at;
-use tracing::{info, info_span};
+use tracing::info;
 
 use crate::server_conn::protocol::ElectionMsg;
 use crate::server_conn::protocol::ToRs;
-use crate::server_conn::protocol::ToWs;
+use crate::server_conn::protocol::FromRS;
 
 type Winner = SocketAddr;
 #[derive(Debug)]
@@ -27,7 +27,7 @@ pub enum ElectionResult {
 
 async fn send_hb(addr: SocketAddr, term: u64) -> Option<()> {
     use futures::SinkExt;
-    type RsStream = connection::MsgStream<ToWs, ToRs>;
+    type RsStream = connection::MsgStream<FromRS, ToRs>;
 
     let socket = TcpStream::connect(addr).await.ok()?;
     let mut stream: RsStream = connection::wrap(socket);
@@ -105,7 +105,7 @@ impl<'a> State<'a> {
 #[tracing::instrument]
 async fn request_and_count(addr: SocketAddr, term: u64, count: &AtomicU16) -> Option<()> {
     use futures::{SinkExt, TryStreamExt};
-    type RsStream = connection::MsgStream<ToWs, ToRs>;
+    type RsStream = connection::MsgStream<FromRS, ToRs>;
 
     let socket = TcpStream::connect(addr).await.ok()?;
     let mut stream: RsStream = connection::wrap(socket);
@@ -114,7 +114,7 @@ async fn request_and_count(addr: SocketAddr, term: u64, count: &AtomicU16) -> Op
         .await
         .ok()?;
 
-    if let Ok(Some(ToWs::Election(ElectionMsg::VotedForYou(t)))) = stream.try_next().await {
+    if let Ok(Some(FromRS::Election(ElectionMsg::VotedForYou(t)))) = stream.try_next().await {
         if t == term {
             count.fetch_add(1, Ordering::Relaxed);
         }

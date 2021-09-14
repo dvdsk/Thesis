@@ -4,8 +4,8 @@ use std::net::{IpAddr, Ipv4Addr};
 use tokio::net::TcpListener;
 use tracing::instrument;
 
-pub use crate::db::DbError;
-pub use crate::db::Directory;
+pub use crate::directory::DbError;
+pub use crate::directory::writeserv::Directory;
 pub use crate::server_conn::to_readserv::ReadServers;
 
 async fn mkdir(mut directory: Directory, path: PathString) -> Response {

@@ -4,10 +4,11 @@ use mac_address::get_mac_address;
 use structopt::StructOpt;
 use tokio::net::UdpSocket;
 use tokio::sync::mpsc;
-use tracing::{info, info_span};
+use tracing::info;
 use tracing_futures::Instrument;
 
-pub mod db;
+pub mod directory;
+use directory::readserv;
 mod read_meta;
 pub mod server_conn;
 mod write_meta;
@@ -53,21 +54,21 @@ fn setup_tracing(instance_name: &str, endpoint: &str) {
 }
 
 #[tracing::instrument]
-async fn write_server(opt: &Opt) {
+async fn write_server(opt: Opt, dir: readserv::Directory) {
     use write_meta::{server, Directory, ReadServers};
 
     let servers = ReadServers::new();
-    let db = Directory::new(servers.clone());
+    let dir = Directory::from(dir, servers.clone());
 
     let maintain_conns = ReadServers::maintain(servers.conns.clone(), opt.control_port);
-    let handle_req = server(opt.client_port, db);
+    let handle_req = server(opt.client_port, dir);
 
     info!("starting write server");
     futures::join!(maintain_conns, handle_req);
 }
 
 #[tracing::instrument]
-async fn read_server(opt: &Opt, state: &'_ mut election::State<'_>) {
+async fn read_server(opt: &Opt, state: &'_ mut election::State<'_>, dir: &mut readserv::Directory) {
     use read_meta::meta_server;
     // the cmd server forwards election related msgs to the
     // election_cycle. This is better then stopping the cmd server
@@ -85,16 +86,17 @@ async fn read_server(opt: &Opt, state: &'_ mut election::State<'_>) {
 async fn server(
     opt: Opt,
     mut state: election::State<'_>,
+    mut dir: readserv::Directory,
     sock: &UdpSocket,
     chart: &discovery::Chart,
 ) {
     discovery::cluster(sock, chart, opt.cluster_size).await;
     info!("finished discovery");
-    read_server(&opt, &mut state).await;
+    read_server(&opt, &mut state, &mut dir).await;
 
     info!("promoted to readserver");
     let send_hb = maintain_heartbeat(&state);
-    let host = write_server(&opt);
+    let host = write_server(opt, dir);
     futures::join!(send_hb, host);
 }
 
@@ -108,21 +110,17 @@ async fn main() {
     );
     setup_tracing(&instance_name, &opt.tracing_endpoint);
 
-    let sp = info_span!("setup");
-    let ro = sp.enter();
-
     let id = get_mac_address()
         .unwrap()
         .expect("there should be at least one network decive")
         .to_string();
     let (sock, chart) = discovery::setup(id).await;
+    let dir = readserv::Directory::new();
     let state = election::State::new(opt.cluster_size, &chart);
 
-    let f1 = server(opt, state, &sock, &chart);
+    let f1 = server(opt, state, dir, &sock, &chart);
     let f2 = discovery::maintain(&sock, &chart);
     futures::join!(f1, f2);
 
-    std::mem::drop(ro);
-    std::mem::drop(sp);
     opentelemetry::global::shutdown_tracer_provider();
 }

@@ -5,11 +5,11 @@ use std::sync::Arc;
 use tokio::net::TcpListener;
 use tokio::sync::Mutex;
 
-use crate::server_conn::protocol::{ToWs,ToRs,Change};
+use crate::server_conn::protocol::{FromRS,ToRs,Change};
 
 use super::protocol::ControlMsg;
 
-type RsStream = connection::MsgStream<ToWs, ToRs>;
+type RsStream = connection::MsgStream<FromRS, ToRs>;
 type ConnList = Arc<Mutex<Vec<RsStream>>>;
 
 #[derive(Clone, Debug)]

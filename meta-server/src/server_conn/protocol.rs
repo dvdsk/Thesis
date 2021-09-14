@@ -2,22 +2,23 @@ use client_protocol::PathString;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
-pub enum ToWs {
+pub enum FromRS {
     Election(ElectionMsg),
 }
 
 type Term = u64;
+type ChangeIdx = u64;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ElectionMsg {
-    HeartBeat(Term),
-    RequestVote(Term),
+    HeartBeat(Term, ChangeIdx),
+    RequestVote(Term, ChangeIdx),
     VotedForYou(Term),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ControlMsg {
     GetServerList,
-    DirectoryChange(Change),
+    DirectoryChange(Change, ChangeIdx),
     Test,
 }
 
