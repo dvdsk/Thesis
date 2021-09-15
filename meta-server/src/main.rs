@@ -3,7 +3,7 @@ use gethostname::gethostname;
 use mac_address::get_mac_address;
 use structopt::StructOpt;
 use tokio::net::UdpSocket;
-use tokio::sync::mpsc;
+use tokio::sync::Notify;
 use tracing::info;
 use tracing_futures::Instrument;
 
@@ -12,8 +12,7 @@ use directory::readserv;
 mod read_meta;
 pub mod server_conn;
 mod write_meta;
-use server_conn::election;
-use server_conn::election::maintain_heartbeat;
+mod consensus;
 
 #[derive(Debug, Clone, StructOpt)]
 struct Opt {
@@ -53,7 +52,6 @@ fn setup_tracing(instance_name: &str, endpoint: &str) {
     tracing::collect::set_global_default(subscriber).unwrap();
 }
 
-#[tracing::instrument]
 async fn write_server(opt: Opt, dir: readserv::Directory) {
     use write_meta::{server, Directory, ReadServers};
 
@@ -67,35 +65,47 @@ async fn write_server(opt: Opt, dir: readserv::Directory) {
     futures::join!(maintain_conns, handle_req);
 }
 
-#[tracing::instrument]
-async fn read_server(opt: &Opt, state: &'_ mut election::State<'_>, dir: &mut readserv::Directory) {
+async fn host_meta_or_update(client_port: u16, state: &'_ consensus::State<'_>, dir: &readserv::Directory) {
     use read_meta::meta_server;
-    // the cmd server forwards election related msgs to the
-    // election_cycle. This is better then stopping the cmd server
-    // and starting a election server as that risks losing packages
-    let (tx, rx) = mpsc::channel(10);
-
-    futures::select! {
-        () = read_meta::cmd_server(opt.control_port, tx).fuse() => todo!(),
-        _res = meta_server(opt.client_port).fuse() => panic!("meta server should not return"),
-        _won = election::cycle(rx, state).fuse() => info!("won the election"),
+    loop {
+        futures::select! {
+            f1 = meta_server(client_port).fuse() => panic!("should not return"),
+            f2 = state.outdated.notified().fuse() => (),
+        }
+        consensus::update(state, dir).await;
     }
 }
 
-#[tracing::instrument]
+async fn read_server(opt: &Opt, state: &'_ consensus::State<'_>, dir: &readserv::Directory) {
+    use consensus::election;
+
+    // TODO ensure meta server stops as soon as we detect we are outdated, then trigger an update
+    // outdated detection happens inside the cmd server (from hb or update)
+    //  - it notifies the meta_server which kills all current requests
+    //  - then the meta server starts updating the directory using the master (if any)
+    //    or blocks until there is a master
+    loop {
+        futures::select! {
+            () = read_meta::cmd_server(opt.control_port, state, dir).fuse() => todo!(),
+            _res = host_meta_or_update(opt.client_port, state, dir).fuse() => panic!("should not return"),
+            _won = election::cycle(state).fuse() => {info!("won the election"); return},
+        }
+    }
+}
+
 async fn server(
     opt: Opt,
-    mut state: election::State<'_>,
+    state: consensus::State<'_>,
     mut dir: readserv::Directory,
     sock: &UdpSocket,
     chart: &discovery::Chart,
 ) {
     discovery::cluster(sock, chart, opt.cluster_size).await;
     info!("finished discovery");
-    read_server(&opt, &mut state, &mut dir).await;
+    read_server(&opt, &state, &mut dir).await;
 
     info!("promoted to readserver");
-    let send_hb = maintain_heartbeat(&state);
+    let send_hb = consensus::maintain_heartbeat(&state);
     let host = write_server(opt, dir);
     futures::join!(send_hb, host);
 }
@@ -116,7 +126,7 @@ async fn main() {
         .to_string();
     let (sock, chart) = discovery::setup(id).await;
     let dir = readserv::Directory::new();
-    let state = election::State::new(opt.cluster_size, &chart);
+    let state = consensus::State::new(opt.cluster_size, &chart, dir.get_change_idx());
 
     let f1 = server(opt, state, dir, &sock, &chart);
     let f2 = discovery::maintain(&sock, &chart);

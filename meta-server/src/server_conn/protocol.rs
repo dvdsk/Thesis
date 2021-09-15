@@ -3,29 +3,30 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum FromRS {
-    Election(ElectionMsg),
-}
-
-type Term = u64;
-type ChangeIdx = u64;
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum ElectionMsg {
-    HeartBeat(Term, ChangeIdx),
-    RequestVote(Term, ChangeIdx),
     VotedForYou(Term),
+    RequestVote(Term, ChangeIdx),
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum ControlMsg {
-    GetServerList,
-    DirectoryChange(Change, ChangeIdx),
-    Test,
+
+#[derive(Debug, Serialize, Deserialize)]
+pub enum ToWs {
+    Sync,
 }
+
+
+#[derive(Debug, Serialize, Deserialize)]
+pub enum FromWs {
+    Directory(()),
+}
+
+pub type Term = u64;
+pub type ChangeIdx = u64;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ToRs {
-    Election(ElectionMsg),
-    Control(ControlMsg),
+    HeartBeat(Term, ChangeIdx),
+    RequestVote(Term, ChangeIdx),
+    DirectoryChange(Change, ChangeIdx),
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

@@ -7,8 +7,6 @@ use tokio::sync::Mutex;
 
 use crate::server_conn::protocol::{FromRS,ToRs,Change};
 
-use super::protocol::ControlMsg;
-
 type RsStream = connection::MsgStream<FromRS, ToRs>;
 type ConnList = Arc<Mutex<Vec<RsStream>>>;
 
@@ -39,7 +37,7 @@ impl ReadServers {
     }
     pub async fn publish(&self, change: Change) {
         let mut conns = self.conns.lock().await;
-        let msg = ToRs::Control(ControlMsg::DirectoryChange(change));
+        let msg = ToRs::DirectoryChange(change, todo!("change idx"));
         for conn in &mut *conns {
             conn.send(msg.clone()).await.unwrap();
         }
