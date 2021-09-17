@@ -1,0 +1,33 @@
+\begin{tikzpicture}[node distance=4cm, auto]
+    \tikzstyle{neuron}=[thick,minimum width=4cm,align=left]
+
+    \node (start) [] {start};
+
+    \node (wait)[neuron, below of=start]{wait till > 50\% \\of cluster discoverd};
+    \node (discover)[neuron, left of=wait]{discover new\\ cluster members};
+
+    \node (monitor_hb) [neuron,below of=wait] {monitor hb};
+    \node (handle_update) [neuron,left of=monitor_hb] {handle fs changes};
+    \node (host_fs) [neuron,right of=monitor_hb] {host fs meta};
+
+    \node (update) [neuron,below of=host_fs] {synchronize meta\\ with master};
+    \node (host_election) [neuron, below of=monitor_hb,] {host election};
+
+    \node (ws) [below of=host_election] {};
+    \node (maintain_hb) [neuron,below left of=ws] {maintain hb};
+    \node (handle_meta) [neuron,below right of=ws] {handle meta\\ change requests};
+
+    \draw[->, >=stealth, very thick] (start) to [out=270, in=90] node [] {} (wait);
+    \draw[->, >=stealth, very thick] (start) to [out=270, in=90] node [] {} (discover);
+
+    \draw[->, >=stealth, very thick] (wait) to [out=270, in=90] node [] {} (handle_update);
+    \draw[->, >=stealth, very thick] (wait) to [out=270, in=90] node [near start, below left] {} (monitor_hb);
+    \draw[->, >=stealth, very thick] (wait) to [out=270, in=90] node [near start, below left] {} (host_fs);
+
+    \draw[->, >=stealth, very thick] (host_fs) to [out=270, in=90] node [near start, above] {} (update);
+    \draw[->, >=stealth, very thick] (monitor_hb) to [out=270, in=90] node [near start, below] {} (host_election);
+
+    \draw[->, >=stealth, very thick] (host_election) to [out=270, in=90] node [below] {} (maintain_hb);
+    \draw[->, >=stealth, very thick] (host_election) to [out=270, in=90] node [below] {} (handle_meta);
+
+\end{tikzpicture}

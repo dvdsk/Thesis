@@ -4,5 +4,10 @@ protocol/target
 tracing/jeager-all-in-one
 Cargo.lock
 tracing-min-example
-client/target dev_discovery/target libmdns/target mdns/target meta-server/target protocol/target tracing-min-example/target
 **/target/
+*.aux
+*.bbl
+*.blg
+*.log
+*.toc
+
