@@ -84,7 +84,7 @@ async fn host_meta_or_update(
 async fn read_server(opt: &Opt, state: &Arc<consensus::State>, chart: &discovery::Chart, dir: &readserv::Directory) {
     use consensus::election;
 
-    // TODO ensure meta server stops as soon as we detect we are outdated, then trigger an update
+    // the meta server stops as soon as we detect we are outdated, then starts updating.
     // outdated detection happens inside the cmd server (from hb or update)
     //  - it notifies the meta_server which kills all current requests
     //  - then the meta server starts updating the directory using the master (if any)

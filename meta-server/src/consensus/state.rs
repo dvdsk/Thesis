@@ -1,4 +1,5 @@
 use std::net::SocketAddr;
+use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 use tokio::sync::Notify;
@@ -10,6 +11,7 @@ use crate::server_conn::protocol::FromRS;
 pub struct State {
     term: AtomicU64,
     change_idx: AtomicU64,
+    master: Mutex<Option<SocketAddr>>, // normal mutex since we do no async io inside crit. sect.
     cluster_size: u16,
     candidate: AtomicBool,
     pub got_valid_hb: Notify,
@@ -29,6 +31,7 @@ impl State {
         Self {
             term: AtomicU64::new(0),
             change_idx: AtomicU64::new(change_idx),
+            master: Mutex::new(None),
             cluster_size,
             candidate: AtomicBool::new(false),
             got_valid_hb: Notify::new(),
@@ -61,6 +64,10 @@ impl State {
         votes > cluster_majority
     }
 
+    pub fn get_master(&self) -> Option<SocketAddr> {
+        *self.master.lock().unwrap()
+    }
+
     fn check_term(&self, term: u64, source: SocketAddr) -> Result<(), ()> {
         if term < self.term() {
             warn!("ignoring hb from main: {:?}, term to old)", source);
@@ -68,7 +75,8 @@ impl State {
         }
         if term > self.term() {
             self.set_term(term);
-            info!("new master: {:?}", source);
+            info!("new master: {:?}", &source);
+            *self.master.lock().unwrap() = Some(source);
             todo!("actually update master");
         }
         self.got_valid_hb.notify_one();

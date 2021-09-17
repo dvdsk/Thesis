@@ -24,6 +24,10 @@ impl Directory {
         self.db.get_change_idx()
     }
 
+    pub fn serialize(&self) -> Vec<u8> {
+        self.db.serialize();
+    }
+
     pub async fn mkdir(&mut self, path: PathString) -> Result<(), DbError> {
         self.db.mkdir(path.clone()).await?;
         self.servers.publish(&self.state, Change::DirAdded(path)).await;

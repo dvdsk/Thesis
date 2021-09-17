@@ -6,6 +6,7 @@ pub enum FromRS {
     VotedForYou(Term),
     RequestVote(Term, ChangeIdx),
     NotVoting,
+    Error,
 }
 
 

@@ -27,10 +27,6 @@ pub async fn meta_server(port: u16) {
     }
 }
 
-async fn handle_msg() {
-    todo!();
-}
-
 type RsStream = connection::MsgStream<ToRs, FromRS>;
 async fn handle_conn(mut stream: RsStream, source: SocketAddr, state: &State, dir: &Directory) {
     use ToRs::*;
@@ -39,10 +35,12 @@ async fn handle_conn(mut stream: RsStream, source: SocketAddr, state: &State, di
             HeartBeat(term, change_idx) => state.handle_heartbeat(term, change_idx, source),
             RequestVote(term, change_idx) => {
                 let reply = state.handle_votereq(term, change_idx);
-                let _ignore_res = stream.send(reply);
+                let _ignore_res = stream.send(reply).await;
             }
             DirectoryChange(term, change_idx, change) => {
-                state.handle_dirchange(term, change_idx, source);
+                if let Err(_) = state.handle_dirchange(term, change_idx, source) {
+                    let _ignore_res = stream.send(FromRS::Error).await;
+                }
                 dir.apply(change).await;
             }
         }
