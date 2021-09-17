@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 pub enum FromRS {
     VotedForYou(Term),
     RequestVote(Term, ChangeIdx),
+    NotVoting,
 }
 
 
@@ -26,7 +27,7 @@ pub type ChangeIdx = u64;
 pub enum ToRs {
     HeartBeat(Term, ChangeIdx),
     RequestVote(Term, ChangeIdx),
-    DirectoryChange(Change, ChangeIdx),
+    DirectoryChange(Term, ChangeIdx, Change),
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

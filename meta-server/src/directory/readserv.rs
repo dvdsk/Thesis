@@ -1,3 +1,5 @@
+use crate::server_conn::protocol::Change;
+
 use super::db::Db;
 use client_protocol::PathString;
 
@@ -19,11 +21,17 @@ impl Directory {
         self.db.get_change_idx()
     }
 
-    pub async fn mkdir(&mut self, path: PathString) {
+    pub async fn mkdir(&self, path: PathString) {
         self
             .db
             .mkdir(path)
             .await
             .expect("file exists should be caught on write server");
+    }
+
+    pub async fn apply(&self, change: Change) {
+        match change {
+            Change::DirAdded(path) => self.mkdir(path).await,
+        }
     }
 }

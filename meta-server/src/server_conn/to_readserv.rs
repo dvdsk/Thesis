@@ -5,6 +5,7 @@ use std::sync::Arc;
 use tokio::net::TcpListener;
 use tokio::sync::Mutex;
 
+use crate::consensus::State;
 use crate::server_conn::protocol::{FromRS,ToRs,Change};
 
 type RsStream = connection::MsgStream<FromRS, ToRs>;
@@ -35,9 +36,9 @@ impl ReadServers {
             });
         }
     }
-    pub async fn publish(&self, change: Change) {
+    pub async fn publish(&self, state: &State, change: Change) {
         let mut conns = self.conns.lock().await;
-        let msg = ToRs::DirectoryChange(change, todo!("change idx"));
+        let msg = ToRs::DirectoryChange(state.term(), state.change_idx(), change);
         for conn in &mut *conns {
             conn.send(msg.clone()).await.unwrap();
         }

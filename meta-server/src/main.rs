@@ -1,18 +1,19 @@
+use std::sync::Arc;
+
 use futures::future::FutureExt;
 use gethostname::gethostname;
 use mac_address::get_mac_address;
 use structopt::StructOpt;
 use tokio::net::UdpSocket;
-use tokio::sync::Notify;
 use tracing::info;
 use tracing_futures::Instrument;
 
 pub mod directory;
 use directory::readserv;
+mod consensus;
 mod read_meta;
 pub mod server_conn;
 mod write_meta;
-mod consensus;
 
 #[derive(Debug, Clone, StructOpt)]
 struct Opt {
@@ -52,11 +53,11 @@ fn setup_tracing(instance_name: &str, endpoint: &str) {
     tracing::collect::set_global_default(subscriber).unwrap();
 }
 
-async fn write_server(opt: Opt, dir: readserv::Directory) {
+async fn write_server(opt: Opt, dir: readserv::Directory, state: &Arc<consensus::State>) {
     use write_meta::{server, Directory, ReadServers};
 
     let servers = ReadServers::new();
-    let dir = Directory::from(dir, servers.clone());
+    let dir = Directory::from(dir, servers.clone(), state);
 
     let maintain_conns = ReadServers::maintain(servers.conns.clone(), opt.control_port);
     let handle_req = server(opt.client_port, dir);
@@ -65,18 +66,22 @@ async fn write_server(opt: Opt, dir: readserv::Directory) {
     futures::join!(maintain_conns, handle_req);
 }
 
-async fn host_meta_or_update(client_port: u16, state: &'_ consensus::State<'_>, dir: &readserv::Directory) {
+async fn host_meta_or_update(
+    client_port: u16,
+    state: &consensus::State,
+    dir: &readserv::Directory,
+) {
     use read_meta::meta_server;
     loop {
         futures::select! {
-            f1 = meta_server(client_port).fuse() => panic!("should not return"),
-            f2 = state.outdated.notified().fuse() => (),
+            _ = meta_server(client_port).fuse() => panic!("should not return"),
+            _ = state.outdated.notified().fuse() => (),
         }
         consensus::update(state, dir).await;
     }
 }
 
-async fn read_server(opt: &Opt, state: &'_ consensus::State<'_>, dir: &readserv::Directory) {
+async fn read_server(opt: &Opt, state: &Arc<consensus::State>, chart: &discovery::Chart, dir: &readserv::Directory) {
     use consensus::election;
 
     // TODO ensure meta server stops as soon as we detect we are outdated, then trigger an update
@@ -86,27 +91,27 @@ async fn read_server(opt: &Opt, state: &'_ consensus::State<'_>, dir: &readserv:
     //    or blocks until there is a master
     loop {
         futures::select! {
-            () = read_meta::cmd_server(opt.control_port, state, dir).fuse() => todo!(),
-            _res = host_meta_or_update(opt.client_port, state, dir).fuse() => panic!("should not return"),
-            _won = election::cycle(state).fuse() => {info!("won the election"); return},
+            () = read_meta::cmd_server(opt.control_port, state.clone(), dir).fuse() => todo!(),
+            _res = host_meta_or_update(opt.client_port, &state, dir).fuse() => panic!("should not return"),
+            _won = election::cycle(&state, chart).fuse() => {info!("won the election"); return},
         }
     }
 }
 
 async fn server(
     opt: Opt,
-    state: consensus::State<'_>,
+    state: Arc<consensus::State>,
     mut dir: readserv::Directory,
     sock: &UdpSocket,
     chart: &discovery::Chart,
 ) {
     discovery::cluster(sock, chart, opt.cluster_size).await;
     info!("finished discovery");
-    read_server(&opt, &state, &mut dir).await;
+    read_server(&opt, &state, chart, &mut dir).await;
 
     info!("promoted to readserver");
-    let send_hb = consensus::maintain_heartbeat(&state);
-    let host = write_server(opt, dir);
+    let send_hb = consensus::maintain_heartbeat(&state, chart);
+    let host = write_server(opt, dir, &state);
     futures::join!(send_hb, host);
 }
 
@@ -126,7 +131,8 @@ async fn main() {
         .to_string();
     let (sock, chart) = discovery::setup(id).await;
     let dir = readserv::Directory::new();
-    let state = consensus::State::new(opt.cluster_size, &chart, dir.get_change_idx());
+    let state = consensus::State::new(opt.cluster_size, dir.get_change_idx());
+    let state = Arc::new(state);
 
     let f1 = server(opt, state, dir, &sock, &chart);
     let f2 = discovery::maintain(&sock, &chart);

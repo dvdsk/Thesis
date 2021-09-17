@@ -1,15 +1,15 @@
 use futures::SinkExt;
 use futures_util::TryStreamExt;
-use tokio::net::TcpListener;
-use std::net::SocketAddr;
 use std::net::IpAddr;
 use std::net::Ipv4Addr;
+use std::net::SocketAddr;
 use std::sync::Arc;
+use tokio::net::TcpListener;
 
-use client_protocol::{Request, Response, connection};
 use crate::consensus::State;
 use crate::directory::readserv::Directory;
 use crate::server_conn::protocol::{FromRS, ToRs};
+use client_protocol::{connection, Request, Response};
 
 pub async fn meta_server(port: u16) {
     let addr = (IpAddr::V4(Ipv4Addr::UNSPECIFIED), port);
@@ -27,33 +27,40 @@ pub async fn meta_server(port: u16) {
     }
 }
 
+async fn handle_msg() {
+    todo!();
+}
+
 type RsStream = connection::MsgStream<ToRs, FromRS>;
-async fn handle_conn(mut stream: RsStream, source: SocketAddr, state: &'_ State<'_>) {
+async fn handle_conn(mut stream: RsStream, source: SocketAddr, state: &State, dir: &Directory) {
     use ToRs::*;
     while let Some(msg) = stream.try_next().await.unwrap() {
         match msg {
-            HeartBeat(term, change_idx) => {
-
-            },
-            RequestVote(term, change_idx) => todo!(),
-            DirectoryChange(term, change_idx) => todo!(),
+            HeartBeat(term, change_idx) => state.handle_heartbeat(term, change_idx, source),
+            RequestVote(term, change_idx) => {
+                let reply = state.handle_votereq(term, change_idx);
+                let _ignore_res = stream.send(reply);
+            }
+            DirectoryChange(term, change_idx, change) => {
+                state.handle_dirchange(term, change_idx, source);
+                dir.apply(change).await;
+            }
         }
     }
     panic!("empty msgs are not allowed");
-
 }
 
-pub async fn cmd_server(port: u16, state: &'_ State<'_>, dir: &Directory) {
+pub async fn cmd_server(port: u16, state: Arc<State>, dir: &Directory) {
     let addr = (IpAddr::V4(Ipv4Addr::UNSPECIFIED), port);
     let listener = TcpListener::bind(addr).await.unwrap();
-    let state = Arc::new(state);
 
     loop {
         let state = state.clone();
+        let dir = dir.clone();
         let (socket, source) = listener.accept().await.unwrap();
         tokio::spawn(async move {
             let stream: RsStream = connection::wrap(socket);
-            handle_conn(stream, source, &state).await;
+            handle_conn(stream, source, &state, &dir).await;
         });
     }
 }

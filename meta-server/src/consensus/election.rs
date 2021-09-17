@@ -2,6 +2,7 @@ use std::net::SocketAddr;
 use std::sync::atomic::{AtomicU16, Ordering};
 
 use client_protocol::connection;
+use discovery::Chart;
 use futures::FutureExt;
 use tokio::net::TcpStream;
 use tokio::time::timeout;
@@ -23,7 +24,7 @@ pub enum ElectionResult {
 }
 
 /// future that returns if no heartbeat has been recieved for
-async fn monitor_heartbeat(state: &'_ State<'_>) {
+async fn monitor_heartbeat(state: &State) {
     use rand::{Rng, SeedableRng};
     let mut rng = rand::rngs::SmallRng::from_entropy();
 
@@ -65,15 +66,14 @@ async fn request_and_count(
 }
 
 // TODO rewrite, as soon as we have enough votes continue and declear win
-async fn request_and_count_votes(state: &State<'_>) -> ElectionResult {
+async fn request_and_count_votes(state: &State, chart: &Chart) -> ElectionResult {
     let count = AtomicU16::new(1); // we vote for ourself
-    let term = state.term.load(Ordering::Relaxed);
-    let requests = state
-        .chart
+    let term = state.term();
+    let requests = chart
         .map
         .iter()
         .map(|m| m.value().clone())
-        .map(|addr| request_and_count(addr, term, state.change_idx, &count));
+        .map(|addr| request_and_count(addr, term, state.change_idx(), &count));
 
     let geather_votes = futures::future::join_all(requests);
     let _ = timeout(Duration::from_millis(500), geather_votes).await;
@@ -90,21 +90,25 @@ async fn request_and_count_votes(state: &State<'_>) -> ElectionResult {
     }
 }
 
-async fn host_election(state: &'_ State<'_>) -> ElectionResult {
+async fn host_election(state: &State, chart: &Chart) -> ElectionResult {
     info!("hosting leader election");
-    state.term.fetch_add(1, Ordering::Relaxed);
+    state.increase_term();
+    state.set_candidate();
     futures::select! {
-        res = request_and_count_votes(&state).fuse() => res,
-        _ = state.got_valid_hb.notified().fuse() => ElectionResult::WeLost,
+        res = request_and_count_votes(&state, chart).fuse() => res,
+        _ = state.got_valid_hb.notified().fuse() => {
+            state.set_follower();
+            ElectionResult::WeLost
+        },
     }
 }
 
-pub async fn cycle(state: &'_ State<'_>) {
+pub async fn cycle(state: &State, chart: &Chart) {
     loop {
         monitor_heartbeat(state).await;
 
         // TODO get cmd server listener in here
-        if let ElectionResult::WeWon = host_election(state).await {
+        if let ElectionResult::WeWon = host_election(state, chart).await {
             info!("won election");
             break;
         }
