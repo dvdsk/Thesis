@@ -117,6 +117,7 @@ async fn server(
 
 #[tokio::main]
 async fn main() {
+    println!("prog strt");
     let opt = Opt::from_args();
     let instance_name = opt.name.clone().unwrap_or(
         gethostname()

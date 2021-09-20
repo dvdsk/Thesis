@@ -27,7 +27,7 @@ impl Db {
             .path("db")
             .mode(sled::Mode::HighThroughput)
             .open()
-            .unwrap();
+            .expect("check if a server is not already running");
         let dir = Self(db);
         dir.init_change_idx();
         dir
