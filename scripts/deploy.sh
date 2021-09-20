@@ -69,7 +69,7 @@ function run_in_tmux_windows()
 
 function deploy()
 {
-	local numb_nodes=1#$1
+	local numb_nodes=$1
 	local bin=$2
 	local args="${@:3}"
 
