@@ -55,7 +55,6 @@ function run_in_tmux_windows()
 	local nodes=(${@:3})
 
 	local cmd=$(window_cmd ${nodes[0]} $dir "$base_cmd")
-	echo "$cmd"
 	tmux new-session -s "deployed" -n ${nodes[0]} -d "$cmd"
 
 	local len=${#nodes[@]}

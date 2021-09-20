@@ -33,14 +33,29 @@ struct Opt {
     /// ip/host dns of the opentelemetry tracing endpoint
     #[structopt(long, default_value = "localhost")]
     tracing_endpoint: String,
+
+    /// optional run number defaults to -1
+    #[structopt(long, default_value = "-1")]
+    run_numb: i64
 }
 
-fn setup_tracing(instance_name: &str, endpoint: &str) {
+fn setup_tracing(opt: &Opt) {
+    use opentelemetry::KeyValue;
     opentelemetry::global::set_text_map_propagator(opentelemetry_jaeger::Propagator::new());
+    let instance_name = opt.name.clone().unwrap_or(
+        gethostname()
+            .into_string()
+            .expect("hostname is not valid utf8"),
+    );
+
     let tracer = opentelemetry_jaeger::new_pipeline()
-        .with_service_name(format!("mock-fs {}", instance_name))
-        .with_agent_endpoint(format!("{}:6831", endpoint))
-        .install_simple()
+        .with_agent_endpoint(format!("{}:6831", opt.tracing_endpoint))
+        .with_service_name("mock-fs")
+        .with_tags(vec![
+            KeyValue::new("instance", instance_name.to_owned()),
+            KeyValue::new("run", opt.run_numb),
+        ])
+        .install_batch(opentelemetry::runtime::Tokio)
         .unwrap();
 
     use tracing_subscriber::prelude::*;
@@ -81,7 +96,12 @@ async fn host_meta_or_update(
     }
 }
 
-async fn read_server(opt: &Opt, state: &Arc<consensus::State>, chart: &discovery::Chart, dir: &readserv::Directory) {
+async fn read_server(
+    opt: &Opt,
+    state: &Arc<consensus::State>,
+    chart: &discovery::Chart,
+    dir: &readserv::Directory,
+) {
     use consensus::election;
 
     // the meta server stops as soon as we detect we are outdated, then starts updating.
@@ -119,12 +139,7 @@ async fn server(
 async fn main() {
     println!("prog strt");
     let opt = Opt::from_args();
-    let instance_name = opt.name.clone().unwrap_or(
-        gethostname()
-            .into_string()
-            .expect("hostname is not valid utf8"),
-    );
-    setup_tracing(&instance_name, &opt.tracing_endpoint);
+    setup_tracing(&opt);
 
     let id = get_mac_address()
         .unwrap()
