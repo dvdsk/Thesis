@@ -113,7 +113,7 @@ async fn read_server(
         futures::select! {
             () = read_meta::cmd_server(opt.control_port, state.clone(), dir).fuse() => todo!(),
             _res = host_meta_or_update(opt.client_port, &state, dir).fuse() => panic!("should not return"),
-            _won = election::cycle(&state, chart).fuse() => {info!("won the election"); return},
+            _won = election::cycle(opt.control_port, &state, chart).fuse() => {info!("won the election"); return},
         }
     }
 }
@@ -129,7 +129,7 @@ async fn server(
     info!("finished discovery");
     read_server(&opt, &state, chart, &mut dir).await;
 
-    info!("promoted to readserver");
+    info!("promoted to write server");
     let send_hb = consensus::maintain_heartbeat(&state, chart);
     let host = write_server(opt, dir, &state);
     futures::join!(send_hb, host);
@@ -145,7 +145,7 @@ async fn main() {
         .unwrap()
         .expect("there should be at least one network decive")
         .to_string();
-    let (sock, chart) = discovery::setup(id).await;
+    let (sock, chart) = discovery::setup(id, opt.control_port).await;
     let dir = readserv::Directory::new();
     let state = consensus::State::new(opt.cluster_size, dir.get_change_idx());
     let state = Arc::new(state);

@@ -116,6 +116,7 @@ impl State {
         Ok(())
     }
 
+    #[tracing::instrument]
     pub fn handle_votereq(&self, term: u64, change_idx: u64) -> FromRS {
         if self.term() > term {
             return FromRS::NotVoting;
@@ -126,8 +127,8 @@ impl State {
         }
 
         match self.candidate() {
-            true => FromRS::VotedForYou(term),
-            false => FromRS::NotVoting,
+            false => FromRS::VotedForYou(term),
+            true => FromRS::NotVoting,
         }
     }
 }

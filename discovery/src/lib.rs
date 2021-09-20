@@ -14,16 +14,18 @@ type Id = String;
 pub struct Chart {
     id: Id,
     pub map: dashmap::DashMap<Id, SocketAddr>,
+    port_to_store: u16,
 }
 
 impl Chart {
-    pub fn add_response(&self, buf: &[u8], addr: SocketAddr) {
+    pub fn add_response(&self, buf: &[u8], mut addr: SocketAddr) {
         let id = std::str::from_utf8(buf)
             .expect("Id should be printable utf8")
             .to_string();
         if id == self.id {
             return;
         }
+        addr.set_port(self.port_to_store);
         let old_key = self.map.insert(id, addr);
         if old_key.is_none() {
             info!("added new address: {:?}, total: ({})", addr, self.len());
@@ -98,7 +100,7 @@ pub async fn cluster(sock: &UdpSocket, chart: &Chart, full_size: u16) {
     info!("found majority of cluster, ({} nodes)", chart.len());
 }
 
-pub async fn setup(id: Id) -> (UdpSocket, Chart) {
+pub async fn setup(id: Id, port_to_store: u16) -> (UdpSocket, Chart) {
     let interface = Ipv4Addr::from([0, 0, 0, 0]);
     let multiaddr = Ipv4Addr::from([224, 0, 0, 251]);
 
@@ -107,6 +109,7 @@ pub async fn setup(id: Id) -> (UdpSocket, Chart) {
     sock.set_broadcast(true).unwrap();
 
     let chart = Chart {
+        port_to_store,
         id,
         map: dashmap::DashMap::new(),
     };
