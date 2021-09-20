@@ -19,11 +19,12 @@ pub async fn update(state: &State, dir: &Directory) {
             Ok(update) => update,
         };
 
-
+        dir.update_from_master(&update).await;
+        break
     }
 }
 
-async fn get_update(master: SocketAddr) -> Result<(), ()> {
+async fn get_update(master: SocketAddr) -> Result<Vec<u8>, ()> {
     type Stream = connection::MsgStream<FromWs, ToWs>;
     let socket = TcpStream::connect(master).await.map_err(|_| ())?;
     let mut stream: Stream = connection::wrap(socket);

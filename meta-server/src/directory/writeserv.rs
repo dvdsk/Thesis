@@ -25,7 +25,7 @@ impl Directory {
     }
 
     pub fn serialize(&self) -> Vec<u8> {
-        self.db.serialize();
+        self.db.serialize()
     }
 
     pub async fn mkdir(&mut self, path: PathString) -> Result<(), DbError> {

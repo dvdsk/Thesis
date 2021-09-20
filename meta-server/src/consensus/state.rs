@@ -12,7 +12,7 @@ pub struct State {
     term: AtomicU64,
     change_idx: AtomicU64,
     master: Mutex<Option<SocketAddr>>, // normal mutex since we do no async io inside crit. sect.
-    cluster_size: u16,
+    pub cluster_size: u16,
     candidate: AtomicBool,
     pub got_valid_hb: Notify,
     pub outdated: Notify,
@@ -59,10 +59,7 @@ impl State {
         self.term.store(val, Ordering::Relaxed)
     }
 
-    pub fn is_majority(&self, votes: usize) -> bool {
-        let cluster_majority = (self.cluster_size as f32 * 0.5).ceil() as usize;
-        votes > cluster_majority
-    }
+    
 
     pub fn get_master(&self) -> Option<SocketAddr> {
         *self.master.lock().unwrap()

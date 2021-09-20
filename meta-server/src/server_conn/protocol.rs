@@ -18,7 +18,7 @@ pub enum ToWs {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum FromWs {
-    Directory(()),
+    Directory(Vec<u8>),
 }
 
 pub type Term = u64;

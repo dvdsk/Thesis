@@ -34,4 +34,8 @@ impl Directory {
             Change::DirAdded(path) => self.mkdir(path).await,
         }
     }
+
+    pub async fn update_from_master(&self, update: &[u8]) {
+        self.db.replace_with_deserialized(update).await;
+    }
 }

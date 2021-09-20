@@ -5,16 +5,13 @@ use client_protocol::connection;
 use discovery::Chart;
 use futures::FutureExt;
 use tokio::net::TcpStream;
-use tokio::time::timeout;
-use tokio::time::Duration;
-use tokio::time::Instant;
+use tokio::sync::Notify;
+use tokio::time::{self, Duration, Instant, timeout_at};
 
-use tokio::time::timeout_at;
 use tracing::info;
 
 use super::{State, HB_TIMEOUT};
-use crate::server_conn::protocol::FromRS;
-use crate::server_conn::protocol::ToRs;
+use crate::server_conn::protocol::{FromRS, ToRs};
 
 #[derive(Debug)]
 pub enum ElectionResult {
@@ -41,11 +38,40 @@ async fn monitor_heartbeat(state: &State) {
     }
 }
 
-async fn request_and_count(
+#[derive(Default)]
+struct VoteCount {
+    majority: u16,
+    count: AtomicU16,
+    notify: Notify,
+}
+
+impl VoteCount {
+    pub fn new(cluster_size: u16) -> Self {
+        Self {
+            majority: (cluster_size as f32 * 0.5).ceil() as u16,
+            count: AtomicU16::new(1), // we vote for ourself
+            notify: Notify::new(),
+        }
+    }
+    pub fn increment(&self) {
+        self.count.fetch_add(1, Ordering::Relaxed);
+        self.notify.notify_one();
+    }
+    pub fn is_majority(&self) -> bool {
+        self.count.load(Ordering::Relaxed) >= self.majority
+    }
+    pub async fn await_majority(&self) {
+        while !self.is_majority() {
+            self.notify.notified().await;
+        }
+    }
+}
+
+async fn request_and_register(
     addr: SocketAddr,
     term: u64,
     change_idx: u64,
-    count: &AtomicU16,
+    count: &VoteCount,
 ) -> Option<()> {
     use futures::{SinkExt, TryStreamExt};
     type RsStream = connection::MsgStream<FromRS, ToRs>;
@@ -59,33 +85,30 @@ async fn request_and_count(
 
     if let Ok(Some(FromRS::VotedForYou(t))) = stream.try_next().await {
         if t == term {
-            count.fetch_add(1, Ordering::Relaxed);
+            count.increment();
         }
     }
     Some(())
 }
 
-// TODO rewrite, as soon as we have enough votes continue and declear win
 async fn request_and_count_votes(state: &State, chart: &Chart) -> ElectionResult {
-    let count = AtomicU16::new(1); // we vote for ourself
+    let count = VoteCount::new(state.cluster_size);
     let term = state.term();
     let requests = chart
         .map
         .iter()
         .map(|m| m.value().clone())
-        .map(|addr| request_and_count(addr, term, state.change_idx(), &count));
+        .map(|addr| request_and_register(addr, term, state.change_idx(), &count));
 
     let geather_votes = futures::future::join_all(requests);
-    let _ = timeout(Duration::from_millis(500), geather_votes).await;
-
-    match state.is_majority(count.into_inner() as usize) {
-        true => {
-            info!("won election");
-            ElectionResult::WeWon
-        }
-        false => {
-            info!("stale election");
-            ElectionResult::Stale
+    let timeout = time::sleep(Duration::from_millis(500));
+    let majority = count.await_majority();
+    futures::select! {
+        _ = timeout.fuse() => ElectionResult::Stale,
+        _ = majority.fuse() => ElectionResult::WeWon,
+        _ = geather_votes.fuse() => match count.is_majority() {
+            true => ElectionResult::WeWon,
+            false => ElectionResult::Stale,
         }
     }
 }
@@ -107,10 +130,13 @@ pub async fn cycle(state: &State, chart: &Chart) {
     loop {
         monitor_heartbeat(state).await;
 
-        // TODO get cmd server listener in here
-        if let ElectionResult::WeWon = host_election(state, chart).await {
-            info!("won election");
-            break;
+        match host_election(state, chart).await {
+            ElectionResult::Stale => info!("stale election"),
+            ElectionResult::WeLost => info!("lost election"),
+            ElectionResult::WeWon => {
+                info!("won election");
+                break;
+            }
         }
     }
 }

@@ -83,7 +83,7 @@ impl Db {
         bytes
     }
 
-    pub fn replace_with_deserialized(&self, bytes: &[u8]) {
+    pub async fn replace_with_deserialized(&self, bytes: &[u8]) {
         self.0.clear().unwrap();
         let mut i = 0;
         while i < bytes.len() {
@@ -91,6 +91,7 @@ impl Db {
             let key = deserialize_next(&mut i, bytes);
             self.0.insert(key, val).unwrap();
         }
+        self.0.flush_async().await.unwrap();
     }
 }
 

@@ -31,6 +31,12 @@ pub enum Existence {
 }
 
 pub type PathString = String; // easier to serialize then Path obj
+#[derive(Debug, PartialEq, Eq)]
+pub enum FsEntry {
+    Dir(PathString),
+    File(PathString),
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum Request {
     GetAssignedServers(ServerList),
