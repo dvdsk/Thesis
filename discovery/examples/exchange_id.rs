@@ -17,7 +17,7 @@ async fn main() {
         .expect("pass id as u16");
 
     let id = id_from_mac();
-    let (sock, chart) = discovery::setup(id).await;
+    let (sock, chart) = discovery::setup(id, 8080).await;
     let discover = discovery::cluster(&sock, &chart, cluster_size);
     let maintain = discovery::maintain(&sock, &chart);
 

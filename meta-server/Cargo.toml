@@ -29,5 +29,5 @@ tracing = {git = "https://github.com/tokio-rs/tracing" }
 tracing-futures = {git = "https://github.com/tokio-rs/tracing" }
 tracing-subscriber = {git = "https://github.com/tokio-rs/tracing" }
 tracing-opentelemetry = {git = "https://github.com/tokio-rs/tracing" }
-opentelemetry = { version = "0.16", features = ["trace"] }
-opentelemetry-jaeger = { version = "0.15", features = ["reqwest_collector_client"]}
+opentelemetry = { version = "0.16", features = ["trace", "rt-tokio"] }
+opentelemetry-jaeger = { version = "0.15", features = ["reqwest_collector_client", "rt-tokio"]}

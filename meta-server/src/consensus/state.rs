@@ -135,6 +135,7 @@ impl State {
         Ok(())
     }
 
+    #[tracing::instrument]
     pub fn handle_votereq(&self, term: u64, change_idx: u64, id: u64) -> FromRS {
         if self.term() > term {
             return FromRS::NotVoting;

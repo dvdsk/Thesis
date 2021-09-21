@@ -33,14 +33,29 @@ struct Opt {
     /// ip/host dns of the opentelemetry tracing endpoint
     #[structopt(long, default_value = "localhost")]
     tracing_endpoint: String,
+
+    /// optional run number defaults to -1
+    #[structopt(long, default_value = "-1")]
+    run_numb: i64
 }
 
-fn setup_tracing(instance_name: &str, endpoint: &str) {
+fn setup_tracing(opt: &Opt) {
+    use opentelemetry::KeyValue;
     opentelemetry::global::set_text_map_propagator(opentelemetry_jaeger::Propagator::new());
+    let instance_name = opt.name.clone().unwrap_or(
+        gethostname()
+            .into_string()
+            .expect("hostname is not valid utf8"),
+    );
+
     let tracer = opentelemetry_jaeger::new_pipeline()
-        .with_service_name(format!("mock-fs {}", instance_name))
-        .with_agent_endpoint(format!("{}:6831", endpoint))
-        .install_simple()
+        .with_agent_endpoint(format!("{}:6831", opt.tracing_endpoint))
+        .with_service_name("mock-fs")
+        .with_tags(vec![
+            KeyValue::new("instance", instance_name.to_owned()),
+            KeyValue::new("run", opt.run_numb),
+        ])
+        .install_batch(opentelemetry::runtime::Tokio)
         .unwrap();
 
     use tracing_subscriber::prelude::*;
@@ -81,7 +96,12 @@ async fn host_meta_or_update(
     }
 }
 
-async fn read_server(opt: &Opt, state: &Arc<consensus::State>, chart: &discovery::Chart, dir: &readserv::Directory) {
+async fn read_server(
+    opt: &Opt,
+    state: &Arc<consensus::State>,
+    chart: &discovery::Chart,
+    dir: &readserv::Directory,
+) {
     use consensus::election;
 
     // the meta server stops as soon as we detect we are outdated, then starts updating.
@@ -93,7 +113,7 @@ async fn read_server(opt: &Opt, state: &Arc<consensus::State>, chart: &discovery
         futures::select! {
             () = read_meta::cmd_server(opt.control_port, state.clone(), dir).fuse() => todo!(),
             _res = host_meta_or_update(opt.client_port, &state, dir).fuse() => panic!("should not return"),
-            _won = election::cycle(&state, chart).fuse() => {info!("won the election"); return},
+            _won = election::cycle(opt.control_port, &state, chart).fuse() => {info!("won the election"); return},
         }
     }
 }
@@ -109,7 +129,7 @@ async fn server(
     info!("finished discovery");
     read_server(&opt, &state, chart, &mut dir).await;
 
-    info!("promoted to readserver");
+    info!("promoted to write server");
     let send_hb = consensus::maintain_heartbeat(&state, chart);
     let host = write_server(opt, dir, &state);
     futures::join!(send_hb, host);
@@ -117,16 +137,11 @@ async fn server(
 
 #[tokio::main]
 async fn main() {
+    println!("prog strt");
     let opt = Opt::from_args();
-    let instance_name = opt.name.clone().unwrap_or(
-        gethostname()
-            .into_string()
-            .expect("hostname is not valid utf8"),
-    );
-    setup_tracing(&instance_name, &opt.tracing_endpoint);
+    setup_tracing(&opt);
 
-    let id = id_from_mac();
-    let (sock, chart) = discovery::setup(id).await;
+    let (sock, chart) = discovery::setup(id, opt.control_port).await;
     let dir = readserv::Directory::new();
     let state = consensus::State::new(opt.cluster_size, dir.get_change_idx());
     let state = Arc::new(state);

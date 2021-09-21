@@ -8,6 +8,7 @@ use tokio::net::TcpStream;
 use tokio::sync::Notify;
 use tokio::time::{self, Duration, Instant, timeout_at};
 
+use tracing_futures::Instrument as _;
 use tracing::info;
 
 use super::{State, HB_TIMEOUT};
@@ -38,7 +39,7 @@ async fn monitor_heartbeat(state: &State) {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 struct VoteCount {
     majority: u16,
     count: AtomicU16,
@@ -67,6 +68,7 @@ impl VoteCount {
     }
 }
 
+#[tracing::instrument]
 async fn request_and_register(
     addr: SocketAddr,
     term: u64,
@@ -92,7 +94,8 @@ async fn request_and_register(
     Some(())
 }
 
-async fn request_and_count_votes(state: &State, chart: &Chart) -> ElectionResult {
+#[tracing::instrument]
+async fn request_and_count_votes(port: u16, state: &State, chart: &Chart) -> ElectionResult {
     let count = VoteCount::new(state.cluster_size);
     let term = state.term();
     let our_id = chart.our_id();
@@ -115,12 +118,13 @@ async fn request_and_count_votes(state: &State, chart: &Chart) -> ElectionResult
     }
 }
 
-async fn host_election(state: &State, chart: &Chart) -> ElectionResult {
+#[tracing::instrument]
+async fn host_election(port: u16, state: &State, chart: &Chart) -> ElectionResult {
     info!("hosting leader election");
     state.increase_term();
     state.set_candidate();
     futures::select! {
-        res = request_and_count_votes(&state, chart).fuse() => res,
+        res = request_and_count_votes(port, &state, chart).fuse() => res,
         _ = state.got_valid_hb.notified().fuse() => {
             state.set_follower();
             ElectionResult::WeLost
@@ -128,12 +132,12 @@ async fn host_election(state: &State, chart: &Chart) -> ElectionResult {
     }
 }
 
-pub async fn cycle(state: &State, chart: &Chart) {
+pub async fn cycle(port: u16, state: &State, chart: &Chart, ) {
     loop {
         state.reset_voted_for();
         monitor_heartbeat(state).await;
 
-        match host_election(state, chart).await {
+        match host_election(port, state, chart).await {
             ElectionResult::Stale => info!("stale election"),
             ElectionResult::WeLost => info!("lost election"),
             ElectionResult::WeWon => {

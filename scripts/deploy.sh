@@ -20,7 +20,7 @@ function wait_for_allocation()
 	echo "" >&2
 }
 
-function cmd()
+function split_cmd()
 {
 	local node=$1
 	local base_cmd="$2"
@@ -33,23 +33,34 @@ function run_in_tmux_splits()
 	local nodes="${@:2}"
 	local tmux_cmd="tmux new -s deployed"
 	for node in $nodes; do
-		local cmd=\"$(cmd $node "$base_cmd")\"
+		local cmd=\"$(split_cmd $node "$base_cmd")\"
 		tmux_cmd="$tmux_cmd "$cmd" ';' split"
 	done
 
 	eval ${tmux_cmd::-9} # print with last split removed
 }
 
+function window_cmd()
+{
+	local node="$1"
+	local dir="$2"
+	local base_cmd="$3"
+	echo "ssh $node \"cd "$dir"; ./$base_cmd\"; sleep 90"
+}
+
 function run_in_tmux_windows()
 {
-	local base_cmd="$1"
-	local nodes=(${@:2})
-	local cmd="ssh ${nodes[0]} \"$base_cmd\"; sleep 90"
+	local dir="$1"
+	local base_cmd="$2"
+	local nodes=(${@:3})
+
+	local cmd=$(window_cmd ${nodes[0]} $dir "$base_cmd")
 	tmux new-session -s "deployed" -n ${nodes[0]} -d "$cmd"
+
 	local len=${#nodes[@]}
 	for (( i = 1; i < $len; i++ )); do
 		local name=${nodes[$i]}
-		local cmd="ssh $name \"$base_cmd\"; sleep 90"
+		local cmd=$(window_cmd ${nodes[i]} $dir "$base_cmd")
 		tmux new-window -t "deployed:$i" -n $name -d "$cmd"
 	done
 	tmux attach-session -t "deployed"
@@ -79,6 +90,6 @@ EOF
 	done
 
 	# run_in_tmux_splits "/tmp/mock-fs/$bin $args" $nodes
-	run_in_tmux_windows "/tmp/mock-fs/$bin $args" $nodes
+	run_in_tmux_windows /tmp/mock-fs/ "$bin $args" $nodes
 	tmux kill-session -t "deployed" 
 }
