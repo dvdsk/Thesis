@@ -141,6 +141,7 @@ async fn main() {
     let opt = Opt::from_args();
     setup_tracing(&opt);
 
+    let id = id_from_mac();
     let (sock, chart) = discovery::setup(id, opt.control_port).await;
     let dir = readserv::Directory::new();
     let state = consensus::State::new(opt.cluster_size, dir.get_change_idx());
