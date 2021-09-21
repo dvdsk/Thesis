@@ -21,13 +21,14 @@ pub enum FromWs {
     Directory(Vec<u8>),
 }
 
+pub type Id = u64;
 pub type Term = u64;
 pub type ChangeIdx = u64;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ToRs {
     HeartBeat(Term, ChangeIdx),
-    RequestVote(Term, ChangeIdx),
+    RequestVote(Term, ChangeIdx, Id),
     DirectoryChange(Term, ChangeIdx, Change),
 }
 

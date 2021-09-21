@@ -125,10 +125,7 @@ async fn main() {
     );
     setup_tracing(&instance_name, &opt.tracing_endpoint);
 
-    let id = get_mac_address()
-        .unwrap()
-        .expect("there should be at least one network decive")
-        .to_string();
+    let id = id_from_mac();
     let (sock, chart) = discovery::setup(id).await;
     let dir = readserv::Directory::new();
     let state = consensus::State::new(opt.cluster_size, dir.get_change_idx());
@@ -139,4 +136,15 @@ async fn main() {
     futures::join!(f1, f2);
 
     opentelemetry::global::shutdown_tracer_provider();
+}
+
+fn id_from_mac() -> u64 {
+    let mac_bytes = get_mac_address()
+        .unwrap()
+        .expect("there should be at least one network decive")
+        .bytes();
+
+    let mut id = 0u64.to_ne_bytes();
+    id[0..6].copy_from_slice(&mac_bytes);
+    u64::from_ne_bytes(id)
 }

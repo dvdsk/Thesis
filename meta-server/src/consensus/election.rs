@@ -71,6 +71,7 @@ async fn request_and_register(
     addr: SocketAddr,
     term: u64,
     change_idx: u64,
+    our_id: u64,
     count: &VoteCount,
 ) -> Option<()> {
     use futures::{SinkExt, TryStreamExt};
@@ -79,7 +80,7 @@ async fn request_and_register(
     let socket = TcpStream::connect(addr).await.ok()?;
     let mut stream: RsStream = connection::wrap(socket);
     stream
-        .send(ToRs::RequestVote(term, change_idx))
+        .send(ToRs::RequestVote(term, change_idx, our_id))
         .await
         .ok()?;
 
@@ -94,11 +95,12 @@ async fn request_and_register(
 async fn request_and_count_votes(state: &State, chart: &Chart) -> ElectionResult {
     let count = VoteCount::new(state.cluster_size);
     let term = state.term();
+    let our_id = chart.our_id();
     let requests = chart
         .map
         .iter()
         .map(|m| m.value().clone())
-        .map(|addr| request_and_register(addr, term, state.change_idx(), &count));
+        .map(|addr| request_and_register(addr, term, state.change_idx(), our_id, &count));
 
     let geather_votes = futures::future::join_all(requests);
     let timeout = time::sleep(Duration::from_millis(500));
@@ -128,6 +130,7 @@ async fn host_election(state: &State, chart: &Chart) -> ElectionResult {
 
 pub async fn cycle(state: &State, chart: &Chart) {
     loop {
+        state.reset_voted_for();
         monitor_heartbeat(state).await;
 
         match host_election(state, chart).await {

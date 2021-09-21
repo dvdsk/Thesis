@@ -1,3 +1,5 @@
+use std::convert::TryInto;
+
 use client_protocol::{FsEntry, PathString};
 
 #[derive(Debug, Clone)]
@@ -97,9 +99,9 @@ impl Db {
 
 fn deserialize_next<'a>(i: &mut usize, bytes: &'a [u8]) -> &'a [u8] {
     const USIZE_LEN: usize = std::mem::size_of::<usize>();
-    let val_len = usize_from_slice(&bytes[*i..*i+USIZE_LEN]);
+    let val_len = usize_from_slice(&bytes[*i..*i + USIZE_LEN]);
     *i += USIZE_LEN;
-    let val = &bytes[*i..*i+val_len];
+    let val = &bytes[*i..*i + val_len];
     *i += val_len;
     val
 }
@@ -125,15 +127,11 @@ fn next_dir(dir: &Vec<u8>) -> Vec<u8> {
 }
 
 fn usize_from_slice(slice: &[u8]) -> usize {
-    let mut idx = [0u8; std::mem::size_of::<usize>()];
-    idx[..].copy_from_slice(&slice);
-    usize::from_ne_bytes(idx)
+    usize::from_ne_bytes(slice.try_into().expect("incorrect length"))
 }
 
 fn idx_from_ivec(vec: sled::IVec) -> u64 {
-    let mut idx = [0u8; 8];
-    idx[..].copy_from_slice(&vec[..]);
-    u64::from_ne_bytes(idx)
+    u64::from_ne_bytes(vec.as_ref().try_into().expect("incorrect length"))
 }
 
 #[cfg(test)]
@@ -147,13 +145,14 @@ mod tests {
                 FsEntry::Dir(p) => db.mkdir(p.to_owned()).await.unwrap(),
                 _ => todo!(),
             }
-            
         }
         db
     }
 
     fn test_entries(numb: usize) -> Vec<FsEntry> {
-        (0..numb).map(|i| FsEntry::Dir(format!("long/path/{}",i))).collect()
+        (0..numb)
+            .map(|i| FsEntry::Dir(format!("long/path/{}", i)))
+            .collect()
     }
 
     #[tokio::test]
@@ -174,7 +173,7 @@ mod tests {
 
         std::mem::drop(db);
         let db = Db::new_temp();
-        db.replace_with_deserialized(&bytes);
+        db.replace_with_deserialized(&bytes).await;
 
         let list = db.ls("long/path/{}");
         for (ls_entry, correct) in list.iter().zip(correct.iter()) {

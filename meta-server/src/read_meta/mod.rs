@@ -33,8 +33,8 @@ async fn handle_conn(mut stream: RsStream, source: SocketAddr, state: &State, di
     while let Some(msg) = stream.try_next().await.unwrap() {
         match msg {
             HeartBeat(term, change_idx) => state.handle_heartbeat(term, change_idx, source),
-            RequestVote(term, change_idx) => {
-                let reply = state.handle_votereq(term, change_idx);
+            RequestVote(term, change_idx, id) => {
+                let reply = state.handle_votereq(term, change_idx, id);
                 let _ignore_res = stream.send(reply).await;
             }
             DirectoryChange(term, change_idx, change) => {
