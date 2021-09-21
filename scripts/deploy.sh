@@ -20,6 +20,17 @@ function wait_for_allocation()
 	echo "" >&2
 }
 
+wait_for_q="
+echo \"Press 'q' to exit\";
+while : ; do;
+	read -n 1 k <&1;
+	if [[ $k = q ]] ; then;
+		break;
+	fi;
+done
+
+"
+
 function split_cmd()
 {
 	local node=$1
@@ -45,7 +56,9 @@ function window_cmd()
 	local node="$1"
 	local dir="$2"
 	local base_cmd="$3"
-	echo "ssh $node \"cd "$dir"; ./$base_cmd\"; sleep 90"
+	# remain on exit is broken on older tmux (https://github.com/tmux/tmux/issues/1354)
+	# for now just using a long sleep to ensure the window stays open
+	echo "tmux setw remain-on-exit on; ssh $node \"cd "$dir"; ./$base_cmd\"; sleep 99999"
 }
 
 function run_in_tmux_windows()
@@ -55,6 +68,7 @@ function run_in_tmux_windows()
 	local nodes=(${@:3})
 
 	local cmd=$(window_cmd ${nodes[0]} $dir "$base_cmd")
+	echo "$cmd"
 	tmux new-session -s "deployed" -n ${nodes[0]} -d "$cmd"
 
 	local len=${#nodes[@]}

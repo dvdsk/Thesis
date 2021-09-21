@@ -15,7 +15,7 @@ pub use state::State;
 const HB_TIMEOUT: Duration = Duration::from_secs(2);
 pub async fn maintain_heartbeat(state: &State, chart: &Chart) {
     loop {
-        let term = state.term();
+        let term = state.increase_term();
         let heartbeats = chart
             .map
             .iter()

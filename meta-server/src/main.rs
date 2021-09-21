@@ -125,6 +125,7 @@ async fn server(
     sock: &UdpSocket,
     chart: &discovery::Chart,
 ) {
+    println!("hi");
     discovery::cluster(sock, chart, opt.cluster_size).await;
     info!("finished discovery");
     read_server(&opt, &state, chart, &mut dir).await;

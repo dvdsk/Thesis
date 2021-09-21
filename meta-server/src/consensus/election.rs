@@ -106,7 +106,7 @@ async fn request_and_count_votes(port: u16, state: &State, chart: &Chart) -> Ele
         .map(|addr| request_and_register(addr, term, state.change_idx(), our_id, &count));
 
     let geather_votes = futures::future::join_all(requests);
-    let timeout = time::sleep(Duration::from_millis(500));
+    let timeout = time::sleep(Duration::from_millis(1.1*HB_TIMEOUT));
     let majority = count.await_majority();
     futures::select! {
         _ = timeout.fuse() => ElectionResult::Stale,
@@ -121,8 +121,8 @@ async fn request_and_count_votes(port: u16, state: &State, chart: &Chart) -> Ele
 #[tracing::instrument]
 async fn host_election(port: u16, state: &State, chart: &Chart) -> ElectionResult {
     info!("hosting leader election");
-    state.increase_term();
     state.set_candidate();
+    state.increase_term();
     futures::select! {
         res = request_and_count_votes(port, &state, chart).fuse() => res,
         _ = state.got_valid_hb.notified().fuse() => {
@@ -134,7 +134,6 @@ async fn host_election(port: u16, state: &State, chart: &Chart) -> ElectionResul
 
 pub async fn cycle(port: u16, state: &State, chart: &Chart, ) {
     loop {
-        state.reset_voted_for();
         monitor_heartbeat(state).await;
 
         match host_election(port, state, chart).await {

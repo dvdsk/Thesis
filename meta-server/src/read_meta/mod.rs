@@ -35,8 +35,12 @@ type RsStream = connection::MsgStream<ToRs, FromRS>;
 #[tracing::instrument]
 async fn handle_conn(mut stream: RsStream, source: SocketAddr, state: &State, dir: &Directory) {
     use ToRs::*;
-    while let Some(msg) = stream.try_next().await.unwrap() {
-        info!("got msg");
+    while let Ok(msg) = stream.try_next().await {
+        let msg = match msg {
+            None => continue,
+            Some(msg) => msg,
+        };
+
         match msg {
             HeartBeat(term, change_idx) => state.handle_heartbeat(term, change_idx, source),
             RequestVote(term, change_idx, id) => {
@@ -51,7 +55,6 @@ async fn handle_conn(mut stream: RsStream, source: SocketAddr, state: &State, di
             }
         }
     }
-    panic!("empty msgs are not allowed");
 }
 
 pub async fn cmd_server(port: u16, state: Arc<State>, dir: &Directory) {
