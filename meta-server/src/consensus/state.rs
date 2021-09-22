@@ -95,7 +95,11 @@ impl State {
                 if res.is_err() {
                     continue; // term changed out under us, run procedure again
                 }
-                *self.master.lock().unwrap() = Some(source);
+                let mut curr = self.master.lock().unwrap();
+                if *curr != Some(source) {
+                    info!("new master: {}", source);
+                }
+                *curr = Some(source);
             }
             break;
         }

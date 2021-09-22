@@ -58,6 +58,7 @@ async fn handle_conn(mut stream: RsStream, source: SocketAddr, state: &State, di
 }
 
 pub async fn cmd_server(port: u16, state: Arc<State>, dir: &Directory) {
+    println!("cmd_serv");
     let addr = (IpAddr::V4(Ipv4Addr::UNSPECIFIED), port);
     let listener = TcpListener::bind(addr).await.unwrap();
 

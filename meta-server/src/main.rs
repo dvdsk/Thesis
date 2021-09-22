@@ -88,6 +88,7 @@ async fn host_meta_or_update(
 ) {
     use read_meta::meta_server;
     loop {
+        println!("host_meta_or_update loop");
         futures::select! {
             _ = meta_server(client_port).fuse() => panic!("should not return"),
             _ = state.outdated.notified().fuse() => (),
@@ -125,7 +126,6 @@ async fn server(
     sock: &UdpSocket,
     chart: &discovery::Chart,
 ) {
-    println!("hi");
     discovery::cluster(sock, chart, opt.cluster_size).await;
     info!("finished discovery");
     read_server(&opt, &state, chart, &mut dir).await;
