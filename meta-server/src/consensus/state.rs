@@ -17,6 +17,7 @@ pub struct State {
     sync_voted_for: Mutex<()>,
 
     // normal mutex since we do no async io inside crit. sect.
+    // never keep locked across an .await point! (will deadlock)
     master: Mutex<Option<SocketAddr>>,
     pub cluster_size: u16,
     pub got_valid_hb: Notify,
@@ -83,6 +84,14 @@ impl State {
         *self.master.lock().unwrap()
     }
 
+    pub fn set_master(&self, source: SocketAddr) {
+        let mut curr = self.master.lock().unwrap();
+        if *curr != Some(source) {
+            info!("new master: {}", source);
+        }
+        *curr = Some(source);
+    }
+
     fn check_term(&self, term: u64, source: SocketAddr) -> Result<(), ()> {
         loop {
             let our_term = self.term();
@@ -95,11 +104,7 @@ impl State {
                 if res.is_err() {
                     continue; // term changed out under us, run procedure again
                 }
-                let mut curr = self.master.lock().unwrap();
-                if *curr != Some(source) {
-                    info!("new master: {}", source);
-                }
-                *curr = Some(source);
+                self.set_master(source)
             }
             break;
         }
@@ -142,6 +147,18 @@ impl State {
         Ok(())
     }
 
+    // keep lock out of async sections (deadlock)
+    fn update_if_later_term(&self, term: u64) {
+        // this needs to be synchornized, else the following could happen
+        //      A increases term -> B increases term further -> B resets voted -> B votes
+        //      -> A reset vote, now the vote to B is no longer counted
+        let _guard = self.sync_voted_for.lock().unwrap();
+        if term > self.term() {
+            self.set_term(term);
+            self.reset_voted_for();
+        }
+    }
+
     #[tracing::instrument]
     pub fn handle_votereq(&self, term: u64, change_idx: u64, id: u64) -> FromRS {
         if self.term() > term {
@@ -156,16 +173,7 @@ impl State {
             return FromRS::NotVoting;
         }
 
-        {
-            // this needs to be synchornized, else the following could happen
-            //      A increases term -> B increases term further -> B resets voted -> B votes
-            //      -> A reset vote, now the vote to B is no longer counted
-            let _guard = self.sync_voted_for.lock().unwrap();
-            if term > self.term() {
-                self.set_term(term);
-                self.reset_voted_for();
-            }
-        }
+        self.update_if_later_term(term);
 
         let res = self.voted_for.compare_exchange(0, id, ORD, ORD);
         match res {

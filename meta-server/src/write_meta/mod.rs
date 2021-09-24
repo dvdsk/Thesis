@@ -23,7 +23,6 @@ async fn handle_client(mut stream: ClientStream, directory: Directory) {
             Request::AddDir(path) => mkdir(directory, path).await,
             // Request::OpenReadWrite(path, policy) => open_rw(path, policy).await,
             _e => {
-                println!("TODO: responding to {:?}", _e);
                 Response::Todo(_e)
             }
         };

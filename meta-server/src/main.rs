@@ -88,10 +88,9 @@ async fn host_meta_or_update(
 ) {
     use read_meta::meta_server;
     loop {
-        println!("host_meta_or_update loop");
-        futures::select! {
-            _ = meta_server(client_port).fuse() => panic!("should not return"),
-            _ = state.outdated.notified().fuse() => (),
+        tokio::select! {
+            _ = meta_server(client_port) => panic!("should not return"),
+            _ = state.outdated.notified() => (),
         }
         consensus::update(state, dir).await;
     }
@@ -111,10 +110,10 @@ async fn read_server(
     //  - then the meta server starts updating the directory using the master (if any)
     //    or blocks until there is a master
     loop {
-        futures::select! {
-            () = read_meta::cmd_server(opt.control_port, state.clone(), dir).fuse() => todo!(),
-            _res = host_meta_or_update(opt.client_port, &state, dir).fuse() => panic!("should not return"),
-            _won = election::cycle(opt.control_port, &state, chart).fuse() => {info!("won the election"); return},
+        tokio::select! {
+            () = read_meta::cmd_server(opt.control_port, state.clone(), dir) => todo!(),
+            _res = host_meta_or_update(opt.client_port, &state, dir) => panic!("should not return"),
+            _won = election::cycle(opt.control_port, &state, chart) => {info!("won the election"); return},
         }
     }
 }
@@ -138,7 +137,6 @@ async fn server(
 
 #[tokio::main]
 async fn main() {
-    println!("prog strt");
     let opt = Opt::from_args();
     setup_tracing(&opt);
 

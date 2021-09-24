@@ -3,7 +3,6 @@ use std::sync::atomic::{AtomicU16, Ordering};
 
 use client_protocol::connection;
 use discovery::Chart;
-use futures::FutureExt;
 use tokio::net::TcpStream;
 use tokio::sync::Notify;
 use tokio::time::{self, Duration, Instant, timeout_at};
@@ -99,34 +98,34 @@ async fn request_and_count_votes(port: u16, state: &State, chart: &Chart) -> Ele
     let count = VoteCount::new(state.cluster_size);
     let term = state.term();
     let our_id = chart.our_id();
-    let requests = chart
-        .map
-        .iter()
-        .map(|m| m.value().clone())
+    let requests = chart.adresses()
+        .into_iter()
         .map(|addr| request_and_register(addr, term, state.change_idx(), our_id, &count));
 
     let geather_votes = futures::future::join_all(requests);
     let timeout = time::sleep(HB_TIMEOUT.mul_f32(1.1));
     let majority = count.await_majority();
-    futures::select! {
-        _ = timeout.fuse() => ElectionResult::Stale,
-        _ = majority.fuse() => ElectionResult::WeWon,
-        _ = geather_votes.fuse() => match count.is_majority() {
+    println!("select starts");
+    let res = tokio::select! {
+        _ = timeout => ElectionResult::Stale,
+        _ = majority => ElectionResult::WeWon,
+        _ = geather_votes => match count.is_majority() {
             true => ElectionResult::WeWon,
             false => ElectionResult::Stale,
         }
-    }
+    };
+    println!("select completes");
+    return res
 }
 
 #[tracing::instrument]
 async fn host_election(port: u16, state: &State, chart: &Chart) -> ElectionResult {
-    println!("hosting leader election");
     info!("hosting leader election");
     state.set_candidate();
     state.increase_term();
-    futures::select! {
-        res = request_and_count_votes(port, &state, chart).fuse() => res,
-        _ = state.got_valid_hb.notified().fuse() => {
+    tokio::select! {
+        res = request_and_count_votes(port, &state, chart) => res,
+        _ = state.got_valid_hb.notified() => {
             state.set_follower();
             ElectionResult::WeLost
         },
@@ -135,9 +134,7 @@ async fn host_election(port: u16, state: &State, chart: &Chart) -> ElectionResul
 
 pub async fn cycle(port: u16, state: &State, chart: &Chart, ) {
     loop {
-        println!("election cycle loop");
         monitor_heartbeat(state).await;
-        println!("hb timed out");
 
         match host_election(port, state, chart).await {
             ElectionResult::Stale => info!("stale election"),
