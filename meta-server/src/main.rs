@@ -4,7 +4,6 @@ use futures::future::FutureExt;
 use gethostname::gethostname;
 use mac_address::get_mac_address;
 use structopt::StructOpt;
-use tokio::net::UdpSocket;
 use tracing::info;
 use tracing_futures::Instrument;
 
@@ -36,7 +35,7 @@ struct Opt {
 
     /// optional run number defaults to -1
     #[structopt(long, default_value = "-1")]
-    run_numb: i64
+    run_numb: i64,
 }
 
 fn setup_tracing(opt: &Opt) {
@@ -68,6 +67,7 @@ fn setup_tracing(opt: &Opt) {
     tracing::collect::set_global_default(subscriber).unwrap();
 }
 
+#[tracing::instrument]
 async fn write_server(opt: Opt, dir: readserv::Directory, state: &Arc<consensus::State>) {
     use write_meta::{server, Directory, ReadServers};
 
@@ -81,6 +81,7 @@ async fn write_server(opt: Opt, dir: readserv::Directory, state: &Arc<consensus:
     futures::join!(maintain_conns, handle_req);
 }
 
+#[tracing::instrument]
 async fn host_meta_or_update(
     client_port: u16,
     state: &consensus::State,
@@ -96,6 +97,7 @@ async fn host_meta_or_update(
     }
 }
 
+#[tracing::instrument]
 async fn read_server(
     opt: &Opt,
     state: &Arc<consensus::State>,
@@ -118,25 +120,26 @@ async fn read_server(
     }
 }
 
+#[tracing::instrument]
 async fn server(
     opt: Opt,
     state: Arc<consensus::State>,
     mut dir: readserv::Directory,
-    sock: &UdpSocket,
-    chart: &discovery::Chart,
+    chart: discovery::Chart,
 ) {
-    discovery::cluster(sock, chart, opt.cluster_size).await;
+    discovery::cluster(&chart, opt.cluster_size).await;
     info!("finished discovery");
-    read_server(&opt, &state, chart, &mut dir).await;
+    read_server(&opt, &state, &chart, &mut dir).await;
 
     info!("promoted to write server");
-    let send_hb = consensus::maintain_heartbeat(&state, chart);
+    let send_hb = consensus::maintain_heartbeat(&state, &chart);
     let host = write_server(opt, dir, &state);
     futures::join!(send_hb, host);
 }
 
 #[tokio::main]
 async fn main() {
+    console_subscriber::init();
     println!("prog strt");
     let opt = Opt::from_args();
     setup_tracing(&opt);
@@ -147,9 +150,15 @@ async fn main() {
     let state = consensus::State::new(opt.cluster_size, dir.get_change_idx());
     let state = Arc::new(state);
 
-    let f1 = server(opt, state, dir, &sock, &chart);
-    let f2 = discovery::maintain(&sock, &chart);
-    futures::join!(f1, f2);
+    let t1 = tokio::task::Builder::new()
+        .name("server")
+        .spawn(server(opt, state, dir, chart.clone()));
+    let t2 = tokio::task::Builder::new()
+        .name("discovery")
+        .spawn(discovery::maintain(sock, chart));
+    let (res1, res2) = futures::join!(t1, t2);
+    res1.unwrap();
+    res2.unwrap();
 
     opentelemetry::global::shutdown_tracer_provider();
 }

@@ -18,8 +18,8 @@ async fn main() {
 
     let id = id_from_mac();
     let (sock, chart) = discovery::setup(id, 8080).await;
-    let discover = discovery::cluster(&sock, &chart, cluster_size);
-    let maintain = discovery::maintain(&sock, &chart);
+    let discover = discovery::cluster(&chart, cluster_size);
+    let maintain = discovery::maintain(sock, chart.clone());
 
     futures::join!(discover, maintain);
 }

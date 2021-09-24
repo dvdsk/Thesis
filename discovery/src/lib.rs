@@ -1,6 +1,7 @@
 use std::convert::TryInto;
 use std::net::Ipv4Addr;
 use std::net::SocketAddr;
+use std::sync::Arc;
 use std::time::Duration;
 
 use tokio::net::UdpSocket;
@@ -11,10 +12,10 @@ use tracing_futures::Instrument;
 pub use dashmap;
 type Id = u64;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Chart {
     id: Id,
-    pub map: dashmap::DashMap<Id, SocketAddr>,
+    pub map: Arc<dashmap::DashMap<Id, SocketAddr>>,
     port_to_store: u16,
 }
 
@@ -53,16 +54,18 @@ async fn awnser_incoming(sock: &UdpSocket, chart: &Chart) {
 async fn sleep_then_request_responses(sock: &UdpSocket, period: Duration, id: Id) {
     use rand::{Rng, SeedableRng};
     let mut rng = rand::rngs::SmallRng::from_entropy();
-    let random_sleep = rng.gen_range(Duration::from_secs(0)..period);
 
-    sleep(random_sleep).await;
-    request_responses(&sock, period, id).await;
+    loop {
+        let random_sleep = rng.gen_range(Duration::from_secs(0)..period);
+        sleep(random_sleep).await;
+        request_responses(&sock, period, id).await;
+    }
 }
 
 #[tracing::instrument]
-pub async fn maintain(sock: &UdpSocket, chart: &Chart) {
-    let f1 = awnser_incoming(sock, &chart);
-    let f2 = sleep_then_request_responses(sock, Duration::from_secs(5), chart.id);
+pub async fn maintain(sock: UdpSocket, chart: Chart) {
+    let f1 = awnser_incoming(&sock, &chart);
+    let f2 = sleep_then_request_responses(&sock, Duration::from_secs(5), chart.id);
     futures::join!(f1, f2);
 }
 
@@ -88,18 +91,14 @@ async fn listen_for_response(sock: &UdpSocket, chart: &Chart, cluster_majority: 
 }
 
 #[tracing::instrument]
-pub async fn cluster(sock: &UdpSocket, chart: &Chart, full_size: u16) {
+pub async fn cluster(chart: &Chart, full_size: u16) {
     assert!(full_size > 2, "minimal cluster size is 3");
+
     let cluster_majority = (full_size as f32 * 0.5).ceil() as usize;
+    while chart.len() < cluster_majority {
+        sleep(Duration::from_millis(100)).await;
+    }
 
-    let f1 = request_responses(&sock, Duration::from_millis(500), chart.id);
-    let f2 = listen_for_response(&sock, &chart, cluster_majority);
-
-    use futures::FutureExt;
-    futures::select!(
-        _ = f1.fuse() => (),
-        _ = f2.fuse() => (),
-    );
     info!("found majority of cluster, ({} nodes)", chart.len());
 }
 
@@ -114,7 +113,7 @@ pub async fn setup(id: Id, port_to_store: u16) -> (UdpSocket, Chart) {
     let chart = Chart {
         port_to_store,
         id,
-        map: dashmap::DashMap::new(),
+        map: Arc::new(dashmap::DashMap::new()),
     };
     (sock, chart)
 }
