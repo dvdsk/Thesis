@@ -15,7 +15,7 @@ type Id = u64;
 #[derive(Debug, Clone)]
 pub struct Chart {
     id: Id,
-    pub map: Arc<dashmap::DashMap<Id, SocketAddr>>,
+    map: Arc<dashmap::DashMap<Id, SocketAddr>>,
     port_to_store: u16,
 }
 
@@ -31,6 +31,10 @@ impl Chart {
             info!("added new address: {:?}, total: ({})", addr, self.len());
         }
     }
+    pub fn adresses(&self) -> Vec<SocketAddr> {
+        self.map.iter().map(|m| m.value().clone()).collect()
+    }
+
     pub fn len(&self) -> usize {
         self.map.len()
     }
