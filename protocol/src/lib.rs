@@ -31,7 +31,7 @@ pub enum Existence {
 }
 
 pub type PathString = String; // easier to serialize then Path obj
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum FsEntry {
     Dir(PathString),
     File(PathString),
@@ -47,6 +47,7 @@ pub enum Request {
     Close(PathString),
     AddDir(PathString),
     Remove(PathString),
+    Ls(PathString),
 
     Test,
 }
@@ -55,6 +56,7 @@ pub enum Request {
 pub enum Response {
     Ok,
     FileExists,
+    Ls(Vec<FsEntry>),
     Test,
     Todo(Request),
 }

@@ -20,17 +20,6 @@ function wait_for_allocation()
 	echo "" >&2
 }
 
-wait_for_q="
-echo \"Press 'q' to exit\";
-while : ; do;
-	read -n 1 k <&1;
-	if [[ $k = q ]] ; then;
-		break;
-	fi;
-done
-
-"
-
 function split_cmd()
 {
 	local node=$1
@@ -68,7 +57,6 @@ function run_in_tmux_windows()
 	local nodes=(${@:3})
 
 	local cmd=$(window_cmd ${nodes[0]} $dir "$base_cmd")
-	echo "$cmd"
 	tmux new-session -s "deployed" -n ${nodes[0]} -d "$cmd"
 
 	local len=${#nodes[@]}
@@ -77,9 +65,9 @@ function run_in_tmux_windows()
 		local cmd=$(window_cmd ${nodes[i]} $dir "$base_cmd")
 		tmux new-window -t "deployed:$i" -n $name -d "$cmd"
 	done
-	tmux attach-session -t "deployed"
 }
 
+resv_numb=""
 function deploy()
 {
 	local numb_nodes=$1
@@ -87,25 +75,35 @@ function deploy()
 	local args="${@:3}"
 
 	local duration=5
-	local resv_numb=$(preserve -# ${numb_nodes} -t 00:${duration}:05 | head -n 1 | cut -d ' ' -f 3)
-	local resv_numb=${resv_numb::-1}
+	resv_numb=$(preserve -# ${numb_nodes} -t 00:${duration}:05 | head -n 1 | cut -d ' ' -f 3)
+	resv_numb=${resv_numb::-1}
 
-	preserve -llist
-	node_list $resv_numb
+	preserve -llist >&2
 	wait_for_allocation $resv_numb
 
 	local nodes=$(node_list $resv_numb)
-	echo "got nodes: $nodes"
 
 	for node in $nodes; do
-		ssh -t $node <<- EOF # TODO run in parallel
+		ssh -t $node <<- EOF & >&2 # TODO run in parallel
 		mkdir -p /tmp/mock-fs
 		cp ${PWD}/bin/$bin /tmp/mock-fs/
 EOF
 	done
+	wait
 
 	# run_in_tmux_splits "/tmp/mock-fs/$bin $args" $nodes
 	run_in_tmux_windows /tmp/mock-fs/ "$bin $args" $nodes
+	echo $resv_numb $nodes
+}
+
+function attach()
+{
+	tmux attach-session -t "deployed"
+}
+
+function cleanup()
+{
+	local resv_numb=$1
 	tmux kill-session -t "deployed" 
 	preserve -c $resv_numb #cancel reservation
 }
