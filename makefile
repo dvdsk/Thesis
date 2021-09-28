@@ -54,7 +54,7 @@ deploy: bin/meta-server
 	$(info test done)
 	bash scripts/deploy_cluster.sh
 
-dev: bin/discovery-exchange-id
+discover: bin/discovery-exchange-id
 	$(info test done)
 	bash scripts/deploy_test.sh
 

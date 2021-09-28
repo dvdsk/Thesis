@@ -66,6 +66,11 @@ impl State {
         self.candidate.store(false, ORD)
     }
 
+    /// may only be called by master
+    pub fn increase_change_idx(&self) -> u64 {
+        self.term.fetch_add(1, ORD)
+    }
+
     pub fn increase_term(&self) -> u64 {
         debug_assert!(
             self.candidate.load(ORD),

@@ -2,6 +2,7 @@ use crate::server_conn::protocol::{FromRS, ToRs};
 use client_protocol::connection;
 use discovery::Chart;
 use std::net::SocketAddr;
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::{timeout_at, Instant};
 use tokio::{net::TcpStream, time};
@@ -12,8 +13,8 @@ pub use replicate::update;
 mod state;
 pub use state::State;
 
-const HB_TIMEOUT: Duration = Duration::from_secs(2);
-pub async fn maintain_heartbeat(state: &State, chart: &Chart) {
+pub const HB_TIMEOUT: Duration = Duration::from_secs(2);
+pub async fn maintain_heartbeat(state: Arc<State>, chart: Chart) {
     let mut next_hb = Instant::now() + HB_TIMEOUT / 2;
     loop {
         let term = state.increase_term();

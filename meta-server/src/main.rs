@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use futures::future::FutureExt;
 use gethostname::gethostname;
 use mac_address::get_mac_address;
 use structopt::StructOpt;
@@ -78,7 +77,8 @@ async fn write_server(opt: Opt, dir: readserv::Directory, state: &Arc<consensus:
     let handle_req = server(opt.client_port, dir);
 
     info!("starting write server");
-    futures::join!(maintain_conns, handle_req);
+    tokio::spawn(maintain_conns);
+    handle_req.await;
 }
 
 #[tracing::instrument]
@@ -132,14 +132,15 @@ async fn server(
     read_server(&opt, &state, &chart, &mut dir).await;
 
     info!("promoted to write server");
-    let send_hb = consensus::maintain_heartbeat(&state, &chart);
+    let send_hb = consensus::maintain_heartbeat(state.clone(), chart);
     let host = write_server(opt, dir, &state);
-    futures::join!(send_hb, host);
+    tokio::spawn(send_hb);
+    host.await
 }
 
 #[tokio::main]
 async fn main() {
-    console_subscriber::init();
+    // console_subscriber::init();
     let opt = Opt::from_args();
     setup_tracing(&opt);
 
@@ -149,15 +150,8 @@ async fn main() {
     let state = consensus::State::new(opt.cluster_size, dir.get_change_idx());
     let state = Arc::new(state);
 
-    let t1 = tokio::task::Builder::new()
-        .name("server")
-        .spawn(server(opt, state, dir, chart.clone()));
-    let t2 = tokio::task::Builder::new()
-        .name("discovery")
-        .spawn(discovery::maintain(sock, chart));
-    let (res1, res2) = futures::join!(t1, t2);
-    res1.unwrap();
-    res2.unwrap();
+    tokio::spawn(server(opt, state, dir, chart.clone()));
+    discovery::maintain(sock, chart).await;
 
     opentelemetry::global::shutdown_tracer_provider();
 }

@@ -1,12 +1,14 @@
 use client_protocol::connection;
 use futures::SinkExt;
+use futures::future::join_all;
+use tokio::time::timeout;
 use std::net::{IpAddr, Ipv4Addr};
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use tokio::sync::Mutex;
 
-use crate::consensus::State;
-use crate::server_conn::protocol::{FromRS,ToRs,Change};
+use crate::consensus::{State, HB_TIMEOUT};
+use crate::server_conn::protocol::{Change, FromRS, ToRs};
 
 type RsStream = connection::MsgStream<FromRS, ToRs>;
 type ConnList = Arc<Mutex<Vec<RsStream>>>;
@@ -14,6 +16,12 @@ type ConnList = Arc<Mutex<Vec<RsStream>>>;
 #[derive(Clone, Debug)]
 pub struct ReadServers {
     pub conns: ConnList,
+}
+
+pub enum PubResult {
+    ReachedAll,
+    ReachedMajority,
+    ReachedMinority,
 }
 
 impl ReadServers {
@@ -36,11 +44,27 @@ impl ReadServers {
             });
         }
     }
-    pub async fn publish(&self, state: &State, change: Change) {
+    pub async fn publish(&self, state: &State, change: Change) -> PubResult {
         let mut conns = self.conns.lock().await;
-        let msg = ToRs::DirectoryChange(state.term(), state.change_idx(), change);
-        for conn in &mut *conns {
-            conn.send(msg.clone()).await.unwrap();
+        let msg = ToRs::DirectoryChange(state.term(), state.increase_change_idx(), change);
+        let requests: Vec<_> = conns
+            .iter_mut()
+            .map(|c| c.send(msg.clone()))
+            .map(|r| timeout(HB_TIMEOUT, r))
+            .collect();
+
+        let reached = join_all(requests).await.into_iter()
+            .filter_map(Result::ok)
+            .filter_map(Result::ok)
+            .count();
+
+        let majority = conns.len() / 2;
+        if reached == conns.len() {
+            PubResult::ReachedAll
+        } else if reached > majority {
+            PubResult::ReachedMajority
+        } else {
+            PubResult::ReachedMinority
         }
     }
 }

@@ -5,10 +5,10 @@ use client_protocol::connection;
 use discovery::Chart;
 use tokio::net::TcpStream;
 use tokio::sync::Notify;
-use tokio::time::{self, Duration, Instant, timeout_at};
+use tokio::time::{self, timeout_at, Duration, Instant};
 
+use tracing::{warn, info};
 use tracing_futures::Instrument as _;
-use tracing::info;
 
 use super::{State, HB_TIMEOUT};
 use crate::server_conn::protocol::{FromRS, ToRs};
@@ -29,7 +29,10 @@ async fn monitor_heartbeat(state: &State) {
     let mut hb_deadline = Instant::now() + HB_TIMEOUT + random_dur;
     loop {
         match timeout_at(hb_deadline, state.got_valid_hb.notified()).await {
-            Err(_timeout) => return,
+            Err(_timeout) => {
+                warn!("heartbeat timed out");
+                return;
+            }
             Ok(_) => {
                 let random_dur = rng.gen_range(Duration::from_secs(0)..HB_TIMEOUT);
                 hb_deadline += HB_TIMEOUT + random_dur;
@@ -98,7 +101,8 @@ async fn request_and_count_votes(port: u16, state: &State, chart: &Chart) -> Ele
     let count = VoteCount::new(state.cluster_size);
     let term = state.term();
     let our_id = chart.our_id();
-    let requests = chart.adresses()
+    let requests = chart
+        .adresses()
         .into_iter()
         .map(|addr| request_and_register(addr, term, state.change_idx(), our_id, &count));
 
@@ -115,7 +119,7 @@ async fn request_and_count_votes(port: u16, state: &State, chart: &Chart) -> Ele
         }
     };
     println!("select completes");
-    return res
+    return res;
 }
 
 #[tracing::instrument]
@@ -132,7 +136,7 @@ async fn host_election(port: u16, state: &State, chart: &Chart) -> ElectionResul
     }
 }
 
-pub async fn cycle(port: u16, state: &State, chart: &Chart, ) {
+pub async fn cycle(port: u16, state: &State, chart: &Chart) {
     loop {
         monitor_heartbeat(state).await;
 

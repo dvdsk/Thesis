@@ -32,4 +32,4 @@ tracing-opentelemetry = {git = "https://github.com/tokio-rs/tracing" }
 opentelemetry = { version = "0.16", features = ["trace", "rt-tokio"] }
 opentelemetry-jaeger = { version = "0.15", features = ["reqwest_collector_client", "rt-tokio"]}
 
-console-subscriber = { git = "https://github.com/tokio-rs/console" }
+# console-subscriber = { git = "https://github.com/tokio-rs/console" }

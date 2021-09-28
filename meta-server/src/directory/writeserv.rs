@@ -1,9 +1,11 @@
 use std::sync::Arc;
 
 use client_protocol::PathString;
+use tokio::time::sleep;
 
-use crate::consensus::State;
+use crate::consensus::{State, HB_TIMEOUT};
 use crate::server_conn::protocol::Change;
+use crate::server_conn::to_readserv::PubResult;
 use crate::server_conn::to_readserv::ReadServers;
 use super::{DbError, readserv};
 use super::db::Db;
@@ -30,7 +32,12 @@ impl Directory {
 
     pub async fn mkdir(&mut self, path: PathString) -> Result<(), DbError> {
         self.db.mkdir(path.clone()).await?;
-        self.servers.publish(&self.state, Change::DirAdded(path)).await;
+        let res = self.servers.publish(&self.state, Change::DirAdded(path)).await;
+        match res {
+            PubResult::ReachedAll => (),
+            PubResult::ReachedMajority => tokio::time::sleep(HB_TIMEOUT).await,
+            PubResult::ReachedMinority => panic!("can not reach majority, crashing master"),
+        }
         Ok(())
     }
 }

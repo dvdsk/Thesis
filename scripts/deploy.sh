@@ -86,10 +86,11 @@ function deploy()
 	local bin=$2
 	local args="${@:3}"
 
-	local duration=0
+	local duration=5
 	local resv_numb=$(preserve -# ${numb_nodes} -t 00:${duration}:05 | head -n 1 | cut -d ' ' -f 3)
 	local resv_numb=${resv_numb::-1}
 
+	preserve -llist
 	node_list $resv_numb
 	wait_for_allocation $resv_numb
 
@@ -106,4 +107,5 @@ EOF
 	# run_in_tmux_splits "/tmp/mock-fs/$bin $args" $nodes
 	run_in_tmux_windows /tmp/mock-fs/ "$bin $args" $nodes
 	tmux kill-session -t "deployed" 
+	preserve -c $resv_numb #cancel reservation
 }
