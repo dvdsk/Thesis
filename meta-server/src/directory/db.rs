@@ -64,7 +64,7 @@ impl Db {
         Ok(())
     }
 
-    fn ls(&self, working_dir: impl Into<PathString>) -> Vec<FsEntry> {
+    pub fn ls(&self, working_dir: impl Into<PathString>) -> Vec<FsEntry> {
         let working_dir = working_dir.into().into_bytes();
         let next_dir = next_dir(&working_dir);
         self.0

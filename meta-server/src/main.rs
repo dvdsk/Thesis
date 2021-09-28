@@ -4,7 +4,6 @@ use gethostname::gethostname;
 use mac_address::get_mac_address;
 use structopt::StructOpt;
 use tracing::info;
-use tracing_futures::Instrument;
 
 pub mod directory;
 use directory::readserv;
@@ -90,7 +89,7 @@ async fn host_meta_or_update(
     use read_meta::meta_server;
     loop {
         tokio::select! {
-            _ = meta_server(client_port) => panic!("should not return"),
+            _ = meta_server(client_port, dir) => panic!("should not return"),
             _ = state.outdated.notified() => (),
         }
         consensus::update(state, dir).await;

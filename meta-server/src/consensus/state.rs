@@ -91,7 +91,7 @@ impl State {
 
     pub fn set_master(&self, source: SocketAddr) {
         let mut curr = self.master.lock().unwrap();
-        if *curr != Some(source) {
+        if curr.map(|s| s.ip()) != Some(source.ip()) {
             info!("new master: {}", source);
         }
         *curr = Some(source);

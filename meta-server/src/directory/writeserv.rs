@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use client_protocol::PathString;
-use tokio::time::sleep;
 
 use crate::consensus::{State, HB_TIMEOUT};
 use crate::server_conn::protocol::Change;

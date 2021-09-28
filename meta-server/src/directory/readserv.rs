@@ -1,7 +1,7 @@
 use crate::server_conn::protocol::Change;
 
 use super::db::Db;
-use client_protocol::PathString;
+use client_protocol::{FsEntry, PathString};
 
 #[derive(Debug, Clone)]
 pub struct Directory {
@@ -27,6 +27,10 @@ impl Directory {
             .mkdir(path)
             .await
             .expect("file exists should be caught on write server");
+    }
+
+    pub fn ls(&self, path: PathString) -> Vec<FsEntry> {
+        self.db.ls(path)
     }
 
     pub async fn apply(&self, change: Change) {

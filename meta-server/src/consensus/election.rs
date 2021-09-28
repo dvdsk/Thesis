@@ -7,8 +7,7 @@ use tokio::net::TcpStream;
 use tokio::sync::Notify;
 use tokio::time::{self, timeout_at, Duration, Instant};
 
-use tracing::{warn, info};
-use tracing_futures::Instrument as _;
+use tracing::{info, trace, warn};
 
 use super::{State, HB_TIMEOUT};
 use crate::server_conn::protocol::{FromRS, ToRs};
@@ -35,7 +34,8 @@ async fn monitor_heartbeat(state: &State) {
             }
             Ok(_) => {
                 let random_dur = rng.gen_range(Duration::from_secs(0)..HB_TIMEOUT);
-                hb_deadline += HB_TIMEOUT + random_dur;
+                hb_deadline = Instant::now() + HB_TIMEOUT + random_dur;
+                trace!("hb timeout in {} ms", hb_deadline.saturating_duration_since(Instant::now()).as_millis()); 
             }
         }
     }
