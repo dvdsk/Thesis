@@ -17,6 +17,11 @@ tmp:
 	mkdir -p ${SCRATCH}/tmp
 	ln -s ${SCRATCH}/tmp tmp
 
+tmp/cache/%: tmp
+	$(eval NAME := $(subst tmp/cache/,,$@))
+	mkdir -p ${SCRATCH}/tmp/$(NAME)
+	-ln -s ${SCRATCH}/tmp/$(NAME) $(NAME)/target
+
 #----------------------------------------------------------------------------
 # Compilers and tools 
 #----------------------------------------------------------------------------
@@ -31,20 +36,26 @@ tmp/cargo: | tmp
 # Executables 
 #----------------------------------------------------------------------------
 
-.PHONY: mete-server-source 
-meta-server-source: $(wildcard find meta-server/**/*.rs)
+.PHONY: client_examples
+client_examples: $(wildcard find client/**/*.rs)
+client_examples: | tmp/cargo tmp/cache/client
+	tmp/cargo/bin/cargo build --examples --manifest-path client/Cargo.toml
+	mkdir -p bin
 
-bin/meta-server: meta-server-source
-bin/meta-server: | tmp/cargo
+bin/meta-server: $(wildcard find meta-server/**/*.rs)
+bin/meta-server: | tmp/cargo tmp/cache/meta-server
 	tmp/cargo/bin/cargo build --manifest-path meta-server/Cargo.toml
 	mkdir -p bin
 	ln -fs ${PWD}/{meta-server/target/debug/,bin/}meta-server
 
 bin/discovery-exchange-id: $(wildcard find discovery/**/*.rs)
-bin/discovery-exchange-id: | tmp/cargo
+bin/discovery-exchange-id: | tmp/cargo tmp/cache/discovery
 	tmp/cargo/bin/cargo build --examples --manifest-path discovery/Cargo.toml
 	mkdir -p bin
 	ln -fs ${PWD}/{discovery/target/debug/examples/exchange_id,bin/discovery-exchange-id}
+
+bin/mkdir: client_examples
+	ln -fs ${PWD}/{client/target/debug/examples/mkdir,bin/test_mkdir}
 
 #----------------------------------------------------------------------------
 # Other
@@ -57,6 +68,10 @@ deploy: bin/meta-server
 discover: bin/discovery-exchange-id
 	$(info test done)
 	bash scripts/deploy_test.sh
+
+test_mkdir: bin/mkdir bin/meta-server
+	bash scripts/tests/mkdir.sh
+
 
 .PHONY: clean
 clean: 

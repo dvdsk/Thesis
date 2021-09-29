@@ -132,7 +132,7 @@ impl State {
         }
     }
 
-    #[tracing::instrument]
+    #[tracing::instrument(err)]
     pub fn handle_dirchange(
         &self,
         term: u64,

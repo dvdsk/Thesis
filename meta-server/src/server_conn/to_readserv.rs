@@ -25,7 +25,7 @@ pub enum PubResult {
 }
 
 impl ReadServers {
-    pub fn new() -> Self {
+    pub fn new(chart: Chart) -> Self {
         Self {
             conns: Arc::new(Mutex::new(Vec::new())),
         }
@@ -58,8 +58,8 @@ impl ReadServers {
             .filter_map(Result::ok)
             .count();
 
-        let majority = conns.len() / 2;
-        if reached == conns.len() {
+        let majority = state.cluster_size/2;
+        if reached == state.cluster_size {
             PubResult::ReachedAll
         } else if reached > majority {
             PubResult::ReachedMajority

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+set -e
 
 function node_list()
 {
@@ -20,26 +21,6 @@ function wait_for_allocation()
 	echo "" >&2
 }
 
-function split_cmd()
-{
-	local node=$1
-	local base_cmd="$2"
-	echo "ssh $node \\\"$base_cmd\\\"; sleep 90"
-}
-
-function run_in_tmux_splits()
-{
-	local base_cmd="$1"
-	local nodes="${@:2}"
-	local tmux_cmd="tmux new -s deployed"
-	for node in $nodes; do
-		local cmd=\"$(split_cmd $node "$base_cmd")\"
-		tmux_cmd="$tmux_cmd "$cmd" ';' split"
-	done
-
-	eval ${tmux_cmd::-9} # print with last split removed
-}
-
 function window_cmd()
 {
 	local node="$1"
@@ -47,7 +28,17 @@ function window_cmd()
 	local base_cmd="$3"
 	# remain on exit is broken on older tmux (https://github.com/tmux/tmux/issues/1354)
 	# for now just using a long sleep to ensure the window stays open
-	echo "tmux setw remain-on-exit on; ssh $node \"cd "$dir"; ./$base_cmd\"; sleep 99999"
+	echo "tmux setw remain-on-exit on; ssh $node \"cd "$dir"; RUST_BACKTRACE=1 ./$base_cmd\"; sleep 99999"
+}
+
+function new_session_name()
+{
+	tmux has-session -t "cluster_a" 2>/dev/null
+	if [ $? != 0 ]; then
+		echo cluster_a
+	else
+		echo cluster_b
+	fi
 }
 
 function run_in_tmux_windows()
@@ -55,15 +46,15 @@ function run_in_tmux_windows()
 	local dir="$1"
 	local base_cmd="$2"
 	local nodes=(${@:3})
+	local session_name=$(new_session_name)
 
 	local cmd=$(window_cmd ${nodes[0]} $dir "$base_cmd")
-	tmux new-session -s "deployed" -n ${nodes[0]} -d "$cmd"
-
+	tmux new-session -s $session_name -n ${nodes[0]} -d "$cmd"
 	local len=${#nodes[@]}
 	for (( i = 1; i < $len; i++ )); do
 		local name=${nodes[$i]}
 		local cmd=$(window_cmd ${nodes[i]} $dir "$base_cmd")
-		tmux new-window -t "deployed:$i" -n $name -d "$cmd"
+		tmux new-window -t "$session_name:$i" -n $name -d "$cmd"
 	done
 }
 
@@ -88,22 +79,23 @@ function deploy()
 		mkdir -p /tmp/mock-fs
 		cp ${PWD}/bin/$bin /tmp/mock-fs/
 EOF
-	done
+done
 	wait
 
-	# run_in_tmux_splits "/tmp/mock-fs/$bin $args" $nodes
 	run_in_tmux_windows /tmp/mock-fs/ "$bin $args" $nodes
 	echo $resv_numb $nodes
 }
 
 function attach()
 {
-	tmux attach-session -t "deployed"
+	local session_name=`[ -z $1 ] && echo "cluster_a" || echo $1`
+	tmux attach-session -t $session_name
 }
 
 function cleanup()
 {
 	local resv_numb=$1
-	tmux kill-session -t "deployed" 
+	local session_name=`[ -z $2 ] && echo "cluster_a" || echo $2`
+	tmux kill-session -t $session_name
 	preserve -c $resv_numb #cancel reservation
 }

@@ -2,6 +2,7 @@ use async_trait::async_trait;
 use futures::prelude::*;
 use std::io;
 use tokio::net::TcpStream;
+use tracing::info;
 
 use protocol::connection::{self, MsgStream};
 use protocol::{Request, Response, ServerList};
@@ -38,8 +39,9 @@ pub trait Conn: Sized {
     async fn from_serverlist(list: ServerList) -> Result<Self, ConnError>;
     async fn re_connect(&mut self) -> Result<(), ConnError>;
     fn get_stream_mut(&mut self) -> &mut ClientStream;
+    async fn request(&mut self, req: Request) -> Result<Response, ConnError>;
 
-    async fn request(&mut self, req: Request) -> Result<Response, ConnError> {
+    async fn basic_request(&mut self, req: Request) -> Result<Response, ConnError> {
         loop {
             use io::ErrorKind::*;
             let stream = self.get_stream_mut();
@@ -94,6 +96,18 @@ impl Conn for WriteServer {
     fn get_stream_mut(&mut self) -> &mut ClientStream {
         &mut self.stream
     }
+    async fn request(&mut self, req: Request) -> Result<Response, ConnError> {
+        loop {
+            match self.basic_request(req.clone()).await {
+                Ok(Response::NotWriteServ(new_list)) => {
+                    info!("updating write server");
+                    self.list = new_list;
+                }
+                _other => return _other,
+
+            }
+        }
+    }
 }
 
 pub struct ReadServer {
@@ -125,5 +139,9 @@ impl Conn for ReadServer {
 
     fn get_stream_mut(&mut self) -> &mut ClientStream {
         &mut self.stream
+    }
+
+    async fn request(&mut self, req: Request) -> Result<Response, ConnError> {
+        self.basic_request(req).await
     }
 }
