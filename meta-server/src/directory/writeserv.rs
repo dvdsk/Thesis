@@ -29,7 +29,7 @@ impl Directory {
         self.db.serialize()
     }
 
-    #[instrument(err)]
+    #[tracing::instrument]
     pub async fn mkdir(&mut self, path: PathString) -> Result<(), DbError> {
         self.db.mkdir(path.clone()).await?;
         let res = self.servers.publish(&self.state, Change::DirAdded(path)).await;

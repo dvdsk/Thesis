@@ -1,6 +1,6 @@
 use mac_address::get_mac_address;
 use std::env;
-use tracing::{info, Level};
+use tracing::Level;
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() {

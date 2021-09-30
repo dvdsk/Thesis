@@ -7,7 +7,6 @@ use std::time::Duration;
 use tokio::net::UdpSocket;
 use tokio::time::sleep;
 use tracing::info;
-use tracing_futures::Instrument;
 
 pub use dashmap;
 type Id = u64;

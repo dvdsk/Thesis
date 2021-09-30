@@ -66,18 +66,14 @@ fn setup_tracing(opt: &Opt) {
 }
 
 #[tracing::instrument]
-async fn write_server(opt: Opt, dir: readserv::Directory, state: &Arc<consensus::State>) {
+async fn write_server(opt: Opt, dir: readserv::Directory, state: &Arc<consensus::State>, chart: discovery::Chart) {
     use write_meta::{server, Directory, ReadServers};
 
-    let servers = ReadServers::new();
-    let dir = Directory::from(dir, servers.clone(), state);
+    let servers = ReadServers::new(chart, opt.control_port);
+    let dir = Directory::from(dir, servers, state);
 
-    let maintain_conns = ReadServers::maintain(servers.conns.clone(), opt.control_port);
-    let handle_req = server(opt.client_port, dir);
-
+    server(opt.client_port, dir).await;
     info!("starting write server");
-    tokio::spawn(maintain_conns);
-    handle_req.await;
 }
 
 #[tracing::instrument]
@@ -131,8 +127,8 @@ async fn server(
     read_server(&opt, &state, &chart, &mut dir).await;
 
     info!("promoted to write server");
-    let send_hb = consensus::maintain_heartbeat(state.clone(), chart);
-    let host = write_server(opt, dir, &state);
+    let send_hb = consensus::maintain_heartbeat(state.clone(), chart.clone());
+    let host = write_server(opt, dir, &state, chart);
     tokio::spawn(send_hb);
     host.await
 }
