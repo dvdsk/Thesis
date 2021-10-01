@@ -50,6 +50,7 @@ pub enum PubResult {
     ReachedMinority,
 }
 
+#[tracing::instrument]
 async fn send(msg: ToRs, ip: IpAddr, conn: &mut RsStream) -> Result<IpAddr, IpAddr> {
     match timeout(HB_TIMEOUT, conn.send(msg)).await {
         Err(_) => Err(ip),
@@ -58,6 +59,7 @@ async fn send(msg: ToRs, ip: IpAddr, conn: &mut RsStream) -> Result<IpAddr, IpAd
     }
 }
 
+#[tracing::instrument]
 async fn conn_and_send(msg: ToRs, ip: IpAddr, port: u16) -> Result<(IpAddr, RsStream), ()> {
     let addr = SocketAddr::from((ip, port));
     let stream = TcpStream::connect(addr).await.map_err(|_| ())?;
@@ -78,6 +80,7 @@ impl Inner {
         }
     }
 
+    #[tracing::instrument]
     async fn send_to_readservers(&mut self, msg: ToRs) -> usize {
         let conn_ips: HashSet<_> = self.conns.keys().cloned().collect();
 

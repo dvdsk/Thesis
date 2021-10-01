@@ -19,8 +19,8 @@ tmp:
 
 tmp/cache/%: tmp
 	$(eval NAME := $(subst tmp/cache/,,$@))
-	mkdir -p ${SCRATCH}/tmp/$(NAME)
-	-ln -s ${SCRATCH}/tmp/$(NAME) $(NAME)/target
+	mkdir -p ${SCRATCH}/tmp/$(NAME)/target
+	-ln -s -t $(NAME) ${SCRATCH}/tmp/$(NAME)/target
 
 #----------------------------------------------------------------------------
 # Compilers and tools 
@@ -46,16 +46,16 @@ bin/meta-server: $(wildcard find meta-server/**/*.rs)
 bin/meta-server: | tmp/cargo tmp/cache/meta-server
 	tmp/cargo/bin/cargo build --manifest-path meta-server/Cargo.toml
 	mkdir -p bin
-	ln -fs ${PWD}/{meta-server/target/debug/,bin/}meta-server
+	cp ${PWD}/{meta-server/target/debug/,bin/}meta-server
 
 bin/discovery-exchange-id: $(wildcard find discovery/**/*.rs)
 bin/discovery-exchange-id: | tmp/cargo tmp/cache/discovery
 	tmp/cargo/bin/cargo build --examples --manifest-path discovery/Cargo.toml
 	mkdir -p bin
-	ln -fs ${PWD}/{discovery/target/debug/examples/exchange_id,bin/discovery-exchange-id}
+	cp ${PWD}/{discovery/target/debug/examples/exchange_id,bin/discovery-exchange-id}
 
 bin/mkdir: client_examples
-	ln -fs ${PWD}/{client/target/debug/examples/mkdir,bin/test_mkdir}
+	cp ${PWD}/{client/target/debug/examples/mkdir,bin/test_mkdir}
 
 #----------------------------------------------------------------------------
 # Other

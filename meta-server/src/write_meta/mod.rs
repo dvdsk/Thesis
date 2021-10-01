@@ -2,7 +2,7 @@ use futures::{SinkExt, TryStreamExt};
 use client_protocol::{connection, Request, Response, PathString};
 use std::net::{IpAddr, Ipv4Addr};
 use tokio::net::TcpListener;
-use tracing::instrument;
+use tracing::{info, instrument, warn};
 
 pub use crate::directory::DbError;
 pub use crate::directory::writeserv::Directory;
@@ -21,13 +21,16 @@ async fn handle_client(mut stream: ClientStream, directory: Directory) {
     if let Some(msg) = stream.try_next().await.unwrap() {
         let response = match msg {
             Request::Test => Response::Test,
-            Request::AddDir(path) => mkdir(directory, path).await,
+            Request::AddDir(path) => {
+                mkdir(directory, path).await
+            }
             // Request::OpenReadWrite(path, policy) => open_rw(path, policy).await,
             _e => {
                 Response::Todo(_e)
             }
         };
         if let Err(_) = stream.send(response).await {
+            warn!("could not send response to client");
             return;
         }
     }

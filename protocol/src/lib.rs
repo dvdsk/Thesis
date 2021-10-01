@@ -6,7 +6,7 @@ pub mod connection;
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ServerList {
     /// write server a client should contact
-    pub write_serv: SocketAddr,
+    pub write_serv: Option<SocketAddr>,
     /// read server a client should contact
     pub read_serv: SocketAddr,
     /// fallback adresses in case both write and read server are down

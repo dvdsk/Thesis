@@ -10,8 +10,8 @@ fn serverlist_from_args() -> ServerList {
     let mut args = std::env::args();
     let port = args.nth(1).unwrap().parse().unwrap();
     ServerList {
+        write_serv: Some(from_arg(port, args.next().unwrap())),
         read_serv: from_arg(port, args.next().unwrap()),
-        write_serv: from_arg(port, args.next().unwrap()),
         fallback: args.map(|a| from_arg(port, a)).collect(),
     }
 }

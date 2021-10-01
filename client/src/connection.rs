@@ -73,7 +73,7 @@ pub struct WriteServer {
 
 impl WriteServer {
     async fn connect(list: &ServerList) -> Result<ClientStream, ConnError> {
-        let tcp_stream = TcpStream::connect(list.write_serv)
+        let tcp_stream = TcpStream::connect(list.write_serv.expect("no write server known"))
             .await
             .map_err(ConnError::NoWriteServer)?;
         let msg_stream = connection::wrap(tcp_stream);

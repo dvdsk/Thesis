@@ -79,13 +79,14 @@ async fn write_server(opt: Opt, dir: readserv::Directory, state: &Arc<consensus:
 #[tracing::instrument]
 async fn host_meta_or_update(
     client_port: u16,
-    state: &consensus::State,
+    state: &Arc<consensus::State>,
+    chart: &discovery::Chart,
     dir: &readserv::Directory,
 ) {
     use read_meta::meta_server;
     loop {
         tokio::select! {
-            _ = meta_server(client_port, dir) => panic!("should not return"),
+            _ = meta_server(client_port, dir, chart, &state) => panic!("should not return"),
             _ = state.outdated.notified() => (),
         }
         consensus::update(state, dir).await;
@@ -109,8 +110,8 @@ async fn read_server(
     loop {
         tokio::select! {
             () = read_meta::cmd_server(opt.control_port, state.clone(), dir) => todo!(),
-            _res = host_meta_or_update(opt.client_port, &state, dir) => panic!("should not return"),
-            _won = election::cycle(opt.control_port, &state, chart) => {info!("won the election"); return},
+            _res = host_meta_or_update(opt.client_port, &state, &chart, dir) => panic!("should not return"),
+            _won = election::cycle(opt.control_port, &state, &chart) => {info!("won the election"); return},
         }
     }
 }

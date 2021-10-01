@@ -1,3 +1,5 @@
+use client_protocol::ServerList;
+use discovery::Chart;
 use futures::SinkExt;
 use futures_util::TryStreamExt;
 use tracing::info;
@@ -12,9 +14,22 @@ use crate::directory::readserv::Directory;
 use crate::server_conn::protocol::{FromRS, ToRs};
 use client_protocol::{connection, Request, Response};
 
+fn serverlist(chart: &Chart, state: &State) -> ServerList {
+    use rand::Rng;
+    let mut rng = rand::thread_rng();
+    let mut addresses = chart.adresses();
+    let idx = rng.gen_range(0..addresses.len());
+
+    ServerList {
+        write_serv: state.get_master(),
+        read_serv: addresses.remove(idx),
+        fallback: addresses,
+    }
+}
+
 type ReqStream = connection::MsgStream<Request, Response>;
 #[tracing::instrument]
-async fn handle_meta_conn(mut stream: ReqStream, dir: &Directory) {
+async fn handle_meta_conn(mut stream: ReqStream, dir: &Directory, chart: &Chart, state: &State) {
     use Request::*;
     while let Ok(msg) = stream.try_next().await {
         let msg = match msg {
@@ -27,12 +42,17 @@ async fn handle_meta_conn(mut stream: ReqStream, dir: &Directory) {
                 let resp = Response::Ls(dir.ls(path));
                 let _res = stream.send(resp).await;
             }
+            AddDir(_) | OpenAppend(_,_) | OpenReadWrite(_,_) => {
+                let list = serverlist(chart, state);
+                let resp = Response::NotWriteServ(list);
+                let _res = stream.send(resp).await;
+            }
             _req => todo!("req: {:?}", _req),
         }
     }
 }
 
-pub async fn meta_server(port: u16, dir: &Directory) {
+pub async fn meta_server(port: u16, dir: &Directory, chart: &Chart, state: &Arc<State>) {
     let addr = (IpAddr::V4(Ipv4Addr::UNSPECIFIED), port);
     let listener = TcpListener::bind(addr)
         .await
@@ -40,10 +60,12 @@ pub async fn meta_server(port: u16, dir: &Directory) {
 
     loop {
         let dir = dir.clone();
+        let chart = chart.clone();
+        let state = state.clone();
         let (socket, _) = listener.accept().await.unwrap();
         tokio::spawn(async move {
             let stream: ReqStream = connection::wrap(socket);
-            handle_meta_conn(stream, &dir).await;
+            handle_meta_conn(stream, &dir, &chart, &state).await;
         });
     }
 }
