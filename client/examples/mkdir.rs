@@ -30,6 +30,7 @@ async fn main() {
     let rconn = ReadServer::from_serverlist(list).await.unwrap();
 
     let res = mkdir(wconn, "test_dir").await;
+    dbg!("info call done");
 
     let res = ls(rconn, "").await;
     dbg!(res);

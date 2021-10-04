@@ -13,6 +13,14 @@ pub struct ServerList {
     pub fallback: Vec<SocketAddr>,
 }
 
+impl ServerList {
+    pub fn random_server(&self) -> &SocketAddr {
+        use rand::seq::SliceRandom;
+        let mut rng = rand::thread_rng();
+        self.fallback.choose(&mut rng).expect("no fallback servers")
+    }
+}
+
 pub trait Message<'de>: Serialize + Deserialize<'de> {
     fn from_buf(buf: &'de [u8]) -> Self {
         bincode::deserialize(buf).unwrap()

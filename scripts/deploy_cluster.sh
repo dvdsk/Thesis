@@ -8,7 +8,7 @@ run_numb=$((ls *.last_run 2>/dev/null || echo "-1.run_numb") \
 	| cut -d " " -f 2 \
 	| cut -d "." -f 1)
 run_numb=$(($run_numb + 1))
-rm *.last_run >& /dev/null
+rm *.last_run >& /dev/null || true
 touch $run_numb.last_run
 
 # deploy cluster

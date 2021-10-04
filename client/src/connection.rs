@@ -1,8 +1,9 @@
 use async_trait::async_trait;
 use futures::prelude::*;
-use std::io;
+use std::time::Duration;
+use std::{io, thread};
 use tokio::net::TcpStream;
-use tracing::info;
+use tracing::{info, warn};
 
 use protocol::connection::{self, MsgStream};
 use protocol::{Request, Response, ServerList};
@@ -73,11 +74,18 @@ pub struct WriteServer {
 
 impl WriteServer {
     async fn connect(list: &ServerList) -> Result<ClientStream, ConnError> {
-        let tcp_stream = TcpStream::connect(list.write_serv.expect("no write server known"))
-            .await
-            .map_err(ConnError::NoWriteServer)?;
-        let msg_stream = connection::wrap(tcp_stream);
-        Ok(msg_stream)
+        let addr = list.write_serv.as_ref().unwrap_or_else(|| list.random_server());
+        if let Ok(stream) = TcpStream::connect(addr).await {
+            return Ok(connection::wrap(stream));
+        }
+
+        loop {
+            warn!("could not connect to server, retrying random adress in 500ms");
+            thread::sleep(Duration::from_millis(500));
+            if let Ok(stream) = TcpStream::connect(list.random_server()).await {
+                return Ok(connection::wrap(stream));
+            }
+        }
     }
 }
 
@@ -100,11 +108,15 @@ impl Conn for WriteServer {
         loop {
             match self.basic_request(req.clone()).await {
                 Ok(Response::NotWriteServ(new_list)) => {
-                    info!("updating write server");
+                    info!("updating write server with new: {:?}", new_list);
                     self.list = new_list;
+                    self.re_connect().await.unwrap();
+                }
+                Err(ConnError::NoWriteServer(_)) => {
+                    info!("current write server unreachable");
+                    self.list.write_serv = None;
                 }
                 _other => return _other,
-
             }
         }
     }
@@ -117,11 +129,17 @@ pub struct ReadServer {
 
 impl ReadServer {
     async fn connect(list: &ServerList) -> Result<ClientStream, ConnError> {
-        let tcp_stream = TcpStream::connect(list.read_serv)
-            .await
-            .map_err(ConnError::NoReadServers)?;
-        let msg_stream = connection::wrap(tcp_stream);
-        Ok(msg_stream)
+        if let Ok(stream) = TcpStream::connect(list.read_serv).await {
+            return Ok(connection::wrap(stream));
+        }
+
+        loop {
+            warn!("could not connect to server, retrying random adress in 500ms");
+            thread::sleep(Duration::from_millis(500));
+            if let Ok(stream) = TcpStream::connect(list.random_server()).await {
+                return Ok(connection::wrap(stream));
+            }
+        }
     }
 }
 

@@ -75,7 +75,7 @@ function deploy()
 	local nodes=$(node_list $resv_numb)
 
 	for node in $nodes; do
-		ssh -t $node <<- EOF & >&2 # TODO run in parallel
+		ssh -t $node <<- EOF & >&2
 		mkdir -p /tmp/mock-fs
 		cp ${PWD}/bin/$bin /tmp/mock-fs/
 EOF

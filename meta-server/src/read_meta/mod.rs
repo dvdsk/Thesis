@@ -2,12 +2,12 @@ use client_protocol::ServerList;
 use discovery::Chart;
 use futures::SinkExt;
 use futures_util::TryStreamExt;
-use tracing::info;
 use std::net::IpAddr;
 use std::net::Ipv4Addr;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::net::TcpListener;
+use tracing::info;
 
 use crate::consensus::State;
 use crate::directory::readserv::Directory;
@@ -29,26 +29,37 @@ fn serverlist(chart: &Chart, state: &State) -> ServerList {
 
 type ReqStream = connection::MsgStream<Request, Response>;
 #[tracing::instrument]
-async fn handle_meta_conn(mut stream: ReqStream, dir: &Directory, chart: &Chart, state: &State) {
+async fn handle_meta_msg(
+    stream: &mut ReqStream,
+    msg: Request,
+    dir: &Directory,
+    chart: &Chart,
+    state: &State,
+) {
     use Request::*;
+    tracing::info!("got msg");
+    match msg {
+        Ls(path) => {
+            let resp = Response::Ls(dir.ls(path));
+            let _res = stream.send(resp).await;
+        }
+        AddDir(_) | OpenAppend(_, _) | OpenReadWrite(_, _) => {
+            let list = serverlist(chart, state);
+            let resp = Response::NotWriteServ(list);
+            let _res = stream.send(resp).await;
+        }
+        _req => todo!("req: {:?}", _req),
+    }
+}
+
+#[tracing::instrument]
+async fn handle_meta_conn(mut stream: ReqStream, dir: &Directory, chart: &Chart, state: &State) {
     while let Ok(msg) = stream.try_next().await {
         let msg = match msg {
             None => continue,
             Some(msg) => msg,
         };
-
-        match msg {
-            Ls(path) => {
-                let resp = Response::Ls(dir.ls(path));
-                let _res = stream.send(resp).await;
-            }
-            AddDir(_) | OpenAppend(_,_) | OpenReadWrite(_,_) => {
-                let list = serverlist(chart, state);
-                let resp = Response::NotWriteServ(list);
-                let _res = stream.send(resp).await;
-            }
-            _req => todo!("req: {:?}", _req),
-        }
+        handle_meta_msg(&mut stream, msg, dir, chart, state).await;
     }
 }
 
@@ -72,27 +83,38 @@ pub async fn meta_server(port: u16, dir: &Directory, chart: &Chart, state: &Arc<
 
 type RsStream = connection::MsgStream<ToRs, FromRS>;
 #[tracing::instrument]
-async fn handle_cmd_conn(mut stream: RsStream, source: SocketAddr, state: &State, dir: &Directory) {
+async fn handle_cmd_msg(
+    stream: &mut RsStream,
+    source: SocketAddr,
+    msg: ToRs,
+    dir: &Directory,
+    state: &State,
+) {
     use ToRs::*;
+    tracing::info!("got msg");
+    match msg {
+        HeartBeat(term, change_idx) => state.handle_heartbeat(term, change_idx, source),
+        RequestVote(term, change_idx, id) => {
+            let reply = state.handle_votereq(term, change_idx, id);
+            let _ignore_res = stream.send(reply).await;
+        }
+        DirectoryChange(term, change_idx, change) => {
+            if let Err(_) = state.handle_dirchange(term, change_idx, source) {
+                let _ignore_res = stream.send(FromRS::Error).await;
+            }
+            dir.apply(change).await;
+        }
+    }
+}
+
+#[tracing::instrument]
+async fn handle_cmd_conn(mut stream: RsStream, source: SocketAddr, state: &State, dir: &Directory) {
     while let Ok(msg) = stream.try_next().await {
         let msg = match msg {
             None => continue,
             Some(msg) => msg,
         };
-
-        match msg {
-            HeartBeat(term, change_idx) => state.handle_heartbeat(term, change_idx, source),
-            RequestVote(term, change_idx, id) => {
-                let reply = state.handle_votereq(term, change_idx, id);
-                let _ignore_res = stream.send(reply).await;
-            }
-            DirectoryChange(term, change_idx, change) => {
-                if let Err(_) = state.handle_dirchange(term, change_idx, source) {
-                    let _ignore_res = stream.send(FromRS::Error).await;
-                }
-                dir.apply(change).await;
-            }
-        }
+        handle_cmd_msg(&mut stream, source, msg, dir, state).await;
     }
 }
 

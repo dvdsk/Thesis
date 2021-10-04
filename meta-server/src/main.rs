@@ -42,7 +42,7 @@ fn setup_tracing(opt: &Opt) {
     let instance_name = opt.name.clone().unwrap_or(
         gethostname()
             .into_string()
-            .expect("hostname is not valid utf8"),
+            .expect("hostname not valid utf8"),
     );
 
     let tracer = opentelemetry_jaeger::new_pipeline()
@@ -102,7 +102,7 @@ async fn read_server(
 ) {
     use consensus::election;
 
-    // the meta server stops as soon as we detect we are outdated, then starts updating.
+    // the meta server stops as soon as we detect the dir contains outdated info, then starts updating.
     // outdated detection happens inside the cmd server (from hb or update)
     //  - it notifies the meta_server which kills all current requests
     //  - then the meta server starts updating the directory using the master (if any)
@@ -155,7 +155,7 @@ async fn main() {
 fn id_from_mac() -> u64 {
     let mac_bytes = get_mac_address()
         .unwrap()
-        .expect("there should be at least one network decive")
+        .expect("there should be at least one network device")
         .bytes();
 
     let mut id = 0u64.to_ne_bytes();

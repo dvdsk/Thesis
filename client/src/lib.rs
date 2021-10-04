@@ -1,6 +1,5 @@
 use std::io::Result as IoResult;
 use std::io::{Read, Write};
-use std::path::PathBuf;
 
 mod connection;
 use protocol::{Request, Response};
