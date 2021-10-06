@@ -1,11 +1,13 @@
-use std::net::SocketAddr;
+use std::net::{IpAddr, SocketAddr};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Mutex;
 
 use tokio::sync::Notify;
-use tracing::{info, warn};
+use tracing::{error, info, warn};
 
+use crate::Config;
 use crate::server_conn::protocol::FromRS;
+
 
 #[derive(Debug)]
 pub struct State {
@@ -148,6 +150,7 @@ impl State {
 
         if let Err(_) = res {
             self.outdated.notify_one();
+            error!("change idx is not what we expected, we are outdated!");
             return Err(());
         }
 

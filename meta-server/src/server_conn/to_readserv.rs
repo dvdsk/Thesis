@@ -1,7 +1,8 @@
 use client_protocol::connection;
 use discovery::Chart;
 use futures::future::join_all;
-use futures::SinkExt;
+use futures::{SinkExt, TryStreamExt};
+use tracing::{trace, warn};
 use std::collections::{HashMap, HashSet};
 use std::net::IpAddr;
 use std::net::SocketAddr;
@@ -53,11 +54,21 @@ pub enum PubResult {
 }
 
 #[tracing::instrument]
+async fn send_confirm(msg: ToRs, conn: &mut RsStream) -> Option<()> {
+    conn.send(msg).await.ok()?;
+    match conn.try_next().await.ok()? {
+        Some(FromRS::Awk) => Some(()),
+        None => {warn!("got empty response"); None}
+        Some(other) => {warn!("got invalid response from peer: {:?}", other); None}
+    }
+}
+
+#[tracing::instrument]
 async fn send(msg: ToRs, ip: IpAddr, conn: &mut RsStream) -> Result<IpAddr, IpAddr> {
-    match timeout(HB_TIMEOUT, conn.send(msg)).await {
+    match timeout(HB_TIMEOUT, send_confirm(msg, conn)).await {
         Err(_) => Err(ip),
-        Ok(Err(_)) => Err(ip),
-        Ok(Ok(_)) => Ok(ip),
+        Ok(None) => Err(ip),
+        Ok(Some(_)) => Ok(ip),
     }
 }
 
@@ -66,10 +77,10 @@ async fn conn_and_send(msg: ToRs, ip: IpAddr, port: u16) -> Result<(IpAddr, RsSt
     let addr = SocketAddr::from((ip, port));
     let stream = TcpStream::connect(addr).await.map_err(|_| ())?;
     let mut conn: RsStream = connection::wrap(stream);
-    match timeout(HB_TIMEOUT, conn.send(msg)).await {
+    match timeout(HB_TIMEOUT, send_confirm(msg, &mut conn)).await {
         Err(_) => Err(()),
-        Ok(Err(_)) => Err(()),
-        Ok(Ok(_)) => Ok((ip, conn)),
+        Ok(None) => Err(()),
+        Ok(Some(_)) => Ok((ip, conn)),
     }
 }
 
@@ -102,6 +113,7 @@ impl Inner {
             .into_iter()
             .map(|addr| addr.ip())
             .filter(|addr| !conn_ips.contains(&addr));
+        trace!("publising to unconnected servers: {:?}", untried);
 
         let jobs = untried.map(|ip| conn_and_send(msg.clone(), ip, self.port));
         let new_ok_conns = join_all(jobs).await.into_iter().filter_map(Result::ok);

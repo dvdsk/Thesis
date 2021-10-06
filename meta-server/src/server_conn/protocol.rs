@@ -7,6 +7,7 @@ pub enum FromRS {
     RequestVote(Term, ChangeIdx),
     NotVoting,
     Error,
+    Awk,
 }
 
 

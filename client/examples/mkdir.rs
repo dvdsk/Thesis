@@ -25,8 +25,8 @@ async fn main() {
     let wconn = WriteServer::from_serverlist(list.clone()).await.unwrap();
     let rconn = ReadServer::from_serverlist(list).await.unwrap();
 
-    let res = mkdir(wconn, "test_dir").await;
-    dbg!("info call done");
+    mkdir(wconn, "test_dir").await;
+    dbg!("mkdir call completed");
 
     let res = ls(rconn, "").await;
     dbg!(res);

@@ -2,12 +2,14 @@ use client_protocol::ServerList;
 use discovery::Chart;
 use futures::SinkExt;
 use futures_util::TryStreamExt;
+use tracing::error;
 use std::net::IpAddr;
 use std::net::Ipv4Addr;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use tracing::info;
+use tracing::warn;
 
 use crate::consensus::State;
 use crate::directory::readserv::Directory;
@@ -17,19 +19,25 @@ use client_protocol::{connection, Request, Response};
 fn serverlist(chart: &Chart, state: &State) -> ServerList {
     use rand::Rng;
     let mut rng = rand::thread_rng();
-    let mut addresses = chart.adresses();
+    let addresses: Vec<IpAddr> = chart
+        .adresses()
+        .into_iter()
+        .map(|sock| sock.ip())
+        .collect();
+
     let idx = rng.gen_range(0..addresses.len());
 
     ServerList {
+        port: state.config.client_port,
         write_serv: state.get_master(),
-        read_serv: addresses.remove(idx),
+        read_serv: Some(addresses[idx]),
         fallback: addresses,
     }
 }
 
 type ReqStream = connection::MsgStream<Request, Response>;
 #[tracing::instrument]
-async fn handle_meta_msg(
+async fn client_msg(
     stream: &mut ReqStream,
     msg: Request,
     dir: &Directory,
@@ -37,7 +45,6 @@ async fn handle_meta_msg(
     state: &State,
 ) {
     use Request::*;
-    tracing::info!("got msg");
     match msg {
         Ls(path) => {
             let resp = Response::Ls(dir.ls(path));
@@ -47,19 +54,20 @@ async fn handle_meta_msg(
             let list = serverlist(chart, state);
             let resp = Response::NotWriteServ(list);
             let _res = stream.send(resp).await;
+            warn!("send serverlist to client asking for write server");
         }
         _req => todo!("req: {:?}", _req),
     }
 }
 
 #[tracing::instrument]
-async fn handle_meta_conn(mut stream: ReqStream, dir: &Directory, chart: &Chart, state: &State) {
+async fn client_conn(mut stream: ReqStream, dir: &Directory, chart: &Chart, state: &State) {
     while let Ok(msg) = stream.try_next().await {
         let msg = match msg {
             None => continue,
             Some(msg) => msg,
         };
-        handle_meta_msg(&mut stream, msg, dir, chart, state).await;
+        client_msg(&mut stream, msg, dir, chart, state).await;
     }
 }
 
@@ -76,14 +84,14 @@ pub async fn meta_server(port: u16, dir: &Directory, chart: &Chart, state: &Arc<
         let (socket, _) = listener.accept().await.unwrap();
         tokio::spawn(async move {
             let stream: ReqStream = connection::wrap(socket);
-            handle_meta_conn(stream, &dir, &chart, &state).await;
+            client_conn(stream, &dir, &chart, &state).await;
         });
     }
 }
 
 type RsStream = connection::MsgStream<ToRs, FromRS>;
 #[tracing::instrument]
-async fn handle_cmd_msg(
+async fn cmd_msg(
     stream: &mut RsStream,
     source: SocketAddr,
     msg: ToRs,
@@ -99,22 +107,24 @@ async fn handle_cmd_msg(
             let _ignore_res = stream.send(reply).await;
         }
         DirectoryChange(term, change_idx, change) => {
-            if let Err(_) = state.handle_dirchange(term, change_idx, source) {
+            if let Err(e) = state.handle_dirchange(term, change_idx, source) {
+                error!("error applying dir change: {:?}",e);
                 let _ignore_res = stream.send(FromRS::Error).await;
             }
             dir.apply(change).await;
+            let _ignore_res = stream.send(FromRS::Awk).await;
         }
     }
 }
 
 #[tracing::instrument]
-async fn handle_cmd_conn(mut stream: RsStream, source: SocketAddr, state: &State, dir: &Directory) {
+async fn cmd_conn(mut stream: RsStream, source: SocketAddr, state: &State, dir: &Directory) {
     while let Ok(msg) = stream.try_next().await {
         let msg = match msg {
             None => continue,
             Some(msg) => msg,
         };
-        handle_cmd_msg(&mut stream, source, msg, dir, state).await;
+        cmd_msg(&mut stream, source, msg, dir, state).await;
     }
 }
 
@@ -129,7 +139,7 @@ pub async fn cmd_server(port: u16, state: Arc<State>, dir: &Directory) {
         tokio::spawn(async move {
             info!("accepted connection from: {:?}", source);
             let stream: RsStream = connection::wrap(socket);
-            handle_cmd_conn(stream, source, &state, &dir).await;
+            cmd_conn(stream, source, &state, &dir).await;
         });
     }
 }
