@@ -73,17 +73,29 @@ fn setup_tracing(opt: &Opt) {
         .unwrap();
 
     use tracing_subscriber::prelude::*;
+    use tracing_subscriber::{fmt, Registry};
     let telemetry = tracing_opentelemetry::subscriber().with_tracer(tracer);
-    let fmt_sub = tracing_subscriber::fmt::subscriber().with_target(false);
+    let stdout = fmt::subscriber()
+            .with_span_events(fmt::format::FmtSpan::NONE);
+    //     .compact();
+        // .with_span_list(false)
+        // .with_current_span(false);
+        // .with_target(false)
+        // .with_level(true)
 
-    let subscriber = tracing_subscriber::Registry::default()
-        .with(fmt_sub)
+    let subscriber = Registry::default()
+        .with(stdout)
         .with(telemetry);
     tracing::collect::set_global_default(subscriber).unwrap();
 }
 
 #[tracing::instrument]
-async fn write_server(opt: Opt, dir: readserv::Directory, state: &Arc<consensus::State>, chart: discovery::Chart) {
+async fn write_server(
+    opt: Opt,
+    dir: readserv::Directory,
+    state: &Arc<consensus::State>,
+    chart: discovery::Chart,
+) {
     use write_meta::{server, Directory, ReadServers};
 
     let servers = ReadServers::new(chart, opt.control_port);
