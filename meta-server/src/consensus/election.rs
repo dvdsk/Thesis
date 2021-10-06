@@ -98,7 +98,7 @@ async fn request_and_register(
 
 #[tracing::instrument]
 async fn request_and_count_votes(port: u16, state: &State, chart: &Chart) -> ElectionResult {
-    let count = VoteCount::new(state.cluster_size);
+    let count = VoteCount::new(state.config.cluster_size);
     let term = state.term();
     let our_id = chart.our_id();
     let requests = chart

@@ -22,12 +22,14 @@ impl ReadServers {
     pub fn new(chart: Chart, port: u16) -> Self {
         Self(Arc::new(Mutex::new(Inner::new(chart, port))))
     }
+    #[tracing::instrument]
     pub async fn publish(&self, state: &State, change: Change) -> PubResult {
         let msg = ToRs::DirectoryChange(state.term(), state.increase_change_idx(), change);
         let reached = self.0.lock().await.send_to_readservers(msg).await as u16;
+        tracing::info!("reached {} servers", reached);
 
-        let majority = state.cluster_size / 2;
-        if reached == state.cluster_size {
+        let majority = state.config.cluster_size / 2;
+        if reached == state.config.cluster_size {
             PubResult::ReachedAll
         } else if reached > majority {
             PubResult::ReachedMajority

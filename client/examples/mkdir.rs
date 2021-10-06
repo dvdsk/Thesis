@@ -1,18 +1,14 @@
-use std::net::{IpAddr, SocketAddr};
+use std::net::IpAddr;
 use client::{Conn, ReadServer, ServerList, WriteServer, ls, mkdir};
-
-fn from_arg(port: u16, arg: String) -> SocketAddr {
-    let ip: IpAddr = arg.parse().unwrap();
-    SocketAddr::from((ip, port))
-}
 
 fn serverlist_from_args() -> ServerList {
     let mut args = std::env::args();
     let port = args.nth(1).unwrap().parse().unwrap();
     ServerList {
-        write_serv: Some(from_arg(port, args.next().unwrap())),
-        read_serv: from_arg(port, args.next().unwrap()),
-        fallback: args.map(|a| from_arg(port, a)).collect(),
+        port,
+        write_serv: None,
+        read_serv: None,
+        fallback: args.map(|a| a.parse().unwrap()).collect()
     }
 }
 

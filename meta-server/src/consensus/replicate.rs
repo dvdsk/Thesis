@@ -1,6 +1,6 @@
 use client_protocol::connection;
 use futures::{SinkExt, TryStreamExt};
-use std::net::SocketAddr;
+use std::net::IpAddr;
 use tokio::net::TcpStream;
 
 use super::State;
@@ -15,7 +15,7 @@ pub async fn update(state: &State, dir: &Directory) {
             Some(addr) => addr,
         };
 
-        let update = match get_update(addr).await {
+        let update = match get_update(addr, state.config.control_port).await {
             Err(_) => continue,
             Ok(update) => update,
         };
@@ -26,9 +26,9 @@ pub async fn update(state: &State, dir: &Directory) {
 }
 
 #[tracing::instrument]
-async fn get_update(master: SocketAddr) -> Result<Vec<u8>, ()> {
+async fn get_update(master: IpAddr, port: u16) -> Result<Vec<u8>, ()> {
     type Stream = connection::MsgStream<FromWs, ToWs>;
-    let socket = TcpStream::connect(master).await.map_err(|_| ())?;
+    let socket = TcpStream::connect((master, port)).await.map_err(|_| ())?;
     let mut stream: Stream = connection::wrap(socket);
     stream.send(ToWs::Sync).await.map_err(|_| ())?;
 

@@ -1,23 +1,32 @@
 use serde::{Deserialize, Serialize};
-use std::net::SocketAddr;
+use std::net::{IpAddr, SocketAddr};
 
 pub mod connection;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ServerList {
+    /// client port
+    pub port: u16,
     /// write server a client should contact
-    pub write_serv: Option<SocketAddr>,
+    pub write_serv: Option<IpAddr>,
     /// read server a client should contact
-    pub read_serv: SocketAddr,
+    pub read_serv: Option<IpAddr>,
     /// fallback adresses in case both write and read server are down
-    pub fallback: Vec<SocketAddr>,
+    pub fallback: Vec<IpAddr>,
 }
 
 impl ServerList {
-    pub fn random_server(&self) -> &SocketAddr {
+    pub fn random_server(&self) -> SocketAddr {
         use rand::seq::SliceRandom;
         let mut rng = rand::thread_rng();
-        self.fallback.choose(&mut rng).expect("no fallback servers")
+        let ip = self.fallback.choose(&mut rng).expect("no fallback servers");
+        SocketAddr::from((*ip, self.port))
+    }
+    pub fn write_serv(&self) -> Option<SocketAddr> {
+        self.write_serv.map(|ip| SocketAddr::from((ip, self.port)))
+    }
+    pub fn read_serv(&self) -> Option<SocketAddr> {
+        self.read_serv.map(|ip| SocketAddr::from((ip, self.port)))
     }
 }
 

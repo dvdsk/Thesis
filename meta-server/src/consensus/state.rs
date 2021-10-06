@@ -18,8 +18,8 @@ pub struct State {
 
     // normal mutex since we do no async io inside crit. sect.
     // never keep locked across an .await point! (will deadlock)
-    master: Mutex<Option<SocketAddr>>,
-    pub cluster_size: u16,
+    master: Mutex<Option<IpAddr>>,
+    pub config: Config,
     pub got_valid_hb: Notify,
     pub outdated: Notify,
 }
@@ -35,7 +35,7 @@ macro_rules! load_atomic {
 }
 
 impl State {
-    pub fn new(cluster_size: u16, change_idx: u64) -> Self {
+    pub fn new(config: impl Into<Config>, change_idx: u64) -> Self {
         Self {
             term: AtomicU64::new(0),
             change_idx: AtomicU64::new(change_idx),
@@ -43,7 +43,7 @@ impl State {
             voted_for: AtomicU64::new(0),
             sync_voted_for: Mutex::new(()),
             master: Mutex::new(None),
-            cluster_size,
+            config: config.into(),
             got_valid_hb: Notify::new(),
             outdated: Notify::new(),
         }
@@ -85,18 +85,20 @@ impl State {
         self.term.store(val, ORD)
     }
 
-    pub fn get_master(&self) -> Option<SocketAddr> {
+    pub fn get_master(&self) -> Option<IpAddr> {
         *self.master.lock().unwrap()
     }
 
     pub fn set_master(&self, source: SocketAddr) {
         let mut curr = self.master.lock().unwrap();
-        if curr.map(|s| s.ip()) != Some(source.ip()) {
+        let source = source.ip();
+        if *curr != Some(source) {
             info!("new master: {}", source);
         }
         *curr = Some(source);
     }
 
+    #[tracing::instrument]
     fn check_term(&self, term: u64, source: SocketAddr) -> Result<(), ()> {
         loop {
             let our_term = self.term();

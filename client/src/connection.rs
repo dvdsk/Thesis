@@ -74,15 +74,21 @@ pub struct WriteServer {
 
 impl WriteServer {
     async fn connect(list: &ServerList) -> Result<ClientStream, ConnError> {
-        let addr = list.write_serv.as_ref().unwrap_or_else(|| list.random_server());
+        let mut addr = list
+            .write_serv()
+            .unwrap_or_else(|| list.random_server());
         if let Ok(stream) = TcpStream::connect(addr).await {
             return Ok(connection::wrap(stream));
         }
 
         loop {
-            warn!("could not connect to server, retrying random adress in 500ms");
+            warn!(
+                "could not connect to server on: {:?}, retrying random adress in 500ms",
+                addr
+            );
+            addr = list.random_server();
             thread::sleep(Duration::from_millis(500));
-            if let Ok(stream) = TcpStream::connect(list.random_server()).await {
+            if let Ok(stream) = TcpStream::connect(addr).await {
                 return Ok(connection::wrap(stream));
             }
         }
@@ -129,14 +135,19 @@ pub struct ReadServer {
 
 impl ReadServer {
     async fn connect(list: &ServerList) -> Result<ClientStream, ConnError> {
-        if let Ok(stream) = TcpStream::connect(list.read_serv).await {
+        let mut addr = list.read_serv().unwrap_or_else(|| list.random_server());
+        if let Ok(stream) = TcpStream::connect(addr).await {
             return Ok(connection::wrap(stream));
         }
 
         loop {
-            warn!("could not connect to server, retrying random adress in 500ms");
+            warn!(
+                "could not connect to server on: {:?}, retrying random adress in 500ms",
+                addr
+            );
+            addr = list.random_server();
             thread::sleep(Duration::from_millis(500));
-            if let Ok(stream) = TcpStream::connect(list.random_server()).await {
+            if let Ok(stream) = TcpStream::connect(addr).await {
                 return Ok(connection::wrap(stream));
             }
         }

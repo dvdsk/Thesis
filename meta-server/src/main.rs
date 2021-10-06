@@ -12,6 +12,23 @@ mod read_meta;
 pub mod server_conn;
 mod write_meta;
 
+#[derive(Debug)]
+pub struct Config {
+    pub cluster_size: u16,
+    pub client_port: u16,
+    pub control_port: u16,
+}
+
+impl From<&Opt> for Config {
+    fn from(opt: &Opt) -> Self {
+        Self {
+            control_port: opt.control_port,
+            client_port: opt.client_port,
+            cluster_size: opt.cluster_size,
+        }
+    }
+}
+
 #[derive(Debug, Clone, StructOpt)]
 struct Opt {
     /// Name used to identify this instance in distributed tracing solutions
@@ -143,7 +160,7 @@ async fn main() {
     let id = id_from_mac();
     let (sock, chart) = discovery::setup(id, opt.control_port).await;
     let dir = readserv::Directory::new();
-    let state = consensus::State::new(opt.cluster_size, dir.get_change_idx());
+    let state = consensus::State::new(&opt, dir.get_change_idx());
     let state = Arc::new(state);
 
     tokio::spawn(server(opt, state, dir, chart.clone()));
