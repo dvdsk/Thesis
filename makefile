@@ -17,10 +17,10 @@ tmp:
 	mkdir -p ${SCRATCH}/tmp
 	ln -s ${SCRATCH}/tmp tmp
 
-tmp/cache/%: tmp
-	$(eval NAME := $(subst tmp/cache/,,$@))
-	mkdir -p ${SCRATCH}/tmp/$(NAME)/target
-	-ln -s -t $(NAME) ${SCRATCH}/tmp/$(NAME)/target
+tmp/target/%: tmp
+	$(eval NAME := $(subst tmp/target/,,$@))
+	mkdir -p ${SCRATCH}/$@
+	ln --force --symbolic -T ${SCRATCH}/$@ $(NAME)/target 
 
 #----------------------------------------------------------------------------
 # Compilers and tools 
@@ -37,24 +37,24 @@ tmp/cargo: | tmp
 #----------------------------------------------------------------------------
 
 .PHONY: client_examples
-client_examples: $(wildcard find client/**/*.rs)
-client_examples: | tmp/cargo tmp/cache/client
+client_examples: REBUILD_ALWAYS
+client_examples: | tmp/cargo tmp/target/client
 	tmp/cargo/bin/cargo build --examples --manifest-path client/Cargo.toml
 	mkdir -p bin
 
-bin/meta-server: $(wildcard find meta-server/**/*.rs)
-bin/meta-server: | tmp/cargo tmp/cache/meta-server
+bin/meta-server: REBUILD_ALWAYS
+bin/meta-server: | tmp/cargo tmp/target/meta-server
 	tmp/cargo/bin/cargo build --manifest-path meta-server/Cargo.toml
 	mkdir -p bin
 	cp ${PWD}/{meta-server/target/debug/,bin/}meta-server
 
-bin/discovery-exchange-id: $(wildcard find discovery/**/*.rs)
-bin/discovery-exchange-id: | tmp/cargo tmp/cache/discovery
+bin/discovery-exchange-id: REBUILD_ALWAYS
+bin/discovery-exchange-id: | tmp/cargo tmp/target/discovery
 	tmp/cargo/bin/cargo build --examples --manifest-path discovery/Cargo.toml
 	mkdir -p bin
 	cp ${PWD}/{discovery/target/debug/examples/exchange_id,bin/discovery-exchange-id}
 
-bin/mkdir: client_examples
+bin/test_mkdir: client_examples
 	cp ${PWD}/{client/target/debug/examples/mkdir,bin/test_mkdir}
 
 #----------------------------------------------------------------------------
@@ -69,10 +69,12 @@ discover: bin/discovery-exchange-id
 	$(info test done)
 	bash scripts/deploy_test.sh
 
-test_mkdir: bin/mkdir bin/meta-server
+test_mkdir: bin/test_mkdir bin/meta-server
 	bash scripts/tests/mkdir.sh
 
 
-.PHONY: clean
+
+.PHONY: clean REBUILD_ALWAYS
 clean: 
-	rm -rf **/target
+	rm -rf tmp/target
+REBUILD_ALWAYS:
