@@ -74,9 +74,12 @@ function deploy()
 
 	local nodes=$(node_list $resv_numb)
 
+	# clear the tmp directory to ensure any state
+	# is resest (think databases etc)
 	for node in $nodes; do
 		ssh -t $node <<- EOF & >&2
-		mkdir -p /tmp/mock-fs
+		rm -r /tmp/mock-fs
+		mkdir /tmp/mock-fs
 		cp ${PWD}/bin/$bin /tmp/mock-fs/
 EOF
 done
