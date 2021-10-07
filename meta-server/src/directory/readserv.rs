@@ -9,8 +9,9 @@ pub struct Directory {
 }
 
 impl Directory {
-    pub fn new() -> Self {
-        Self { db: Db::new() }
+    pub fn new() -> (Self, u64) {
+        let (db, chance_idx) = Db::new();
+        (Self { db }, chance_idx)
     }
 
     pub fn into_db(self) -> Db {

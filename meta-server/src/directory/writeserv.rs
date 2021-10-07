@@ -2,23 +2,34 @@ use std::sync::Arc;
 
 use client_protocol::PathString;
 
-use crate::consensus::{State, HB_TIMEOUT};
+use super::db::Db;
+use super::{readserv, DbError};
+use crate::consensus::{HB_TIMEOUT, HbControl, State};
 use crate::server_conn::protocol::Change;
 use crate::server_conn::to_readserv::PubResult;
 use crate::server_conn::to_readserv::ReadServers;
-use super::{DbError, readserv};
-use super::db::Db;
 
 #[derive(Debug, Clone)]
 pub struct Directory {
     db: Db,
     servers: ReadServers,
     state: Arc<State>,
+    hb_ctrl: HbControl,
 }
 
 impl Directory {
-    pub fn from(dir: readserv::Directory, servers: ReadServers, state: &Arc<State>) -> Self {
-        Self { db: dir.into_db(), servers, state: state.clone() }
+    pub fn from(
+        dir: readserv::Directory,
+        servers: ReadServers,
+        state: &Arc<State>,
+        hb_ctrl: HbControl,
+    ) -> Self {
+        Self {
+            db: dir.into_db(),
+            servers,
+            state: state.clone(),
+            hb_ctrl,
+        }
     }
 
     pub fn get_change_idx(&self) -> u64 {
@@ -31,13 +42,21 @@ impl Directory {
 
     #[tracing::instrument]
     pub async fn mkdir(&mut self, path: PathString) -> Result<(), DbError> {
-        self.db.mkdir(path.clone()).await?;
-        let res = self.servers.publish(&self.state, Change::DirAdded(path)).await;
+        self.hb_ctrl.delay().await;
+
+        let res = self
+            .servers
+            .publish(&self.state, Change::DirAdded(path.clone()))
+            .await;
         match res {
             PubResult::ReachedAll => (),
             PubResult::ReachedMajority => tokio::time::sleep(HB_TIMEOUT).await,
             PubResult::ReachedMinority => panic!("can not reach majority, crashing master"),
         }
+        // it is essential we only store to the database AFTER we are sure
+        // the change has disseminated through the cluster or consistancy WILL BREAK
+        self.db.mkdir(path).await?;
+        // self.db.set_change_idx(change_idx).await?; TODO
         Ok(())
     }
 }

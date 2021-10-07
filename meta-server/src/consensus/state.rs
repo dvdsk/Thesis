@@ -5,9 +5,8 @@ use std::sync::Mutex;
 use tokio::sync::Notify;
 use tracing::{error, info, warn};
 
-use crate::Config;
 use crate::server_conn::protocol::FromRS;
-
+use crate::Config;
 
 #[derive(Debug)]
 pub struct State {
@@ -149,10 +148,14 @@ impl State {
         let res = self
             .change_idx
             .compare_exchange(change_idx - 1, change_idx, ORD, ORD);
+        // TODO need to also update db change_idx
 
-        if let Err(_) = res {
+        if let Err(curr_val) = res {
             self.outdated.notify_one();
-            error!("change idx is not what we expected, we are outdated!");
+            error!(
+                "change idx ({:?}) is not what we expected ({:?}), we are outdated!",
+                curr_val, change_idx
+            );
             return Err(());
         }
 

@@ -15,24 +15,35 @@ pub fn folder() -> sled::IVec {
 }
 
 impl Db {
-    fn init_change_idx(&self) {
+    fn init_change_idx(&self) -> u64 {
         let key = &[0];
-        let change_idx = 0u64;
-        let _ = self
+        let zero = 0u64;
+        let res = self
             .0
-            .compare_and_swap(key, None as Option<&[u8]>, Some(&change_idx.to_ne_bytes()))
-            .unwrap();
+            .compare_and_swap(key, None as Option<&[u8]>, Some(&zero.to_ne_bytes()))
+            .expect("error accessing db");
+        match res {
+            Ok(_) => {
+                tracing::info!("initialized change_idx to 0");
+                zero
+            }
+            Err(cas_err) => {
+                let loaded = idx_from_ivec(cas_err.current.unwrap());
+                tracing::info!("loaded previous change_idx: {:?}", loaded);
+                loaded
+            }
+        }
     }
 
-    pub fn new() -> Self {
+    pub fn new() -> (Self, u64) {
         let db = sled::Config::new()
             .path("db")
             .mode(sled::Mode::HighThroughput)
             .open()
             .expect("check if a server is not already running");
         let dir = Self(db);
-        dir.init_change_idx();
-        dir
+        let change_idx = dir.init_change_idx();
+        (dir, change_idx)
     }
 
     #[cfg(test)]

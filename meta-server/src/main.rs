@@ -75,16 +75,27 @@ fn setup_tracing(opt: &Opt) {
     use tracing_subscriber::prelude::*;
     use tracing_subscriber::{fmt, Registry};
     let telemetry = tracing_opentelemetry::subscriber().with_tracer(tracer);
-    let stdout = fmt::subscriber()
-            .with_span_events(fmt::format::FmtSpan::NONE);
-    //     .compact();
-        // .with_span_list(false)
-        // .with_current_span(false);
-        // .with_target(false)
-        // .with_level(true)
+
+    // let format = fmt::format::Format::default().compact();
+    // format.with_current_span(false);
+    // let stdout = fmt::subscriber()
+    //     .with_span_events(fmt::format::FmtSpan::NONE)
+    //     .event_format(fmt);
+    //     // .with_current_span(false);
+
+    // for now using log to register events without span info
+    use simplelog::*;
+    TermLogger::init(
+        LevelFilter::Warn,
+        Config::default(),
+        TerminalMode::Mixed,
+        ColorChoice::Auto,
+    )
+    .expect("could not setup logger");
+    tracing::error!("test simplelog");
 
     let subscriber = Registry::default()
-        .with(stdout)
+        // .with(stdout)
         .with(telemetry);
     tracing::collect::set_global_default(subscriber).unwrap();
 }
@@ -95,11 +106,12 @@ async fn write_server(
     dir: readserv::Directory,
     state: &Arc<consensus::State>,
     chart: discovery::Chart,
+    hb_control: consensus::HbControl,
 ) {
     use write_meta::{server, Directory, ReadServers};
 
     let servers = ReadServers::new(chart, opt.control_port);
-    let dir = Directory::from(dir, servers, state);
+    let dir = Directory::from(dir, servers, state, hb_control);
 
     server(opt.client_port, dir).await;
     info!("starting write server");
@@ -157,8 +169,9 @@ async fn server(
     read_server(&opt, &state, &chart, &mut dir).await;
 
     info!("promoted to write server");
-    let send_hb = consensus::maintain_heartbeat(state.clone(), chart.clone());
-    let host = write_server(opt, dir, &state, chart);
+    let (hb_controller, rx) = consensus::HbControl::new();
+    let send_hb = consensus::maintain_heartbeat(state.clone(), chart.clone(), rx);
+    let host = write_server(opt, dir, &state, chart, hb_controller);
     tokio::spawn(send_hb);
     host.await
 }
@@ -171,8 +184,8 @@ async fn main() {
 
     let id = id_from_mac();
     let (sock, chart) = discovery::setup(id, opt.control_port).await;
-    let dir = readserv::Directory::new();
-    let state = consensus::State::new(&opt, dir.get_change_idx());
+    let (dir, change_idx) = readserv::Directory::new();
+    let state = consensus::State::new(&opt, change_idx);
     let state = Arc::new(state);
 
     tokio::spawn(server(opt, state, dir, chart.clone()));

@@ -4,8 +4,8 @@ use discovery::Chart;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::time::{timeout_at, Instant};
-use tokio::{net::TcpStream, time};
+use tokio::time::{Instant, sleep_until, timeout_at};
+use tokio::net::TcpStream;
 
 pub mod election;
 mod replicate;
@@ -14,7 +14,23 @@ mod state;
 pub use state::State;
 
 pub const HB_TIMEOUT: Duration = Duration::from_secs(2);
-pub async fn maintain_heartbeat(state: Arc<State>, chart: Chart) {
+
+#[derive(Clone, Debug)]
+pub struct HbControl(flume::Sender<Instant>);
+
+impl HbControl {
+    pub fn new() -> (Self, flume::Receiver<Instant>) {
+        // randevous channel
+        let (tx, rx) = flume::bounded(0);
+        (Self(tx), rx)
+    }
+    pub async fn delay(&mut self) {
+        let next_hb = Instant::now() + HB_TIMEOUT / 2;
+        self.0.send_async(next_hb).await.unwrap();
+    }
+}
+
+pub async fn maintain_heartbeat(state: Arc<State>, chart: Chart, mut rx: flume::Receiver<Instant>) {
     let mut next_hb = Instant::now() + HB_TIMEOUT / 2;
     loop {
         let term = state.increase_term();
@@ -25,8 +41,19 @@ pub async fn maintain_heartbeat(state: Arc<State>, chart: Chart) {
 
         let send_all = futures::future::join_all(heartbeats);
         let _ = timeout_at(next_hb, send_all).await;
-        time::sleep_until(next_hb).await;
-        next_hb += HB_TIMEOUT / 2;
+        next_hb = sleep_prolongable(next_hb, &mut rx).await;
+    }
+}
+
+async fn sleep_prolongable(mut next_hb: Instant, rx: &mut flume::Receiver<Instant>) -> Instant {
+    loop {
+        next_hb = tokio::select! {
+            biased; // always first poll the recv future
+            new = rx.recv_async() => new.unwrap(),
+            _ = sleep_until(next_hb) => {
+                return next_hb + HB_TIMEOUT / 2; 
+            }
+        };
     }
 }
 
