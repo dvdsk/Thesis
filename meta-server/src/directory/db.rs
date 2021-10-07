@@ -60,7 +60,24 @@ impl Db {
         idx_from_ivec(vec)
     }
 
-    pub async fn mkdir(&self, path: PathString) -> Result<(), DbError> {
+    pub async fn flush(&self) {
+        self.0.flush_async().await.unwrap();
+    }
+
+    /// at this point consensus is safe, this
+    /// makes sure not to revert the change_idx preventing
+    /// consensus issue when rebooting
+    pub fn update(&self, change_idx: u64) {
+        let key = &[0];
+        self.0.fetch_and_update(key, |old| {
+            let array: [u8; 8] = old.expect("change_idx should exist").try_into().unwrap();
+            let old = u64::from_ne_bytes(array);
+            let new = u64::max(old, change_idx).to_ne_bytes();
+            Some(Vec::from(new))
+        }).unwrap();
+    }
+
+    pub fn mkdir(&self, path: PathString) -> Result<(), DbError> {
         let res = self
             .0
             .compare_and_swap(&path, None as Option<&[u8]>, Some(folder()))
@@ -70,8 +87,6 @@ impl Db {
                 Err(DbError::FileExists)?;
             } // no error if dir exists
         }
-
-        self.0.flush_async().await.unwrap();
         Ok(())
     }
 
@@ -100,8 +115,8 @@ impl Db {
         self.0.clear().unwrap();
         let mut i = 0;
         while i < bytes.len() {
-            let val = deserialize_next(&mut i, bytes);
             let key = deserialize_next(&mut i, bytes);
+            let val = deserialize_next(&mut i, bytes);
             self.0.insert(key, val).unwrap();
         }
         self.0.flush_async().await.unwrap();
@@ -153,41 +168,57 @@ mod tests {
         let db = Db::new_temp();
         for e in entries {
             match e {
-                FsEntry::Dir(p) => db.mkdir(p.to_owned()).await.unwrap(),
+                FsEntry::Dir(p) => db.mkdir(p.to_owned()).unwrap(),
                 _ => todo!(),
             }
         }
+        db.flush().await;
         db
     }
 
-    fn test_entries(numb: usize) -> Vec<FsEntry> {
+    fn test_entries(numb: usize, path: &str) -> Vec<FsEntry> {
         (0..numb)
-            .map(|i| FsEntry::Dir(format!("long/path/{}", i)))
+            .map(|i| FsEntry::Dir(format!("{}/{}", path, i)))
             .collect()
     }
 
     #[tokio::test]
     async fn ls() {
-        let correct = test_entries(5);
+        let correct = test_entries(5, "long/path");
         let db = filled_db(&correct).await;
         let list = db.ls("long/path");
+        assert_eq!(list.len(), 5, "ls result misses entries");
         for (ls_entry, correct) in list.iter().zip(correct.iter()) {
-            assert_eq!(ls_entry, correct);
+            assert_eq!(ls_entry, correct, "ls entry incorrect");
+        }
+    }
+
+    #[tokio::test]
+    async fn ls_empty_path() {
+        let correct = test_entries(5, "");
+        let db = filled_db(&correct).await;
+        dbg!(db.0.len());
+        let list = db.ls("");
+        assert_eq!(list.len(), 5, "ls result misses entries");
+        for (ls_entry, correct) in list.iter().zip(correct.iter()) {
+            assert_eq!(ls_entry, correct, "ls entry incorrect");
         }
     }
 
     #[tokio::test]
     async fn serialize_and_deserialize() {
-        let correct = test_entries(5);
-        let db = filled_db(&correct).await;
+        let correct_entries = test_entries(5, "long/path");
+        let db = filled_db(&correct_entries).await;
         let bytes = db.serialize();
+        let correct_len = db.0.len();
 
         std::mem::drop(db);
         let db = Db::new_temp();
         db.replace_with_deserialized(&bytes).await;
+        assert_eq!(db.0.len(), correct_len, "db is missing entries");
 
-        let list = db.ls("long/path/{}");
-        for (ls_entry, correct) in list.iter().zip(correct.iter()) {
+        let list = db.ls("long/path");
+        for (ls_entry, correct) in list.iter().zip(correct_entries.iter()) {
             assert_eq!(ls_entry, correct);
         }
     }

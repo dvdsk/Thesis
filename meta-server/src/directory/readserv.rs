@@ -22,22 +22,24 @@ impl Directory {
         self.db.get_change_idx()
     }
 
-    pub async fn mkdir(&self, path: PathString) {
+    pub fn mkdir(&self, path: PathString) {
         self
             .db
             .mkdir(path)
-            .await
             .expect("file exists should be caught on write server");
     }
 
     pub fn ls(&self, path: PathString) -> Vec<FsEntry> {
-        self.db.ls(path)
+        dbg!(self.db.ls(path))
     }
 
-    pub async fn apply(&self, change: Change) {
+    pub async fn apply(&self, change: Change, change_idx: u64) {
         match change {
-            Change::DirAdded(path) => self.mkdir(path).await,
+            Change::DirAdded(path) => self.mkdir(path),
         }
+        self.db.update(change_idx);
+        self.db.flush().await;
+        tracing::warn!("dir added");
     }
 
     pub async fn update_from_master(&self, update: &[u8]) {

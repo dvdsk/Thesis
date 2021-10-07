@@ -48,15 +48,18 @@ impl Directory {
             .servers
             .publish(&self.state, Change::DirAdded(path.clone()))
             .await;
-        match res {
-            PubResult::ReachedAll => (),
-            PubResult::ReachedMajority => tokio::time::sleep(HB_TIMEOUT).await,
+        let change_idx = match res {
+            PubResult::ReachedAll(idx) => idx,
+            PubResult::ReachedMajority(idx) => {tokio::time::sleep(HB_TIMEOUT).await; idx}
             PubResult::ReachedMinority => panic!("can not reach majority, crashing master"),
-        }
+        };
         // it is essential we only store to the database AFTER we are sure
         // the change has disseminated through the cluster or consistancy WILL BREAK
-        self.db.mkdir(path).await?;
-        // self.db.set_change_idx(change_idx).await?; TODO
+        // as we can not roll back the change must now either succeed or we must crash
+        // giving up control of the cluster
+        self.db.mkdir(path).unwrap();
+        self.db.update(change_idx);
+        self.db.flush().await;
         Ok(())
     }
 }
