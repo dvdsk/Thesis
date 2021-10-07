@@ -68,9 +68,11 @@ impl State {
         self.candidate.store(false, ORD)
     }
 
-    /// may only be called by master
+    /// may only be called by master and only from the
+    /// readservers publish function
     pub fn increase_change_idx(&self) -> u64 {
-        self.term.fetch_add(1, ORD)
+        let prev = self.change_idx.fetch_add(1, ORD);
+        prev+1
     }
 
     pub fn increase_term(&self) -> u64 {
