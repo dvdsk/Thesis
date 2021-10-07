@@ -25,15 +25,16 @@ impl ReadServers {
     }
     #[tracing::instrument]
     pub async fn publish(&self, state: &State, change: Change) -> PubResult {
-        let msg = ToRs::DirectoryChange(state.term(), state.increase_change_idx(), change);
+        let change_idx = state.increase_change_idx();
+        let msg = ToRs::DirectoryChange(state.term(), change_idx, change);
         let reached = self.0.lock().await.send_to_readservers(msg).await as u16;
         tracing::info!("reached {} servers", reached);
 
         let majority = state.config.cluster_size / 2;
         if reached == state.config.cluster_size {
-            PubResult::ReachedAll
+            PubResult::ReachedAll(change_idx)
         } else if reached > majority {
-            PubResult::ReachedMajority
+            PubResult::ReachedMajority(change_idx)
         } else {
             PubResult::ReachedMinority
         }
@@ -48,8 +49,8 @@ struct Inner {
 }
 
 pub enum PubResult {
-    ReachedAll,
-    ReachedMajority,
+    ReachedAll(u64),
+    ReachedMajority(u64),
     ReachedMinority,
 }
 

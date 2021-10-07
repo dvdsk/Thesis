@@ -34,6 +34,7 @@ async fn client_msg(stream: &mut ClientStream, msg: Request, directory: &mut Dir
         Request::AddDir(path) => {
             mkdir(directory, path).await
         }
+        Request::Ls(_) => Response::NotReadServ,
         // Request::OpenReadWrite(path, policy) => open_rw(path, policy).await,
         _e => {
             Response::Todo(_e)

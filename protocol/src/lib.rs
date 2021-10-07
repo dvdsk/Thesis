@@ -74,6 +74,7 @@ pub enum Response {
     Ok,
     FileExists,
     NotWriteServ(ServerList),
+    NotReadServ,
     Ls(Vec<FsEntry>),
     Test,
     Todo(Request),

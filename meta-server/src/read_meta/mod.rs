@@ -111,7 +111,8 @@ async fn cmd_msg(
                 error!("error applying dir change: {:?}",e);
                 let _ignore_res = stream.send(FromRS::Error).await;
             }
-            dir.apply(change).await;
+            // consensus: this crashes the readserv on fail never leaving us in an invalide state
+            dir.apply(change, change_idx).await; 
             let _ignore_res = stream.send(FromRS::Awk).await;
         }
     }
