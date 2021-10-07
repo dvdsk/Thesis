@@ -13,19 +13,12 @@ async fn send_recieve(req: Request, stream: &mut ClientStream) -> Result<Respons
     use ConnError::*;
     stream.send(req).await.map_err(RequestIo)?;
 
-    loop {
-        if let Some(response) = stream
-            .try_next()
-            .await
-            .map_err(ResponseIo)? {
-            return Ok(response)
-        }
-    }
-    // .try_next()
-    // .await
-    // .map_err(ResponseIo)?
-    // .ok_or(NoResponse)?;
-    // Ok(response)
+    let response = stream
+    .try_next()
+    .await
+    .map_err(ResponseIo)?
+    .ok_or(NoResponse)?;
+    Ok(response)
 }
 
 #[derive(thiserror::Error, Debug)]
