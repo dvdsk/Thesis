@@ -70,14 +70,18 @@ impl Db {
     /// consensus issue when rebooting
     pub fn update(&self, change_idx: u64) {
         let key = &[];
-        self.0.fetch_and_update(key, |old| {
-            let array: [u8; 8] = old.expect("change_idx should exist").try_into().unwrap();
-            let old = u64::from_ne_bytes(array);
-            let new = u64::max(old, change_idx).to_ne_bytes();
-            Some(Vec::from(new))
-        }).unwrap();
+        self.0
+            .fetch_and_update(key, |old| {
+                let array: [u8; 8] = old.expect("change_idx should exist").try_into().unwrap();
+                let old = u64::from_ne_bytes(array);
+                let new = u64::max(old, change_idx).to_ne_bytes();
+                Some(Vec::from(new))
+            })
+            .unwrap();
     }
 
+    /// deletes a folder and its content (including ANY subfolders/files)
+    /// does not work on files
     pub fn rmdir(&self, path: impl Into<PathString>) -> Result<(), DbError> {
         let mut path = path.into();
         path.insert(0, '\0');
@@ -90,6 +94,13 @@ impl Db {
                 Err(DbError::NoSuchDir)?;
             }
         }
+
+        let path = path.into_bytes();
+        let next_dir = next_dir(&path);
+        for to_delete in self.0.range(path..next_dir).keys() {
+            self.0.remove(to_delete.unwrap()).unwrap();
+        }
+
         Ok(())
     }
 
@@ -111,7 +122,7 @@ impl Db {
     pub fn ls(&self, working_dir: impl Into<PathString>) -> Vec<FsEntry> {
         let mut working_dir = working_dir.into();
         working_dir.insert(0, '\0');
-        let working_dir= working_dir.into_bytes();
+        let working_dir = working_dir.into_bytes();
         let next_dir = next_dir(&working_dir);
         self.0
             .range(working_dir..next_dir)

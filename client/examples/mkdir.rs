@@ -25,12 +25,13 @@ async fn main() {
     let mut wconn = WriteServer::from_serverlist(list.clone()).await.unwrap();
     let mut rconn = ReadServer::from_serverlist(list).await.unwrap();
 
+    mkdir(&mut wconn, "another_dir").await;
     mkdir(&mut wconn, "test_dir").await;
+    mkdir(&mut wconn, "test_dir/subdir").await;
     let res = ls(&mut rconn, "").await;
     dbg!(res);
 
     rmdir(&mut wconn, "test_dir").await;
     let res = ls(&mut rconn, "").await;
     dbg!(res);
-
 }
