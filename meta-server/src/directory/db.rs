@@ -16,7 +16,7 @@ pub fn folder() -> sled::IVec {
 
 impl Db {
     fn init_change_idx(&self) -> u64 {
-        let key = &[0];
+        let key = &[];
         let zero = 0u64;
         let res = self
             .0
@@ -55,7 +55,7 @@ impl Db {
     }
 
     pub fn get_change_idx(&self) -> u64 {
-        let key = &[0];
+        let key = &[];
         let vec = self.0.get(key).unwrap().unwrap();
         idx_from_ivec(vec)
     }
@@ -68,7 +68,7 @@ impl Db {
     /// makes sure not to revert the change_idx preventing
     /// consensus issue when rebooting
     pub fn update(&self, change_idx: u64) {
-        let key = &[0];
+        let key = &[];
         self.0.fetch_and_update(key, |old| {
             let array: [u8; 8] = old.expect("change_idx should exist").try_into().unwrap();
             let old = u64::from_ne_bytes(array);
@@ -77,7 +77,10 @@ impl Db {
         }).unwrap();
     }
 
-    pub fn mkdir(&self, path: PathString) -> Result<(), DbError> {
+    pub fn mkdir(&self, path: impl Into<PathString>) -> Result<(), DbError> {
+        let mut path = path.into();
+        path.insert(0, '\0');
+        dbg!(path.as_bytes());
         let res = self
             .0
             .compare_and_swap(&path, None as Option<&[u8]>, Some(folder()))
@@ -91,8 +94,11 @@ impl Db {
     }
 
     pub fn ls(&self, working_dir: impl Into<PathString>) -> Vec<FsEntry> {
-        let working_dir = working_dir.into().into_bytes();
+        let mut working_dir = working_dir.into();
+        working_dir.insert(0, '\0');
+        let working_dir= working_dir.into_bytes();
         let next_dir = next_dir(&working_dir);
+        dbg!(&next_dir, &working_dir);
         self.0
             .range(working_dir..next_dir)
             .filter_map(Result::ok)
@@ -133,7 +139,7 @@ fn deserialize_next<'a>(i: &mut usize, bytes: &'a [u8]) -> &'a [u8] {
 }
 
 fn into_fs_entry((k, v): (sled::IVec, sled::IVec)) -> FsEntry {
-    let path = PathString::from_utf8(k.to_vec()).unwrap();
+    let path = PathString::from_utf8(k[1..].to_vec()).unwrap();
     match v.len() {
         0 => FsEntry::Dir(path),
         _ => FsEntry::File(path),
@@ -142,12 +148,19 @@ fn into_fs_entry((k, v): (sled::IVec, sled::IVec)) -> FsEntry {
 
 fn next_dir(dir: &Vec<u8>) -> Vec<u8> {
     let mut dir = dir.clone();
+    let mut overflow = true;
     for b in dir.iter_mut().rev() {
-        let (new_b, overflow) = b.overflowing_add(1);
+        let (new_b, overflow_res) = b.overflowing_add(1);
+        overflow = overflow_res;
         *b = new_b;
         if !overflow {
             break;
         }
+    }
+
+    // key to small need make it longer
+    if overflow {
+        dir.push(0)
     }
     dir
 }
@@ -197,7 +210,6 @@ mod tests {
     async fn ls_empty_path() {
         let correct = test_entries(5, "");
         let db = filled_db(&correct).await;
-        dbg!(db.0.len());
         let list = db.ls("");
         assert_eq!(list.len(), 5, "ls result misses entries");
         for (ls_entry, correct) in list.iter().zip(correct.iter()) {
