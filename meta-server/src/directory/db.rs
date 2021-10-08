@@ -90,6 +90,7 @@ impl Db {
                 Err(DbError::FileExists)?;
             } // no error if dir exists
         }
+        dbg!(path);
         Ok(())
     }
 

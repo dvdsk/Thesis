@@ -30,7 +30,7 @@ impl Directory {
     }
 
     pub fn ls(&self, path: PathString) -> Vec<FsEntry> {
-        dbg!(self.db.ls(path))
+        self.db.ls(path)
     }
 
     pub async fn apply(&self, change: Change, change_idx: u64) {

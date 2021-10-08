@@ -76,13 +76,6 @@ fn setup_tracing(opt: &Opt) {
     use tracing_subscriber::{fmt, Registry};
     let telemetry = tracing_opentelemetry::subscriber().with_tracer(tracer);
 
-    // let format = fmt::format::Format::default().compact();
-    // format.with_current_span(false);
-    // let stdout = fmt::subscriber()
-    //     .with_span_events(fmt::format::FmtSpan::NONE)
-    //     .event_format(fmt);
-    //     // .with_current_span(false);
-
     // for now using log to register events without span info
     use simplelog::*;
     TermLogger::init(
