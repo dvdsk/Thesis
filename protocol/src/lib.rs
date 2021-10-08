@@ -63,6 +63,7 @@ pub enum Request {
     OpenAppend(PathString, Existence),
     Close(PathString),
     AddDir(PathString),
+    RmDir(PathString),
     Remove(PathString),
     Ls(PathString),
 
@@ -75,6 +76,7 @@ pub enum Response {
     FileExists,
     NotWriteServ(ServerList),
     NotReadServ,
+    NoSuchDir,
     Ls(Vec<FsEntry>),
     Test,
     Todo(Request),

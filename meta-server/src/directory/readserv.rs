@@ -23,8 +23,7 @@ impl Directory {
     }
 
     pub fn mkdir(&self, path: PathString) {
-        self
-            .db
+        self.db
             .mkdir(path)
             .expect("file exists should be caught on write server");
     }
@@ -34,8 +33,11 @@ impl Directory {
     }
 
     pub async fn apply(&self, change: Change, change_idx: u64) {
+        const EXPECT_STR: &str =
+            "any error should have been found on the server already, consistancy issue!";
         match change {
-            Change::DirAdded(path) => self.mkdir(path),
+            Change::DirAdded(path) => self.db.mkdir(path).expect(EXPECT_STR),
+            Change::DirRemoved(path) => self.db.rmdir(path).expect(EXPECT_STR),
         }
         self.db.update(change_idx);
         self.db.flush().await;

@@ -8,6 +8,7 @@ pub struct Db(sled::Db);
 #[derive(Debug)]
 pub enum DbError {
     FileExists,
+    NoSuchDir,
 }
 
 pub fn folder() -> sled::IVec {
@@ -77,10 +78,24 @@ impl Db {
         }).unwrap();
     }
 
+    pub fn rmdir(&self, path: impl Into<PathString>) -> Result<(), DbError> {
+        let mut path = path.into();
+        path.insert(0, '\0');
+        let res = self // conditional deletion
+            .0
+            .compare_and_swap(&path, Some(folder()), None as Option<&[u8]>)
+            .unwrap(); // crash on any internal/io db error
+        if let Err(e) = res {
+            if e.current.unwrap().len() > 0 {
+                Err(DbError::NoSuchDir)?;
+            }
+        }
+        Ok(())
+    }
+
     pub fn mkdir(&self, path: impl Into<PathString>) -> Result<(), DbError> {
         let mut path = path.into();
         path.insert(0, '\0');
-        dbg!(path.as_bytes());
         let res = self
             .0
             .compare_and_swap(&path, None as Option<&[u8]>, Some(folder()))
@@ -90,7 +105,6 @@ impl Db {
                 Err(DbError::FileExists)?;
             } // no error if dir exists
         }
-        dbg!(path);
         Ok(())
     }
 
@@ -99,7 +113,6 @@ impl Db {
         working_dir.insert(0, '\0');
         let working_dir= working_dir.into_bytes();
         let next_dir = next_dir(&working_dir);
-        dbg!(&next_dir, &working_dir);
         self.0
             .range(working_dir..next_dir)
             .filter_map(Result::ok)

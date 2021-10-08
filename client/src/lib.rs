@@ -17,8 +17,7 @@ pub struct ReadOnlyFile {
     meta_conn: ReadServer,
 }
 
-pub async fn ls(conn: impl Into<ReadServer>, path: impl Into<PathString>) -> Vec<FsEntry> {
-    let mut conn = conn.into();
+pub async fn ls(conn: &mut ReadServer, path: impl Into<PathString>) -> Vec<FsEntry> {
     let res = conn.request(Request::Ls(path.into())).await.unwrap();
     match res {
         Response::Ls(list) => return list,
@@ -26,9 +25,12 @@ pub async fn ls(conn: impl Into<ReadServer>, path: impl Into<PathString>) -> Vec
     }
 }
 
-pub async fn mkdir(conn: impl Into<WriteServer>, path: impl Into<PathString>) {
-    let mut conn = conn.into();
+pub async fn mkdir(conn: &mut WriteServer, path: impl Into<PathString>) {
     conn.request(Request::AddDir(path.into())).await.unwrap();
+}
+
+pub async fn rmdir(conn: &mut WriteServer, path: impl Into<PathString>) {
+    conn.request(Request::RmDir(path.into())).await.unwrap();
 }
 
 impl WriteableFile {

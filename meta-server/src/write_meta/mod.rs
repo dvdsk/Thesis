@@ -13,6 +13,16 @@ async fn mkdir(directory: &mut Directory, path: PathString) -> Response {
     match directory.mkdir(path).await {
         Ok(_) => Response::Ok,
         Err(DbError::FileExists) => Response::FileExists,
+        Err(_) => panic!("error should not occur for mkdir"),
+    }
+}
+
+#[instrument]
+async fn rmdir(directory: &mut Directory, path: PathString) -> Response {
+    match directory.rmdir(path).await {
+        Ok(_) => Response::Ok,
+        Err(DbError::NoSuchDir) => Response::NoSuchDir,
+        Err(_) => panic!("error should not occur for rmdir"),
     }
 }
 
@@ -33,6 +43,9 @@ async fn client_msg(stream: &mut ClientStream, msg: Request, directory: &mut Dir
         Request::Test => Response::Test,
         Request::AddDir(path) => {
             mkdir(directory, path).await
+        }
+        Request::RmDir(path) => {
+            rmdir(directory, path).await
         }
         Request::Ls(_) => Response::NotReadServ,
         // Request::OpenReadWrite(path, policy) => open_rw(path, policy).await,

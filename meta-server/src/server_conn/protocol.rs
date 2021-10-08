@@ -35,5 +35,6 @@ pub enum ToRs {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum Change {
+    DirRemoved(PathString),
     DirAdded(PathString),
 }

@@ -1,5 +1,5 @@
 use std::net::IpAddr;
-use client::{Conn, ReadServer, ServerList, WriteServer, ls, mkdir};
+use client::{Conn, ReadServer, ServerList, WriteServer, ls, mkdir, rmdir};
 
 fn serverlist_from_args() -> ServerList {
     let mut args = std::env::args();
@@ -22,12 +22,15 @@ async fn main() {
     setup_tracing();
     let list = serverlist_from_args();
 
-    let wconn = WriteServer::from_serverlist(list.clone()).await.unwrap();
-    let rconn = ReadServer::from_serverlist(list).await.unwrap();
+    let mut wconn = WriteServer::from_serverlist(list.clone()).await.unwrap();
+    let mut rconn = ReadServer::from_serverlist(list).await.unwrap();
 
-    mkdir(wconn, "test_dir").await;
-    dbg!("mkdir call completed");
-
-    let res = ls(rconn, "").await;
+    mkdir(&mut wconn, "test_dir").await;
+    let res = ls(&mut rconn, "").await;
     dbg!(res);
+
+    rmdir(&mut wconn, "test_dir").await;
+    let res = ls(&mut rconn, "").await;
+    dbg!(res);
+
 }
