@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use client_protocol::PathString;
+use client_protocol::{PathString, Existence};
 
 use super::db::Db;
 use super::{DbError, LEASE_DUR, readserv};
@@ -81,5 +81,8 @@ impl Directory {
         let change = Change::DirAdded(path.clone());
         let apply_to_db = |db: &mut Db| db.mkdir(path);
         self.consistent_change(change, apply_to_db, HB_TIMEOUT).await
+    }
+
+    pub async fn open(&mut self, path: PathString, existance: Existence) -> Result<(), DbError> {
     }
 }

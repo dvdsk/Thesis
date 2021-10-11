@@ -1,5 +1,5 @@
-use std::net::IpAddr;
-use client::{Conn, ReadServer, ServerList, WriteServer, ls, mkdir, rmdir};
+use client::FsEntry;
+use client::{ls, mkdir, rmdir, Conn, ReadServer, ServerList, WriteServer};
 
 fn serverlist_from_args() -> ServerList {
     let mut args = std::env::args();
@@ -8,13 +8,13 @@ fn serverlist_from_args() -> ServerList {
         port,
         write_serv: None,
         read_serv: None,
-        fallback: args.map(|a| a.parse().unwrap()).collect()
+        fallback: args.map(|a| a.parse().unwrap()).collect(),
     }
 }
 
 fn setup_tracing() {
     use tracing_subscriber::FmtSubscriber;
-    let subscriber = FmtSubscriber::builder().try_init().unwrap();
+    let _subscriber = FmtSubscriber::builder().try_init().unwrap();
 }
 
 #[tokio::main]
@@ -29,9 +29,23 @@ async fn main() {
     mkdir(&mut wconn, "test_dir").await;
     mkdir(&mut wconn, "test_dir/subdir").await;
     let res = ls(&mut rconn, "").await;
+    assert_eq!(
+        res,
+        vec![
+            FsEntry::Dir("another_dir".to_string()),
+            FsEntry::Dir("test_dir".to_string()),
+            FsEntry::Dir("test_dir/subdir".to_string())
+        ]
+    );
     dbg!(res);
 
     rmdir(&mut wconn, "test_dir").await;
     let res = ls(&mut rconn, "").await;
+    assert_eq!(
+        res,
+        vec![
+            FsEntry::Dir("another_dir".to_string()),
+        ]
+    );
     dbg!(res);
 }

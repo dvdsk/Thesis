@@ -37,4 +37,5 @@ pub enum ToRs {
 pub enum Change {
     DirRemoved(PathString),
     DirAdded(PathString),
+    FileAdded(PathString),
 }

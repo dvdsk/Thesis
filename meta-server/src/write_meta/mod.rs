@@ -1,5 +1,5 @@
 use futures::{SinkExt, TryStreamExt};
-use client_protocol::{connection, Request, Response, PathString};
+use client_protocol::{connection, Request, Response, PathString, Existence};
 use std::net::{IpAddr, Ipv4Addr};
 use tokio::net::TcpListener;
 use tracing::{instrument, warn};
@@ -27,6 +27,14 @@ async fn rmdir(directory: &mut Directory, path: PathString) -> Response {
 }
 
 #[instrument]
+async fn open(directory: &mut Directory, path: PathString, existance: Existence) {
+    match directory.open(path, existance) {
+        Ok(Lease) => todo!(),
+        Err(_) => panic!("should not occur for open file"),
+    }
+}
+
+#[instrument]
 async fn client_conn(mut stream: ClientStream, mut directory: Directory) {
     while let Ok(msg) = stream.try_next().await {
         let msg = match msg {
@@ -37,17 +45,22 @@ async fn client_conn(mut stream: ClientStream, mut directory: Directory) {
     }
 }
 
+
 #[instrument]
 async fn client_msg(stream: &mut ClientStream, msg: Request, directory: &mut Directory) {
+    use Request::*;
     let response = match msg {
-        Request::Test => Response::Test,
-        Request::AddDir(path) => {
+        Test => Response::Test,
+        AddDir(path) => {
             mkdir(directory, path).await
         }
-        Request::RmDir(path) => {
+        RmDir(path) => {
             rmdir(directory, path).await
         }
-        Request::Ls(_) => Response::NotReadServ,
+        OpenReadWrite(path, existance) => {
+            open(path, existance).await
+        }
+        Ls(_) | OpenReadOnly(..) => Response::NotReadServ,
         // Request::OpenReadWrite(path, policy) => open_rw(path, policy).await,
         _e => {
             Response::Todo(_e)
