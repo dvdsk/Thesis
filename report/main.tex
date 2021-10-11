@@ -1,7 +1,7 @@
 \documentclass[lang=en, hanging-titles=true]{skrapport}
 
-%\usepackage[backend=biber]{biblatex}
-%\addbibresource{References.bib}
+\usepackage[backend=biber]{biblatex}
+\addbibresource{References.bib}
 
 \usepackage[hidelinks]{hyperref}
 \usepackage{tikz}
@@ -13,6 +13,7 @@
   \graphicspath{{../figs/}} % set of paths to search for images
 \usepackage{ragged2e}
 \usepackage{ctable}
+\usepackage{cleveref}
 % \usepackage{float}
 % \usepackage{subcaption}
 %   \captionsetup{compatibility=false}
@@ -27,8 +28,8 @@
 
 \raggedright
 \colortheme{skdoc}
-\title{A report Title}
-\author[dskleingeld@gmail.com]{David Kleingeld}
+\title{Distributed GFS Meta}
+\author[opensource@davidsk.dev]{David Kleingeld}
 
 
 \begin{document}
@@ -38,22 +39,25 @@
 \tableofcontents
 %\end{titlepage}
 
-%\section{Introduction}
-%\input{content/intro}
-%\section{Theory}
-%\input{content/theory}
-\section{Implementation}
+\section{Introduction} 
+\label{sec:intro}
+\input{content/intro}
+\section{Implementation} 
+\label{sec:impl}
 \input{content/impl}
-%\section{Results}
-%\input{content/res}
-%\section{Conclusion}
-%\input{content/conclusion}
+\section{Results} 
+\label{sec:res}
+\input{content/res}
+\section{Conclusion} 
+\label{sec:conc}
+\input{content/conclusion}
 
 \clearpage
 \appendix
-%\section{Run Instructions}
-% \input{content/run_instructions}
-%\printbibliography
+\section{Run Instructions} 
+\label{sec:deploy}
+\input{content/deploy}
+\printbibliography
 
 \end{document}
 
