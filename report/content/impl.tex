@@ -1,8 +1,19 @@
+Here I will discuss my implementation in three parts. I will begin by going over the states a node goes through during its operation. Then I will detail how the metadata is changed by following a mkdir through the cluster. Finally I detail the technical side discussing the use of async over classical concurency primitives.
+There are a number of systems I will not discussed in depth, these are:
+
+\begin{enumerate}
+	\item The client implementation. It automatically finds the right node to talk to and retries any request until it is accepted by the cluster. It will ask the cluster for new adresses if it notices a node going offline. If the cluster does not move to quickly it will stay operating with the cluster moving to new all new ip adresses.
+	\item The automatic cluster configuration. The cluster nodes do not need to know eachothers adress. The nodes will use udp multicasts to build an adress book and keep it up to date while operating. Nodes can be added\footnote{as long as the cluster size does not grow beyond a statically set maximum} while the cluster is operating.
+\end{enumerate}
+
+\subsection{The life of a node}
+A node in the cluster can go through three states in its life: \textit{disconnected}, \textit{readserver} and \textit{writeserver}. We can see the stages the node goes through in \cref{fig:nodelife}. Every node starts \textit{disconnected}. In this state its discovering cluster members and waiting till it has discoverd at least 50\% of the (maximum) cluster size. Then it continues and becomes a \textit{readserver}, only serving meta data for read requests \footnote{such as opening a file in read only mode or listing everything in a directory}. It will recieve changes to the meta data from the \textit{writeserver}. If no \textit{writeserver} is found an election will start using the \textit{raft}\cite{raft} consensus algorithm. If our node wins the election it will become the current \textit{writeserver}. As \textit{writeserver} it will handle client requests modifying the meta data and maintain a heartbeat. The heartbeat is part of \textit{raft} and ensures no new elections start.
+
 \begin{figure}[htbp]
 	\centering
 	\input{figs/serverlife.tex}
-	\caption{<caption>}
-	\label{<label>}
+	\caption{The states a server node goes through (left of the braces) and the various processes it does}
+	\label{fig:nodelife}
 \end{figure}
 
 

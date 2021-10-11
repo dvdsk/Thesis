@@ -1,8 +1,9 @@
 
-\tikzstyle{headers}=[minimum width=2cm, minimum height=0.5cm, font=\normalsize]
 \tikzstyle{base}=[minimum width=2cm, minimum height=0.5cm, font=\footnotesize]
 \tikzstyle{neuron}=[base, rectangle, align=left, draw=black, fill=orange!30]
-% \tikzstyle{neuron}=[thick,minimum width=0cm,align=left]
+\tikzstyle{headers}=[minimum width=2cm, minimum height=0.5cm, font=\normalsize]
+% \tikzstyle{side_lines}=[headers, -, line width=0.2cm, draw=gray]
+\tikzstyle{side_lines}=[headers, decorate, decoration={brace, amplitude=10pt, raise=-10pt}, line width=0.5mm, xshift=-20pt]
 
 \begin{tikzpicture}[node distance=0.9cm and 1.0cm, auto]
 
@@ -22,12 +23,12 @@
     \node (maintain_hb) [neuron,below left=of ws] {maintain hb};
     \node (handle_meta) [neuron,below right=of ws] {handle meta\\ change requests};
 
-	\node (S2) [base, right=of host_fs] {1};
-	\node (S1) [base, above=of S2] {1};
-	\node (S0) [base, above=of S1] {1};
-	\node (S3) [base, below=of S2] {1};
-	\node (S4) [base, below=of S3] {1};
-	\node (S5) [base, below=of S4] {1};
+	\node (A) [base, right=0.3 of host_fs] {};
+	\node (S1) [base, above=0.3 of A] {};
+	\node (S0) [base, above=2 of S1] {};
+	\node (S3) [base, below=of A] {};
+	\node (S4) [base, below=0.4 of S3] {};
+	\node (S5) [base, below=2.2 of S4] {};
 
     \draw[->, >=stealth, thick] (start) to [out=270, in=90] node [] {} (wait);
     \draw[->, >=stealth, thick] (start) to [out=270, in=90] node [] {} (discover);
@@ -42,8 +43,8 @@
     \draw[->, >=stealth, thick] (host_election) to [out=270, in=90] node [below] {} (maintain_hb);
     \draw[->, >=stealth, thick] (host_election) to [out=270, in=90] node [below] {} (handle_meta);
 
-	% \draw [-, very thick, headers] (S0) to node {disconnected} (S1) ;
-	% \draw [-, very thick, headers] (S1) to node {readserver} (S3) ;
-	% \draw [-, very thick, headers] (S3) to node {writeserver} (S5) ;
+	\draw [side_lines] (S0) to node {disconnected} (S1) ;
+	\draw [side_lines] (S1) to node {readserver} (S4) ;
+	\draw [side_lines] (S4) to node {writeserver} (S5) ;
 
 \end{tikzpicture}
