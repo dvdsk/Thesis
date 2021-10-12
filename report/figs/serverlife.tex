@@ -2,12 +2,12 @@
 \tikzstyle{base}=[minimum width=2cm, minimum height=0.5cm, font=\footnotesize]
 \tikzstyle{neuron}=[base, rectangle, align=left, draw=black, fill=orange!30]
 \tikzstyle{headers}=[minimum width=2cm, minimum height=0.5cm, font=\normalsize]
-% \tikzstyle{side_lines}=[headers, -, line width=0.2cm, draw=gray]
 \tikzstyle{side_lines}=[headers, decorate, decoration={brace, amplitude=10pt, raise=-10pt}, line width=0.5mm, xshift=-20pt]
+\tikzstyle{path_text}=[midway, left, font=\footnotesize]
 
 \begin{tikzpicture}[node distance=0.9cm and 1.0cm, auto]
 
-    \node (start) [headers] {start};
+    \node (start) [headers] {Start};
 
     \node (wait)[neuron, below=of start]{wait till > 50\% \\of cluster discoverd};
     \node (discover)[neuron, left=of wait]{discover new\\ cluster members};
@@ -34,17 +34,20 @@
     \draw[->, >=stealth, thick] (start) to [out=270, in=90] node [] {} (discover);
 
     \draw[->, >=stealth, thick] (wait) to [out=270, in=90] node [] {} (handle_update);
-    \draw[->, >=stealth, thick] (wait) to [out=270, in=90] node [near start, below left] {} (monitor_hb);
-    \draw[->, >=stealth, thick] (wait) to [out=270, in=90] node [near start, below left] {} (host_fs);
+    \draw[->, >=stealth, thick] (wait) to [out=270, in=90] node [] {} (monitor_hb);
+    \draw[->, >=stealth, thick] (wait) to [out=270, in=90] node [] {} (host_fs);
 
-    \draw[->, >=stealth, thick] (host_fs) to [out=270, in=90] node [near start, above] {} (update);
-    \draw[->, >=stealth, thick] (monitor_hb) to [out=270, in=90] node [near start, below] {} (host_election);
+    \draw[->, >=stealth, thick] (host_fs) to [out=230, in=130] node [path_text] {outdated} (update);
+    \draw[->, >=stealth, thick] (update) to [out=40, in=310] node [] {} (host_fs);
 
-    \draw[->, >=stealth, thick] (host_election) to [out=270, in=90] node [below] {} (maintain_hb);
-    \draw[->, >=stealth, thick] (host_election) to [out=270, in=90] node [below] {} (handle_meta);
+    \draw[->, >=stealth, thick] (monitor_hb) to [out=310, in=40] node [] {} (host_election);
+    \draw[->, >=stealth, thick] (host_election) to [out=130, in=230] node [path_text] {lost} (monitor_hb);
 
-	\draw [side_lines] (S0) to node {disconnected} (S1) ;
-	\draw [side_lines] (S1) to node {readserver} (S4) ;
-	\draw [side_lines] (S4) to node {writeserver} (S5) ;
+    \draw[->, >=stealth, thick] (host_election) to [out=270, in=90] node [] {} (maintain_hb);
+    \draw[->, >=stealth, thick] (host_election) to [out=270, in=90] node [] {} (handle_meta);
+
+	\draw [side_lines] (S0) to node {Disconnected} (S1) ;
+	\draw [side_lines] (S1) to node {Readserver} (S4) ;
+	\draw [side_lines] (S4) to node {Writeserver} (S5) ;
 
 \end{tikzpicture}

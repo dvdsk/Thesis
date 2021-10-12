@@ -7,7 +7,11 @@ There are a number of systems I will not discussed in depth, these are:
 \end{enumerate}
 
 \subsection{The life of a node}
-A node in the cluster can go through three states in its life: \textit{disconnected}, \textit{readserver} and \textit{writeserver}. We can see the stages the node goes through in \cref{fig:nodelife}. Every node starts \textit{disconnected}. In this state its discovering cluster members and waiting till it has discoverd at least 50\% of the (maximum) cluster size. Then it continues and becomes a \textit{readserver}, only serving meta data for read requests \footnote{such as opening a file in read only mode or listing everything in a directory}. It will recieve changes to the meta data from the \textit{writeserver}. If no \textit{writeserver} is found an election will start using the \textit{raft}\cite{raft} consensus algorithm. If our node wins the election it will become the current \textit{writeserver}. As \textit{writeserver} it will handle client requests modifying the meta data and maintain a heartbeat. The heartbeat is part of \textit{raft} and ensures no new elections start.
+A node in the cluster can go through three states in its life: \textit{disconnected}, \textit{readserver} and \textit{writeserver}. We can see the stages the node goes through in \cref{fig:nodelife}. Every node starts \textit{disconnected}. In this state its discovering cluster members and waiting till it has discoverd at least 50\% of the (maximum) cluster size. 
+
+When it has found enough cluster members our node becomes a \textit{readserver}, it can then start serving meta data for read requests \footnote{such as opening a file in read only mode or listing everything in a directory}. It will only serve those requests as long as its not \textit{outdated}. A \textit{readserver} starts outdated and can only get up to date by syncing with an elected \textit{writeserver}. At any time if no \textit{writeserver} is found an election will start using the \textit{raft}\cite{raft} consensus algorithm. 
+
+If our node wins the election it will become the current \textit{writeserver}. As \textit{writeserver} it will handle client requests modifying the meta data and maintain a heartbeat. The heartbeat is part of \textit{raft} and ensures no new elections start.
 
 \begin{figure}[htbp]
 	\centering
@@ -16,4 +20,11 @@ A node in the cluster can go through three states in its life: \textit{disconnec
 	\label{fig:nodelife}
 \end{figure}
 
+\subsection{Changing metadata}
 
+\begin{figure}[htbp]
+	\centering
+	\input{figs/mkdir.tex}
+	\caption{The states the client and cluster go through during a mkdir request}
+	\label{fig:mkdir}
+\end{figure}

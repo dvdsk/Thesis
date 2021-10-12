@@ -1,0 +1,70 @@
+\tikzstyle{base}=[minimum width=3cm, minimum height=1cm, align=left, font=\footnotesize]
+\tikzstyle{state}=[base, rectangle, draw=black, fill=orange!30]
+\tikzstyle{wait_line}=[->, dashed, >=stealth, thick, draw=black!40]
+\tikzstyle{line}=[->, >=stealth, thick]
+
+\tikzstyle{side_lines}=[align=left, line width=0.5cm, line width=0.5mm, xshift=-20pt]
+
+% align settings: AlignCtl =lp1P0
+% to align use :[range]Align[({[] for example :6,23Align[({[]
+\begin {tikzpicture} [node distance=0.8cm and 0.6cm, auto]
+
+
+\node (c_mkdir)   [state]                     {request mkdir};
+
+\node (w_await)   [state, right=of c_mkdir]   {await client requests};
+\node (w_delay)   [state, below=of w_await]   {delay next heartbeat};
+\node (w_pub)     [state, below=of w_delay]   {publish change\\ to readservers};
+\node (w_spacer0) [base, below=of w_pub]      {};
+\node (w_spacer1) [base, below=of w_spacer0]  {};
+\node (w_spacer2) [base, below=of w_spacer1]  {};
+\node (w_timeout) [state, below=of w_spacer2] {publish timed out};
+\node (w_sleep)   [state, below=of w_timeout] {sleep till two \\heartbeats after \\publication started};
+\node (w_done)    [state, below=of w_sleep]   {respond ok};
+
+\node (g_await)   [state, right=of w_spacer0] {awaiting metadata\\ changes};
+\node (g_term)    [state, below=of g_await]   {checking request \\can we apply this?};
+\node (g_apply)   [state, below=of g_term]    {apply changes to db};
+\node (g_awk)     [state, below=of g_apply]   {awknowledge to\\ writeserver};
+
+\node (b_await)   [state, right=of g_await]   {awaiting metadata\\ changes};
+\node (b_crash)   [state, below=of b_await]   {crash};
+
+\node (c_wait)    [state, left=of w_done]     {waiting for \\server response};
+\node (c_done)    [state, below=of c_wait]    {completed mkdir};
+
+\draw [wait_line] (c_mkdir) to   [out=south, in=north] node [] {} (c_wait);
+\draw [line]      (c_mkdir) to   [out=east, in=west] node   [] {} (w_await);
+\draw [line]      (c_wait) to    [out=south, in=north] node [] {} (c_done);
+
+\draw [line]      (w_await) to   [out=south, in=north] node [] {} (w_delay);
+\draw [line]      (w_delay) to   [out=south, in=north] node [] {} (w_pub);
+\draw [wait_line] (w_pub) to     [out=south, in=north] node [] {} (w_timeout);
+\draw [line]      (w_pub) to     [out=east, in=north] node  [] {} (g_await);
+\draw [line]      (w_pub) to     [out=east, in=north] node  [] {} (b_await);
+
+\draw [line]      (w_timeout) to [out=south, in=north] node [] {} (w_sleep);
+\draw [line]      (w_sleep) to   [out=south, in=north] node [] {} (w_done);
+\draw [line]      (w_done) to    [out=west, in=east] node   [] {} (c_wait);
+
+\draw [line]      (g_await) to   [out=south, in=north] node [] {} (g_term) ;
+\draw [line]      (g_term)  to   [out=south, in=north] node [] {} (g_apply);
+\draw [line]      (g_apply) to   [out=south, in=north] node [] {} (g_awk)  ;
+\draw [line]      (g_awk)   to   [out=west, in=east] node   [] {} (w_timeout);
+
+\draw [line]      (b_await) to   [out=south, in=north] node [] {} (b_crash)  ;
+
+% draw header
+\node (A)  [above=of c_mkdir] {};
+\node (S1) [left=1.2 of A] {};
+\node (S2) [right=3.3 of S1] {};
+\node (S3) [right=3.3 of S2] {};
+\node (S4) [right=3.3 of S3] {};
+\node (S5) [right=3.3 of S4] {};
+
+\draw [side_lines] (S1) to node {Client} (S2) ;
+\draw [side_lines] (S2) to node {Write server} (S3) ;
+\draw [side_lines] (S3) to node {Functioning\\ read servers} (S4) ;
+\draw [side_lines] (S4) to node {Malfunctioning\\ read servers} (S5) ;
+
+\end{tikzpicture}
