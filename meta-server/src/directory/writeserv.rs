@@ -44,15 +44,15 @@ impl Directory {
         &mut self,
         change: Change,
         apply_db: impl FnOnce(&mut Db) -> Result<(), DbError>,
-        timeout: std::time::Duration,
     ) -> Result<(), DbError> {
         self.hb_ctrl.delay().await;
 
+        let timeout = std::time::Instant::now() + 2*HB_TIMEOUT;
         let res = self.servers.publish(&self.state, change).await;
         let change_idx = match res {
             PubResult::ReachedAll(idx) => idx,
             PubResult::ReachedMajority(idx) => {
-                tokio::time::sleep(timeout).await;
+                tokio::time::sleep_until(timeout).await;
                 idx
             }
             PubResult::ReachedMinority => panic!("can not reach majority, crashing master"),
@@ -73,14 +73,14 @@ impl Directory {
         // expire and can then no longer be opened
         let change = Change::DirRemoved(path.clone());
         let apply_to_db = |db: &mut Db| db.rmdir(path);
-        self.consistent_change(change, apply_to_db, HB_TIMEOUT).await
+        self.consistent_change(change, apply_to_db).await
     }
 
     #[tracing::instrument]
     pub async fn mkdir(&mut self, path: PathString) -> Result<(), DbError> {
         let change = Change::DirAdded(path.clone());
         let apply_to_db = |db: &mut Db| db.mkdir(path);
-        self.consistent_change(change, apply_to_db, HB_TIMEOUT).await
+        self.consistent_change(change, apply_to_db).await
     }
 
     pub async fn open(&mut self, path: PathString, existance: Existence) -> Result<(), DbError> {

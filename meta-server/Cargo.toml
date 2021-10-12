@@ -20,8 +20,6 @@ mac_address = "1.1.2"
 
 sled = "0.34"
 
-mdns = "3.0" # requests
-libmdns = "0.6" # responds
 futures-util = "0.3"
 
 thiserror = "1"
