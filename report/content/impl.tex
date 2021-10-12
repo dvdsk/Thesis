@@ -21,6 +21,7 @@ If our node wins the election it will become the current \textit{writeserver}. A
 \end{figure}
 
 \subsection{Changing metadata}
+Here I will describe what happens during a succesful make directory request (mkdir) where some servers malfunctioned. The transaction is illustrated in \cref{fig:mkdir}. It starts with the client sending a mkdir request over TCP. Servers and clients communicate between eachother over TCP. Requests and responses consist out of serialized\footnote{As serialization format we use Bincode which guarentees an encoded size no larger then the deserialized size} high level types. 
 
 \begin{figure}[htbp]
 	\centering
@@ -28,3 +29,28 @@ If our node wins the election it will become the current \textit{writeserver}. A
 	\caption{The states the client and cluster go through during a mkdir request}
 	\label{fig:mkdir}
 \end{figure}
+
+Once the write server recieves the request it will cancel the next heartbeat and instead publish the change to the cluster. To speed this up the write server caches connections to the read servers. It is no problem if a server does not recieve a request as:
+\begin{enumerate}
+	\item if it recieve the next heartbeat it will notice it is outdated and stop hosting meta. 
+	\item if it fails to recieve the next two heartbeats it will declare itself outdated and stop hosting meta.
+\end{enumerate}
+After declaring itself outdated a server will ask and get from the write server an up to date copy of the file system directory. 
+
+Any read server that is not malfunctioning now recieves the change and checks if it can safely apply it using the \textit{Raft} concensus algorithm. Then it applies the change to its database and awnsers the writeserver all is well.
+
+After publishing a change the write server can run into three scenarios:
+\begin{enumerate}
+	\item \textit{Everyone acknowledged}: continue
+	\item \textit{A majority acknowledged}: some server(s) failed to awnser, the new change will still be availible to all clients after two heartbeat durations from the publish as by then any malfunctioning server(s) will have noticed it/they are outdated.
+	\item \textit{A minority acknowledged}: the write server is no longer in control it will crash and the cluster will go through an election.
+\end{enumerate}
+
+Then the write server awnsers the client request. The client then completes the make directory request.
+
+\subsection{Technicalities}
+The implementation has been written in \textit{Rust}: a high performance memory safe language without garbage collection. It makes extensive use of libaries for networking, the database and logging/tracing. The system is split into a binary for the server software, a libary defining the communcation protocol and a client libary for interacting with the server. The client libary provides various example binaries.
+
+The implementation is made without any blocking code using exclusively asynchronous (async) functions instead. The result is a fully concurrent system where most work runs in parallel. I have written a short primer on async in the past here included in \cref{sec:async} though a far better resource is the \textit{rust async book}\footnote{freely availible at: https://rust-lang.github.io/async-book}. In general a machine can handle many more asynchronous tasks then threads. Async is an especially good fit here as consistency requires us to wait before awnsering and finishing many tasks.
+
+Debugging distributed systems is notoriously hard. To help development this implementation contains `tracing` a framwork for structured logging. The information is send to a (potentially distributed) tracing collection system which provides a web interface to inspect the structured logs of all the nodes in a central location.

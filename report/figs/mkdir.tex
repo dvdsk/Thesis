@@ -13,7 +13,7 @@
 \node (c_mkdir)   [state]                     {request mkdir};
 
 \node (w_await)   [state, right=of c_mkdir]   {await client requests};
-\node (w_delay)   [state, below=of w_await]   {delay next heartbeat};
+\node (w_delay)   [state, below=of w_await]   {cancel next heartbeat};
 \node (w_pub)     [state, below=of w_delay]   {publish change\\ to readservers};
 \node (w_spacer0) [base, below=of w_pub]      {};
 \node (w_spacer1) [base, below=of w_spacer0]  {};
@@ -40,6 +40,7 @@
 \draw [line]      (w_await) to   [out=south, in=north] node [] {} (w_delay);
 \draw [line]      (w_delay) to   [out=south, in=north] node [] {} (w_pub);
 \draw [wait_line] (w_pub) to     [out=south, in=north] node [] {} (w_timeout);
+\draw [wait_line] (w_pub) to     [out=south west, in=150] node [] {} (w_done);
 \draw [line]      (w_pub) to     [out=east, in=north] node  [] {} (g_await);
 \draw [line]      (w_pub) to     [out=east, in=north] node  [] {} (b_await);
 
