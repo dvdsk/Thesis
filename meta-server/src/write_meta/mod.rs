@@ -29,7 +29,7 @@ async fn rmdir(directory: &mut Directory, path: PathString) -> Response {
 #[instrument(skip(directory))]
 async fn open(directory: &mut Directory, path: PathString, existance: Existence) -> Response {
     match directory.open(path, existance).await {
-        Ok(Lease) => todo!(),
+        Ok(_lease) => todo!(),
         Err(_) => panic!("should not occur for open file"),
     }
 }

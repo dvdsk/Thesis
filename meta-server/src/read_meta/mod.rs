@@ -3,6 +3,7 @@ use discovery::Chart;
 use futures::SinkExt;
 use futures_util::TryStreamExt;
 use tracing::error;
+use tracing::trace;
 use std::net::IpAddr;
 use std::net::Ipv4Addr;
 use std::net::SocketAddr;
@@ -99,7 +100,6 @@ async fn cmd_msg(
     state: &State,
 ) {
     use ToRs::*;
-    tracing::info!("got msg");
     match msg {
         HeartBeat(term, change_idx) => state.handle_heartbeat(term, change_idx, source),
         RequestVote(term, change_idx, id) => {
@@ -138,7 +138,6 @@ pub async fn cmd_server(port: u16, state: Arc<State>, dir: &Directory) {
         let dir = dir.clone();
         let (socket, source) = listener.accept().await.unwrap();
         tokio::spawn(async move {
-            info!("accepted connection from: {:?}", source);
             let stream: RsStream = connection::wrap(socket);
             cmd_conn(stream, source, &state, &dir).await;
         });

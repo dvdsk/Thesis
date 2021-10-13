@@ -13,6 +13,7 @@ pub use replicate::update;
 mod state;
 pub use state::State;
 
+/// heartbeats are send every HB_TIMEOUT/2 seconds
 pub const HB_TIMEOUT: Duration = Duration::from_millis(200);
 
 #[derive(Clone, Debug)]

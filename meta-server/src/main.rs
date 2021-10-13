@@ -69,6 +69,7 @@ fn setup_tracing(opt: &Opt) {
             KeyValue::new("instance", instance_name.to_owned()),
             KeyValue::new("run", opt.run_numb),
         ])
+
         .install_batch(opentelemetry::runtime::Tokio)
         .unwrap();
 
@@ -76,21 +77,20 @@ fn setup_tracing(opt: &Opt) {
     use tracing_subscriber::{fmt, Registry};
     let telemetry = tracing_opentelemetry::subscriber().with_tracer(tracer);
 
-    // for now using log to register events without span info
+    let subscriber = Registry::default()
+        .with(telemetry);
+    tracing::collect::set_global_default(subscriber).unwrap();
+}
+
+fn setup_logging() {
     use simplelog::*;
     TermLogger::init(
-        LevelFilter::Warn,
+        LevelFilter::Info,
         Config::default(),
         TerminalMode::Mixed,
         ColorChoice::Auto,
     )
     .expect("could not setup logger");
-    tracing::error!("test simplelog");
-
-    let subscriber = Registry::default()
-        // .with(stdout)
-        .with(telemetry);
-    tracing::collect::set_global_default(subscriber).unwrap();
 }
 
 #[tracing::instrument(skip(dir, state, chart, hb_control))]
@@ -171,8 +171,8 @@ async fn server(
 
 #[tokio::main]
 async fn main() {
-    // console_subscriber::init();
     let opt = Opt::from_args();
+    setup_logging();
     setup_tracing(&opt);
 
     let id = id_from_mac();

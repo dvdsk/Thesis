@@ -2,7 +2,6 @@ use client_protocol::connection;
 use discovery::Chart;
 use futures::future::join_all;
 use futures::{SinkExt, TryStreamExt};
-use tracing::{trace, warn};
 use std::collections::{HashMap, HashSet};
 use std::net::IpAddr;
 use std::net::SocketAddr;
@@ -10,6 +9,7 @@ use std::sync::Arc;
 use tokio::net::TcpStream;
 use tokio::sync::Mutex;
 use tokio::time::timeout;
+use tracing::{trace, warn};
 
 use crate::consensus::{State, HB_TIMEOUT};
 use crate::server_conn::protocol::{Change, FromRS, ToRs};
