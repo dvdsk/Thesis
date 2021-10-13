@@ -23,7 +23,7 @@ impl ReadServers {
     pub fn new(chart: Chart, port: u16) -> Self {
         Self(Arc::new(Mutex::new(Inner::new(chart, port))))
     }
-    #[tracing::instrument]
+    #[tracing::instrument(skip(self))]
     pub async fn publish(&self, state: &State, change: Change) -> PubResult {
         let change_idx = state.increase_change_idx();
         let msg = ToRs::DirectoryChange(state.term(), change_idx, change);
@@ -94,7 +94,7 @@ impl Inner {
         }
     }
 
-    #[tracing::instrument]
+    #[tracing::instrument(skip(self))]
     async fn send_to_readservers(&mut self, msg: ToRs) -> usize {
         let conn_ips: HashSet<_> = self.conns.keys().cloned().collect();
 

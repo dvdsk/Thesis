@@ -7,7 +7,7 @@ use super::State;
 use crate::directory::readserv::Directory;
 use crate::server_conn::protocol::{FromWs, ToWs};
 
-#[tracing::instrument]
+#[tracing::instrument(skip(state, dir))]
 pub async fn update(state: &State, dir: &Directory) {
     loop {
         let addr = match state.get_master() {

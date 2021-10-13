@@ -3,7 +3,7 @@ use std::sync::Arc;
 use client_protocol::{PathString, Existence};
 
 use super::db::Db;
-use super::{DbError, LEASE_DUR, readserv};
+use super::{DbError, readserv};
 use crate::consensus::{HbControl, State, HB_TIMEOUT};
 use crate::server_conn::protocol::Change;
 use crate::server_conn::to_readserv::PubResult;
@@ -47,7 +47,7 @@ impl Directory {
     ) -> Result<(), DbError> {
         self.hb_ctrl.delay().await;
 
-        let timeout = std::time::Instant::now() + 2*HB_TIMEOUT;
+        let timeout = tokio::time::Instant::now() + HB_TIMEOUT;
         let res = self.servers.publish(&self.state, change).await;
         let change_idx = match res {
             PubResult::ReachedAll(idx) => idx,
@@ -67,7 +67,7 @@ impl Directory {
         Ok(())
     }
 
-    #[tracing::instrument]
+    #[tracing::instrument(skip(self))]
     pub async fn rmdir(&mut self, path: PathString) -> Result<(), DbError> {
         // no special measures needed, open file leases inside the dir wil 
         // expire and can then no longer be opened
@@ -76,7 +76,7 @@ impl Directory {
         self.consistent_change(change, apply_to_db).await
     }
 
-    #[tracing::instrument]
+    #[tracing::instrument(skip(self))]
     pub async fn mkdir(&mut self, path: PathString) -> Result<(), DbError> {
         let change = Change::DirAdded(path.clone());
         let apply_to_db = |db: &mut Db| db.mkdir(path);
@@ -84,5 +84,6 @@ impl Directory {
     }
 
     pub async fn open(&mut self, path: PathString, existance: Existence) -> Result<(), DbError> {
+        todo!()
     }
 }

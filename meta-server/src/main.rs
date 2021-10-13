@@ -93,7 +93,7 @@ fn setup_tracing(opt: &Opt) {
     tracing::collect::set_global_default(subscriber).unwrap();
 }
 
-#[tracing::instrument]
+#[tracing::instrument(skip(dir, state, chart, hb_control))]
 async fn write_server(
     opt: Opt,
     dir: readserv::Directory,
@@ -110,7 +110,7 @@ async fn write_server(
     info!("starting write server");
 }
 
-#[tracing::instrument]
+#[tracing::instrument(skip(state,chart,dir))]
 async fn host_meta_or_update(
     client_port: u16,
     state: &Arc<consensus::State>,
@@ -127,7 +127,7 @@ async fn host_meta_or_update(
     }
 }
 
-#[tracing::instrument]
+#[tracing::instrument(skip(state, chart,dir))]
 async fn read_server(
     opt: &Opt,
     state: &Arc<consensus::State>,
@@ -150,7 +150,7 @@ async fn read_server(
     }
 }
 
-#[tracing::instrument]
+#[tracing::instrument(skip(state,dir,chart))]
 async fn server(
     opt: Opt,
     state: Arc<consensus::State>,

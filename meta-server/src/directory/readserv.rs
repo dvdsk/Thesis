@@ -38,6 +38,7 @@ impl Directory {
         match change {
             Change::DirAdded(path) => self.db.mkdir(path).expect(EXPECT_STR),
             Change::DirRemoved(path) => self.db.rmdir(path).expect(EXPECT_STR),
+            Change::FileAdded(path) => todo!(),
         }
         self.db.update(change_idx);
         self.db.flush().await;

@@ -8,7 +8,7 @@ pub use crate::directory::DbError;
 pub use crate::directory::writeserv::Directory;
 pub use crate::server_conn::to_readserv::ReadServers;
 
-#[instrument]
+#[instrument(skip(directory))]
 async fn mkdir(directory: &mut Directory, path: PathString) -> Response {
     match directory.mkdir(path).await {
         Ok(_) => Response::Ok,
@@ -17,7 +17,7 @@ async fn mkdir(directory: &mut Directory, path: PathString) -> Response {
     }
 }
 
-#[instrument]
+#[instrument(skip(directory))]
 async fn rmdir(directory: &mut Directory, path: PathString) -> Response {
     match directory.rmdir(path).await {
         Ok(_) => Response::Ok,
@@ -26,15 +26,15 @@ async fn rmdir(directory: &mut Directory, path: PathString) -> Response {
     }
 }
 
-#[instrument]
-async fn open(directory: &mut Directory, path: PathString, existance: Existence) {
-    match directory.open(path, existance) {
+#[instrument(skip(directory))]
+async fn open(directory: &mut Directory, path: PathString, existance: Existence) -> Response {
+    match directory.open(path, existance).await {
         Ok(Lease) => todo!(),
         Err(_) => panic!("should not occur for open file"),
     }
 }
 
-#[instrument]
+#[instrument(skip(directory, stream))]
 async fn client_conn(mut stream: ClientStream, mut directory: Directory) {
     while let Ok(msg) = stream.try_next().await {
         let msg = match msg {
@@ -46,7 +46,7 @@ async fn client_conn(mut stream: ClientStream, mut directory: Directory) {
 }
 
 
-#[instrument]
+#[instrument(skip(stream, directory))]
 async fn client_msg(stream: &mut ClientStream, msg: Request, directory: &mut Directory) {
     use Request::*;
     let response = match msg {
@@ -58,7 +58,7 @@ async fn client_msg(stream: &mut ClientStream, msg: Request, directory: &mut Dir
             rmdir(directory, path).await
         }
         OpenReadWrite(path, existance) => {
-            open(path, existance).await
+            open(directory, path, existance).await
         }
         Ls(_) | OpenReadOnly(..) => Response::NotReadServ,
         // Request::OpenReadWrite(path, policy) => open_rw(path, policy).await,

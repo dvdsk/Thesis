@@ -13,7 +13,7 @@ pub use replicate::update;
 mod state;
 pub use state::State;
 
-pub const HB_TIMEOUT: Duration = Duration::from_secs(2);
+pub const HB_TIMEOUT: Duration = Duration::from_millis(200);
 
 #[derive(Clone, Debug)]
 pub struct HbControl(flume::Sender<Instant>);
