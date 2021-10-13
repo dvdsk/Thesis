@@ -171,6 +171,15 @@ impl Conn for ReadServer {
     }
 
     async fn request(&mut self, req: Request) -> Result<Response, ConnError> {
-        self.basic_request(req).await
+        loop {
+            match self.basic_request(req.clone()).await {
+                Ok(Response::NotReadServ) => {
+                    info!("not read server moving to diff adress");
+                    self.list.read_serv = None;
+                    self.re_connect().await.unwrap();
+                }
+                _other => return _other,
+            }
+        }
     }
 }

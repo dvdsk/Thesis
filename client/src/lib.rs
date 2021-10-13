@@ -21,7 +21,7 @@ pub async fn ls(conn: &mut ReadServer, path: impl Into<PathString>) -> Vec<FsEnt
     let res = conn.request(Request::Ls(path.into())).await.unwrap();
     match res {
         Response::Ls(list) => return list,
-        _ => panic!("ls request should be awnsered with ls response"),
+        _other => panic!("ls request expects ls response, was: {:?}", _other),
     }
 }
 
