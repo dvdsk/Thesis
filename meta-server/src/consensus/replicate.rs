@@ -7,7 +7,7 @@ use super::State;
 use crate::directory::readserv::Directory;
 use crate::server_conn::protocol::{FromWs, ToWs};
 
-#[tracing::instrument(skip(state, dir))]
+#[tracing::instrument(level = "debug", skip(state, dir))]
 pub async fn update(state: &State, dir: &Directory) {
     loop {
         let addr = match state.get_master() {
@@ -25,7 +25,7 @@ pub async fn update(state: &State, dir: &Directory) {
     }
 }
 
-#[tracing::instrument]
+#[tracing::instrument(level = "debug")]
 async fn get_update(master: IpAddr, port: u16) -> Result<Vec<u8>, ()> {
     type Stream = connection::MsgStream<FromWs, ToWs>;
     let socket = TcpStream::connect((master, port)).await.map_err(|_| ())?;

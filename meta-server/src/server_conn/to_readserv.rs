@@ -23,7 +23,7 @@ impl ReadServers {
     pub fn new(chart: Chart, port: u16) -> Self {
         Self(Arc::new(Mutex::new(Inner::new(chart, port))))
     }
-    #[tracing::instrument(skip(self))]
+    #[tracing::instrument(level = "debug", skip(self, state))]
     pub async fn publish(&self, state: &State, change: Change) -> PubResult {
         let change_idx = state.increase_change_idx();
         let msg = ToRs::DirectoryChange(state.term(), change_idx, change);
@@ -54,17 +54,23 @@ pub enum PubResult {
     ReachedMinority,
 }
 
-#[tracing::instrument]
+#[tracing::instrument(level = "debug")]
 async fn send_confirm(msg: ToRs, conn: &mut RsStream) -> Option<()> {
     conn.send(msg).await.ok()?;
     match conn.try_next().await.ok()? {
         Some(FromRS::Awk) => Some(()),
-        None => {warn!("got empty response"); None}
-        Some(other) => {warn!("got invalid response from peer: {:?}", other); None}
+        None => {
+            warn!("got empty response");
+            None
+        }
+        Some(other) => {
+            warn!("got invalid response from peer: {:?}", other);
+            None
+        }
     }
 }
 
-#[tracing::instrument]
+#[tracing::instrument(level = "debug")]
 async fn send(msg: ToRs, ip: IpAddr, conn: &mut RsStream) -> Result<IpAddr, IpAddr> {
     match timeout(HB_TIMEOUT, send_confirm(msg, conn)).await {
         Err(_) => Err(ip),
@@ -73,7 +79,7 @@ async fn send(msg: ToRs, ip: IpAddr, conn: &mut RsStream) -> Result<IpAddr, IpAd
     }
 }
 
-#[tracing::instrument]
+#[tracing::instrument(level = "debug")]
 async fn conn_and_send(msg: ToRs, ip: IpAddr, port: u16) -> Result<(IpAddr, RsStream), ()> {
     let addr = SocketAddr::from((ip, port));
     let stream = TcpStream::connect(addr).await.map_err(|_| ())?;
@@ -94,7 +100,7 @@ impl Inner {
         }
     }
 
-    #[tracing::instrument(skip(self))]
+    #[tracing::instrument(level = "debug", skip(self))]
     async fn send_to_readservers(&mut self, msg: ToRs) -> usize {
         let conn_ips: HashSet<_> = self.conns.keys().cloned().collect();
 

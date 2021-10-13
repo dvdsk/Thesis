@@ -8,7 +8,7 @@ pub use crate::directory::DbError;
 pub use crate::directory::writeserv::Directory;
 pub use crate::server_conn::to_readserv::ReadServers;
 
-#[instrument(skip(directory))]
+#[instrument(level = "debug", skip(directory))]
 async fn mkdir(directory: &mut Directory, path: PathString) -> Response {
     match directory.mkdir(path).await {
         Ok(_) => Response::Ok,
@@ -17,7 +17,7 @@ async fn mkdir(directory: &mut Directory, path: PathString) -> Response {
     }
 }
 
-#[instrument(skip(directory))]
+#[instrument(level = "debug", skip(directory))]
 async fn rmdir(directory: &mut Directory, path: PathString) -> Response {
     match directory.rmdir(path).await {
         Ok(_) => Response::Ok,

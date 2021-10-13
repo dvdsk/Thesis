@@ -36,7 +36,7 @@ fn serverlist(chart: &Chart, state: &State) -> ServerList {
 }
 
 type ReqStream = connection::MsgStream<Request, Response>;
-#[tracing::instrument(skip(stream, dir, chart, state))]
+#[tracing::instrument(level = "debug", skip(stream, dir, chart, state))]
 async fn client_msg(
     stream: &mut ReqStream,
     msg: Request,
@@ -54,13 +54,13 @@ async fn client_msg(
             let list = serverlist(chart, state);
             let resp = Response::NotWriteServ(list);
             let _res = stream.send(resp).await;
-            warn!("send serverlist to client asking for write server");
+            trace!("send serverlist to client asking for write server");
         }
         _req => todo!("req: {:?}", _req),
     }
 }
 
-#[tracing::instrument(skip(stream, dir, chart, state))]
+#[tracing::instrument(level = "debug", skip(stream, dir, chart, state))]
 async fn client_conn(mut stream: ReqStream, dir: &Directory, chart: &Chart, state: &State) {
     while let Ok(msg) = stream.try_next().await {
         let msg = match msg {
@@ -90,7 +90,7 @@ pub async fn meta_server(port: u16, dir: &Directory, chart: &Chart, state: &Arc<
 }
 
 type RsStream = connection::MsgStream<ToRs, FromRS>;
-#[tracing::instrument(skip(stream, dir, state))]
+#[tracing::instrument(level = "debug", skip(stream, dir, state))]
 async fn cmd_msg(
     stream: &mut RsStream,
     source: SocketAddr,
@@ -118,7 +118,7 @@ async fn cmd_msg(
     }
 }
 
-#[tracing::instrument(skip(stream, dir, state))]
+#[tracing::instrument(level = "debug", skip(stream, dir, state))]
 async fn cmd_conn(mut stream: RsStream, source: SocketAddr, state: &State, dir: &Directory) {
     while let Ok(msg) = stream.try_next().await {
         let msg = match msg {

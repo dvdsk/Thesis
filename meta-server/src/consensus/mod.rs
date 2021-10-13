@@ -57,7 +57,7 @@ async fn sleep_prolongable(mut next_hb: Instant, rx: &mut flume::Receiver<Instan
     }
 }
 
-#[tracing::instrument]
+#[tracing::instrument(level = "debug")]
 async fn send_hb(addr: SocketAddr, term: u64, change_idx: u64) -> Option<()> {
     use futures::SinkExt;
     type RsStream = connection::MsgStream<FromRS, ToRs>;

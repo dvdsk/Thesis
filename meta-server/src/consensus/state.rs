@@ -101,7 +101,7 @@ impl State {
         *curr = Some(source);
     }
 
-    #[tracing::instrument(skip(self))]
+    #[tracing::instrument(level = "debug", skip(self))]
     fn check_term(&self, term: u64, source: SocketAddr) -> Result<(), ()> {
         loop {
             let our_term = self.term();
@@ -122,7 +122,7 @@ impl State {
         Ok(())
     }
 
-    #[tracing::instrument(skip(self))]
+    #[tracing::instrument(level = "debug", skip(self))]
     pub fn handle_heartbeat(&self, term: u64, change_idx: u64, source: SocketAddr) {
         if let Err(_) = self.check_term(term, source) {
             return;
@@ -137,7 +137,7 @@ impl State {
         }
     }
 
-    #[tracing::instrument(skip(self))]
+    #[tracing::instrument(level = "debug", skip(self))]
     pub fn handle_dirchange(
         &self,
         term: u64,
@@ -174,7 +174,7 @@ impl State {
         }
     }
 
-    #[tracing::instrument(skip(self))]
+    #[tracing::instrument(level = "debug", skip(self))]
     pub fn handle_votereq(&self, term: u64, change_idx: u64, id: u64) -> FromRS {
         if self.term() > term {
             return FromRS::NotVoting;

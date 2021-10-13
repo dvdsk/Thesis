@@ -70,7 +70,7 @@ impl VoteCount {
     }
 }
 
-#[tracing::instrument]
+#[tracing::instrument(level = "debug")]
 async fn request_and_register(
     addr: SocketAddr,
     term: u64,
@@ -96,7 +96,7 @@ async fn request_and_register(
     Some(())
 }
 
-#[tracing::instrument]
+#[tracing::instrument(level = "debug", skip(state, chart))]
 async fn request_and_count_votes(port: u16, state: &State, chart: &Chart) -> ElectionResult {
     let count = VoteCount::new(state.config.cluster_size);
     let term = state.term();
@@ -122,7 +122,7 @@ async fn request_and_count_votes(port: u16, state: &State, chart: &Chart) -> Ele
     return res;
 }
 
-#[tracing::instrument]
+#[tracing::instrument(level = "debug", skip(state,chart))]
 async fn host_election(port: u16, state: &State, chart: &Chart) -> ElectionResult {
     info!("hosting leader election");
     state.set_candidate();

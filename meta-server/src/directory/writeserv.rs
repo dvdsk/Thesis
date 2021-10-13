@@ -67,7 +67,7 @@ impl Directory {
         Ok(())
     }
 
-    #[tracing::instrument(skip(self))]
+    #[tracing::instrument(level = "debug", skip(self))]
     pub async fn rmdir(&mut self, path: PathString) -> Result<(), DbError> {
         // no special measures needed, open file leases inside the dir wil 
         // expire and can then no longer be opened
@@ -76,7 +76,7 @@ impl Directory {
         self.consistent_change(change, apply_to_db).await
     }
 
-    #[tracing::instrument(skip(self))]
+    #[tracing::instrument(level = "debug", skip(self))]
     pub async fn mkdir(&mut self, path: PathString) -> Result<(), DbError> {
         let change = Change::DirAdded(path.clone());
         let apply_to_db = |db: &mut Db| db.mkdir(path);
