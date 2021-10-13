@@ -21,6 +21,16 @@ function wait_for_allocation()
 	echo "" >&2
 }
 
+function to_infiniband_ips()
+{
+	SITE_IP=10.149.1
+	for node in $@; do
+		node_id=$(echo ${node:5:6} | sed 's/^0*//') #node102 -> 02
+		printf "${SITE_IP}.${node_id} "
+	done
+	echo ""
+}
+
 function window_cmd()
 {
 	local node="$1"

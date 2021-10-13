@@ -16,26 +16,29 @@ touch $run_numb.last_run
 
 # deploy cluster
 client_port=50978
-numb_nodes=3
+nserver_nodes=3
 bin="meta-server"
 args="
 	--client-port $client_port \
-	--cluster-size $numb_nodes \
+	--cluster-size $nserver_nodes \
 	--control-port 50972 \
 	--tracing-endpoint fs1.cm.cluster \
 	--run-numb $run_numb"
 
-res=$(deploy $numb_nodes $bin $args)
+res=$(deploy $nserver_nodes $bin $args)
 echo $res
 resv_numb1=$(echo $res | cut -d " " -f 1)
-nodes=$(echo $res | cut -d " " -f 2-)
-ips=$(to_infiniband_ips $nodes)
+server_nodes=$(echo $res | cut -d " " -f 2-)
+
+# deploy clients
+client_nodes=1
+server_ips=$(to_infiniband_ips $server_nodes)
 
 echo giving fs-cluster time to find eachother and elect a leader
 sleep 1
 
-args="$client_port $ips"
-res=$(deploy 1 "test_mkdir" $args)
+args="$client_port $server_ips"
+res=$(deploy $client_nodes "bench_mkdir" $args)
 resv_numb2=$(echo $res | cut -d " " -f 1)
 attach cluster_b
 
