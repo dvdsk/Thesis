@@ -69,9 +69,10 @@ impl State {
 
     /// may only be called by master and only from the
     /// readservers publish function
-    pub fn increase_change_idx(&self) -> u64 {
-        let prev = self.change_idx.fetch_add(1, ORD);
-        prev+1
+    pub fn increment_change_idx(&self) -> u64 {
+        let new = self.change_idx.fetch_add(1, ORD) + 1;
+        info!("incremented change idx, now: {}", new);
+        new
     }
 
     pub fn increase_term(&self) -> u64 {
@@ -81,10 +82,13 @@ impl State {
             in which case candidate should still be true otherwise this 
             can race with resetting voted_for"
         );
-        self.term.fetch_add(1, ORD)
+        let old = self.term.fetch_add(1, ORD);
+        info!("incrementing term, was: {}", old);
+        old
     }
 
     pub fn set_term(&self, val: u64) {
+        info!("overriding term to {}", val);
         self.term.store(val, ORD)
     }
 
@@ -106,7 +110,10 @@ impl State {
         loop {
             let our_term = self.term();
             if term < our_term {
-                warn!("ignoring hb from main: {:?}, term to old)", source);
+                warn!(
+                    "ignoring hb from main: {:?}, term {} to old (our term: {}))",
+                    source, term, our_term
+                );
                 return Err(());
             }
             if term >= our_term {
@@ -127,10 +134,13 @@ impl State {
         if let Err(_) = self.check_term(term, source) {
             return;
         }
-        assert!(
-            change_idx >= self.change_idx(),
-            "master change idx should never be lower!"
-        );
+        let our_change_idx = self.change_idx();
+        if change_idx < our_change_idx {
+            error!(
+                "master change idx ({}) should never be lower the ours ({})!",
+                change_idx, our_change_idx
+            );
+        }
         if change_idx > self.change_idx() {
             self.outdated.notify_one();
             return;

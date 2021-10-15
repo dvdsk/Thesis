@@ -39,14 +39,14 @@ tmp/cargo: | tmp
 .PHONY: client_examples
 client_examples: REBUILD_ALWAYS
 client_examples: | tmp/cargo tmp/target/client
-	tmp/cargo/bin/cargo build --examples --manifest-path client/Cargo.toml
+	tmp/cargo/bin/cargo build --examples --manifest-path client/Cargo.toml --release
 	mkdir -p bin
 
 bin/meta-server: REBUILD_ALWAYS
 bin/meta-server: | tmp/cargo tmp/target/meta-server
-	tmp/cargo/bin/cargo build --manifest-path meta-server/Cargo.toml
+	tmp/cargo/bin/cargo build --manifest-path meta-server/Cargo.toml --release
 	mkdir -p bin
-	cp ${PWD}/{meta-server/target/debug/,bin/}meta-server
+	cp ${PWD}/{meta-server/target/release/,bin/}meta-server
 
 bin/discovery-exchange-id: REBUILD_ALWAYS
 bin/discovery-exchange-id: | tmp/cargo tmp/target/discovery

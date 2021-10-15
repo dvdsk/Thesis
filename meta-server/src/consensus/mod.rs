@@ -1,6 +1,7 @@
 use crate::server_conn::protocol::{FromRS, ToRs};
 use client_protocol::connection;
 use discovery::Chart;
+use tracing::info;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
@@ -13,7 +14,7 @@ pub use replicate::update;
 mod state;
 pub use state::State;
 
-/// heartbeats are send every HB_TIMEOUT/2 seconds
+/// heartbeats are send every HB_TIMEOUT/2 seconds, 200ms seems to be the lowest
 pub const HB_TIMEOUT: Duration = Duration::from_millis(200);
 
 #[derive(Clone, Debug)]
@@ -26,33 +27,40 @@ impl HbControl {
         (Self(tx), rx)
     }
     pub async fn delay(&mut self) {
-        let next_hb = Instant::now() + HB_TIMEOUT / 2;
+        let next_hb = Instant::now() + HB_TIMEOUT.mul_f32(1.2);
+        // let next_hb = Instant::now() + Duration::from_millis(2000);
         self.0.send_async(next_hb).await.unwrap();
+        // // ensure any previous heartbeat got out
+        // tokio::time::sleep(Duration::from_millis(20)).await;
     }
 }
 
 pub async fn maintain_heartbeat(state: Arc<State>, chart: Chart, mut rx: flume::Receiver<Instant>) {
-    let mut next_hb = Instant::now() + HB_TIMEOUT / 2;
     loop {
-        let term = state.increase_term();
+        let term = state.term();
+        let change_idx = state.change_idx();
         let heartbeats = chart
             .adresses()
             .into_iter()
-            .map(|addr| send_hb(addr, term, state.change_idx()));
-
+            .map(|addr| send_hb(addr, term, change_idx));
         let send_all = futures::future::join_all(heartbeats);
+        info!("send hb with ci: {}", change_idx);
+        let next_hb = Instant::now() + HB_TIMEOUT / 2;
         let _ = timeout_at(next_hb, send_all).await;
-        next_hb = sleep_prolongable(next_hb, &mut rx).await;
+        sleep_prolongable(next_hb, &mut rx).await;
     }
 }
 
-async fn sleep_prolongable(mut next_hb: Instant, rx: &mut flume::Receiver<Instant>) -> Instant {
+async fn sleep_prolongable(mut next_hb: Instant, rx: &mut flume::Receiver<Instant>) {
     loop {
         next_hb = tokio::select! {
             biased; // always first poll the recv future
-            new = rx.recv_async() => new.unwrap(),
+            new = rx.recv_async() => {
+                info!("hb delayed");
+                new.unwrap()
+            }
             _ = sleep_until(next_hb) => {
-                return next_hb + HB_TIMEOUT / 2; 
+                return 
             }
         };
     }

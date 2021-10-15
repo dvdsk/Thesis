@@ -173,7 +173,7 @@ async fn server(
 async fn main() {
     let opt = Opt::from_args();
     setup_logging();
-    setup_tracing(&opt);
+    // setup_tracing(&opt);
 
     let id = id_from_mac();
     let (sock, chart) = discovery::setup(id, opt.control_port).await;

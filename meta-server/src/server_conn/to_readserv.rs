@@ -25,7 +25,7 @@ impl ReadServers {
     }
     #[tracing::instrument(level = "debug", skip(self, state))]
     pub async fn publish(&self, state: &State, change: Change) -> PubResult {
-        let change_idx = state.increase_change_idx();
+        let change_idx = state.increment_change_idx();
         let msg = ToRs::DirectoryChange(state.term(), change_idx, change);
         let reached = self.0.lock().await.send_to_readservers(msg).await as u16;
         tracing::info!("reached {} servers", reached);
@@ -64,7 +64,7 @@ async fn send_confirm(msg: ToRs, conn: &mut RsStream) -> Option<()> {
             None
         }
         Some(other) => {
-            warn!("got invalid response from peer: {:?}", other);
+            warn!("got invalid response from readserver: {:?}", other);
             None
         }
     }
@@ -84,7 +84,7 @@ async fn conn_and_send(msg: ToRs, ip: IpAddr, port: u16) -> Result<(IpAddr, RsSt
     let addr = SocketAddr::from((ip, port));
     let stream = TcpStream::connect(addr).await.map_err(|_| ())?;
     let mut conn: RsStream = connection::wrap(stream);
-    match timeout(HB_TIMEOUT, send_confirm(msg, &mut conn)).await {
+    match timeout(HB_TIMEOUT/2, send_confirm(msg, &mut conn)).await {
         Err(_) => Err(()),
         Ok(None) => Err(()),
         Ok(Some(_)) => Ok((ip, conn)),

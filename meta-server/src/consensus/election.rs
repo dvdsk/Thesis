@@ -24,7 +24,7 @@ async fn monitor_heartbeat(state: &State) {
     use rand::{Rng, SeedableRng};
     let mut rng = rand::rngs::SmallRng::from_entropy();
 
-    let random_dur = rng.gen_range(Duration::from_secs(0)..HB_TIMEOUT);
+    let random_dur = rng.gen_range(Duration::from_secs(0)..Duration::from_millis(500));
     let mut hb_deadline = Instant::now() + HB_TIMEOUT + random_dur;
     loop {
         match timeout_at(hb_deadline, state.got_valid_hb.notified()).await {
