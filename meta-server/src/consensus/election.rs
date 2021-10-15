@@ -51,7 +51,7 @@ struct VoteCount {
 impl VoteCount {
     pub fn new(cluster_size: u16) -> Self {
         Self {
-            majority: (cluster_size as f32 * 0.5).ceil() as u16,
+            majority: (cluster_size as f32 * 0.5).floor() as u16 + 1,
             count: AtomicU16::new(1), // we vote for ourself
             notify: Notify::new(),
         }
