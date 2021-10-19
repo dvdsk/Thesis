@@ -17,7 +17,7 @@ fn setup_tracing() {
 }
 
 async fn make_list(wconn: &mut WriteServer, prefix: &str) {
-    for numb in 0..300 {
+    for numb in 0..30 {
         let path = format!("{}/{}", prefix, numb);
         mkdir(wconn, &path).await;
     }
@@ -37,14 +37,17 @@ async fn main() {
         .map(char::from)
         .collect();
     make_list(&mut wconn, &prefix).await;
+    tracing::info!("made list");
 
-    for _ in 0..100 {
+    for _ in 0..5 {
         let list = list.clone();
         let prefix = prefix.clone();
         tokio::spawn(async move {
+            tracing::info!("spawned job");
             let mut rconn = ReadServer::from_serverlist(list).await.unwrap();
             for _ in 0..10 {
                 let _ = ls(&mut rconn, &prefix).await;
+                tracing::info!("ran ls");
             }
         });
     }

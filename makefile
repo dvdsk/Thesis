@@ -55,10 +55,13 @@ bin/discovery-exchange-id: | tmp/cargo tmp/target/discovery
 	cp ${PWD}/{discovery/target/debug/examples/exchange_id,bin/discovery-exchange-id}
 
 bin/test_mkdir: client_examples
-	cp ${PWD}/{client/target/debug/examples/mkdir,bin/test_mkdir}
+	cp ${PWD}/{client/target/release/examples/mkdir,bin/test_mkdir}
 
 bin/bench_mkdir: client_examples
-	cp ${PWD}/{client/target/debug/examples/bench_mkdir,bin/bench_mkdir}
+	cp ${PWD}/{client/target/release/examples/bench_mkdir,bin/bench_mkdir}
+
+bin/bench_ls: client_examples
+	cp ${PWD}/{client/target/release/examples,bin}/bench_ls
 
 #----------------------------------------------------------------------------
 # Other
@@ -78,6 +81,8 @@ test_mkdir: bin/test_mkdir bin/meta-server
 bench_mkdir: bin/bench_mkdir bin/meta-server
 	bash scripts/bench/mkdir.sh
 
+bench_ls: bin/bench_ls bin/meta-server
+	bash scripts/bench/ls.sh
 
 .PHONY: clean REBUILD_ALWAYS
 clean: 

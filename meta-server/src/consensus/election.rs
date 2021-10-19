@@ -24,18 +24,21 @@ async fn monitor_heartbeat(state: &State) {
     use rand::{Rng, SeedableRng};
     let mut rng = rand::rngs::SmallRng::from_entropy();
 
-    let random_dur = rng.gen_range(Duration::from_secs(0)..Duration::from_millis(500));
-    let mut hb_deadline = Instant::now() + HB_TIMEOUT + random_dur;
     loop {
+        let random_dur = rng.gen_range(Duration::from_secs(0)..HB_TIMEOUT);
+        let hb_deadline = Instant::now() + HB_TIMEOUT + random_dur;
         match timeout_at(hb_deadline, state.got_valid_hb.notified()).await {
-            Err(_timeout) => {
-                warn!("heartbeat timed out");
+            Err(elapsed) => {
+                warn!("heartbeat timed out, elapsed without hb: {:?}", elapsed);
                 return;
             }
             Ok(_) => {
-                let random_dur = rng.gen_range(Duration::from_secs(0)..HB_TIMEOUT);
-                hb_deadline = Instant::now() + HB_TIMEOUT + random_dur;
-                trace!("hb timeout in {} ms", hb_deadline.saturating_duration_since(Instant::now()).as_millis()); 
+                info!(
+                    "hb timeout in {} ms",
+                    hb_deadline
+                        .saturating_duration_since(Instant::now())
+                        .as_millis()
+                );
             }
         }
     }
@@ -122,7 +125,7 @@ async fn request_and_count_votes(port: u16, state: &State, chart: &Chart) -> Ele
     return res;
 }
 
-#[tracing::instrument(level = "debug", skip(state,chart))]
+#[tracing::instrument(level = "debug", skip(state, chart))]
 async fn host_election(port: u16, state: &State, chart: &Chart) -> ElectionResult {
     info!("hosting leader election");
     state.set_candidate();

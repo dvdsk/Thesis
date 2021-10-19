@@ -126,6 +126,7 @@ impl State {
             break;
         }
         self.got_valid_hb.notify_one();
+        info!("notified hb watcher");
         Ok(())
     }
 

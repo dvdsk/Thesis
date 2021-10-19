@@ -15,7 +15,7 @@ mod state;
 pub use state::State;
 
 /// heartbeats are send every HB_TIMEOUT/2 seconds, 200ms seems to be the lowest
-pub const HB_TIMEOUT: Duration = Duration::from_millis(200);
+pub const HB_TIMEOUT: Duration = Duration::from_millis(400);
 
 #[derive(Clone, Debug)]
 pub struct HbControl(flume::Sender<Instant>);
@@ -28,10 +28,7 @@ impl HbControl {
     }
     pub async fn delay(&mut self) {
         let next_hb = Instant::now() + HB_TIMEOUT.mul_f32(1.2);
-        // let next_hb = Instant::now() + Duration::from_millis(2000);
         self.0.send_async(next_hb).await.unwrap();
-        // // ensure any previous heartbeat got out
-        // tokio::time::sleep(Duration::from_millis(20)).await;
     }
 }
 
@@ -44,7 +41,6 @@ pub async fn maintain_heartbeat(state: Arc<State>, chart: Chart, mut rx: flume::
             .into_iter()
             .map(|addr| send_hb(addr, term, change_idx));
         let send_all = futures::future::join_all(heartbeats);
-        info!("send hb with ci: {}", change_idx);
         let next_hb = Instant::now() + HB_TIMEOUT / 2;
         let _ = timeout_at(next_hb, send_all).await;
         sleep_prolongable(next_hb, &mut rx).await;

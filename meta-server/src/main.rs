@@ -69,7 +69,6 @@ fn setup_tracing(opt: &Opt) {
             KeyValue::new("instance", instance_name.to_owned()),
             KeyValue::new("run", opt.run_numb),
         ])
-
         .install_batch(opentelemetry::runtime::Tokio)
         .unwrap();
 
@@ -77,16 +76,19 @@ fn setup_tracing(opt: &Opt) {
     use tracing_subscriber::{fmt, Registry};
     let telemetry = tracing_opentelemetry::subscriber().with_tracer(tracer);
 
-    let subscriber = Registry::default()
-        .with(telemetry);
+    let subscriber = Registry::default().with(telemetry);
     tracing::collect::set_global_default(subscriber).unwrap();
 }
 
 fn setup_logging() {
     use simplelog::*;
+    let config = ConfigBuilder::default()
+        .set_time_format_str("%T%.3f")
+        .build();
+
     TermLogger::init(
         LevelFilter::Info,
-        Config::default(),
+        config,
         TerminalMode::Mixed,
         ColorChoice::Auto,
     )
@@ -110,7 +112,7 @@ async fn write_server(
     info!("starting write server");
 }
 
-#[tracing::instrument(skip(state,chart,dir))]
+#[tracing::instrument(skip(state, chart, dir))]
 async fn host_meta_or_update(
     client_port: u16,
     state: &Arc<consensus::State>,
@@ -127,7 +129,7 @@ async fn host_meta_or_update(
     }
 }
 
-#[tracing::instrument(skip(state, chart,dir))]
+#[tracing::instrument(skip(state, chart, dir))]
 async fn read_server(
     opt: &Opt,
     state: &Arc<consensus::State>,
@@ -150,7 +152,7 @@ async fn read_server(
     }
 }
 
-#[tracing::instrument(skip(state,dir,chart))]
+#[tracing::instrument(skip(state, dir, chart))]
 async fn server(
     opt: Opt,
     state: Arc<consensus::State>,
