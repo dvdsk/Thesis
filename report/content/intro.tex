@@ -4,4 +4,4 @@ A key problem with the first approaches is the dedicated node, the meta data nod
 
 Here I made a prototype implementing a subset of GoogleFs using the raft\cite{raft} concensus algorithm to turn the one meta node into a failure proof cluster. The cluster has one node responsible for meta-data modifications, the other cluster members activly host consistant read only meta-data. 
 
-In the \cref{sec:impl} I will detail my implementation, then in \cref{sec:res} we glance at the performance of the system. Finally I conclude how well the approache works in \cref{sec:conc}. Instructions on how to deploy the system for testing are in \cref{sec:deploy}.
+In the \cref{sec:impl} I will detail my implementation, then in \cref{sec:res} we test the system. Finally I conclude how well the approache works in \cref{sec:conc}. Instructions on how to deploy the system for testing are in \cref{sec:deploy}.
