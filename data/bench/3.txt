@@ -1,0 +1,68 @@
+3
+conns: 2, elapsed: 14.663355ms
+conns: 4, elapsed: 22.119445ms
+conns: 8, elapsed: 42.993018ms
+conns: 16, elapsed: 315.477246ms
+conns: 32, elapsed: 346.968455ms
+conns: 64, elapsed: 460.445117ms
+conns: 128, elapsed: 635.627372ms
+conns: 256, elapsed: 1.848069813s
+conns: 512, elapsed: 2.550123655s
+conns: 1024, elapsed: 3.951157681s
+conns: 2048, elapsed: 8.408739796s
+conns: 4096, elapsed: 25.197661361s
+
+4
+conns: 2, elapsed: 169.127803ms
+conns: 4, elapsed: 223.840732ms
+conns: 8, elapsed: 285.045141ms
+conns: 16, elapsed: 343.243796ms
+conns: 32, elapsed: 481.393309ms
+conns: 64, elapsed: 588.959344ms
+conns: 128, elapsed: 714.290625ms
+conns: 256, elapsed: 964.636316ms
+conns: 512, elapsed: 1.346443679s
+conns: 1024, elapsed: 3.07621848s
+conns: 2048, elapsed: 6.463473386s
+conns: 4096, elapsed: 8.560151802s
+
+conns: 2, elapsed: 14.96779ms
+conns: 4, elapsed: 24.389257ms
+conns: 8, elapsed: 37.282205ms
+conns: 16, elapsed: 251.612513ms
+conns: 32, elapsed: 345.974787ms
+conns: 64, elapsed: 413.712622ms
+conns: 128, elapsed: 578.770169ms
+conns: 256, elapsed: 830.265687ms
+conns: 512, elapsed: 2.194282485s
+conns: 1024, elapsed: 2.980160321s
+conns: 2048, elapsed: 6.897937665s
+conns: 4096, elapsed: 13.911419252s
+
+5
+conns: 2, elapsed: 14.510684ms
+conns: 4, elapsed: 24.065706ms
+conns: 8, elapsed: 27.864601ms
+conns: 16, elapsed: 245.793932ms
+conns: 32, elapsed: 317.651037ms
+conns: 64, elapsed: 373.298807ms
+conns: 128, elapsed: 492.465779ms
+conns: 256, elapsed: 777.374525ms
+conns: 512, elapsed: 960.578001ms
+conns: 1024, elapsed: 2.707936301s
+conns: 2048, elapsed: 3.726989861s
+conns: 4096, elapsed: 11.885154531s
+
+6 NOTE elections happinging all the time lots of nodes falling out
+conns: 2, elapsed: 171.079041ms
+conns: 4, elapsed: 228.363158ms
+conns: 8, elapsed: 303.942468ms
+conns: 16, elapsed: 449.880076ms
+conns: 32, elapsed: 586.687431ms
+conns: 64, elapsed: 762.186919ms
+conns: 128, elapsed: 968.640814ms
+conns: 256, elapsed: 1.460654198s
+conns: 512, elapsed: 2.884889332s
+conns: 1024, elapsed: 5.338341249s
+conns: 2048, elapsed: 13.100811245s
+conns: 4096, elapsed: 25.118385013s

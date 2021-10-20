@@ -68,16 +68,17 @@ pub trait Conn: Sized {
 }
 
 pub struct WriteServer {
-    list: ServerList,
+    pub list: ServerList,
     stream: ClientStream,
 }
 
 impl WriteServer {
-    async fn connect(list: &ServerList) -> Result<ClientStream, ConnError> {
+    async fn connect(list: &mut ServerList) -> Result<ClientStream, ConnError> {
         let mut addr = list
             .write_serv()
             .unwrap_or_else(|| list.random_server());
         if let Ok(stream) = TcpStream::connect(addr).await {
+            list.write_serv = Some(addr.ip());
             return Ok(connection::wrap(stream));
         }
 
@@ -97,13 +98,13 @@ impl WriteServer {
 
 #[async_trait]
 impl Conn for WriteServer {
-    async fn from_serverlist(list: ServerList) -> Result<Self, ConnError> {
-        let stream = Self::connect(&list).await?;
+    async fn from_serverlist(mut list: ServerList) -> Result<Self, ConnError> {
+        let stream = Self::connect(&mut list).await?;
         Ok(Self { list, stream })
     }
 
     async fn re_connect(&mut self) -> Result<(), ConnError> {
-        self.stream = Self::connect(&self.list).await?;
+        self.stream = Self::connect(&mut self.list).await?;
         Ok(())
     }
 

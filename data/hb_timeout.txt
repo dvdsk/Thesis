@@ -1,0 +1,278 @@
+13:42:15.590 [INFO] initialized change_idx to 0
+13:42:15.591 [INFO] server; opt=Opt { name: None, client_port: 50978, control_port: 50972, cluster_size: 3, tracing_endpoint: "fs1.cm
+.cluster", run_numb: 172 }
+13:42:24.387 [INFO] finished discovery
+13:42:24.387 [INFO] read_server; opt=Opt { name: None, client_port: 50978, control_port: 50972, cluster_size: 3, tracing_endpoint: "f
+s1.cm.cluster", run_numb: 172 }
+13:42:24.387 [INFO] host_meta_or_update; client_port=50978
+13:42:24.986 [INFO] overriding term to 2
+13:42:25.009 [INFO] new master: 10.141.0.4
+13:42:25.009 [INFO] notified hb watcher
+13:42:25.011 [INFO] hb timeout in 100 ms
+13:42:25.011 [INFO] notified hb watcher
+13:42:25.011 [INFO] hb timeout in 534 ms
+13:42:25.013 [WARN] dir added
+13:42:25.424 [INFO] notified hb watcher
+13:42:25.424 [INFO] hb timeout in 239 ms
+13:42:25.429 [WARN] dir added
+13:42:25.833 [INFO] notified hb watcher
+13:42:25.834 [INFO] hb timeout in 48 ms
+13:42:25.834 [WARN] dir added
+13:42:26.237 [INFO] notified hb watcher
+13:42:26.237 [INFO] hb timeout in 390 ms
+13:42:26.237 [WARN] dir added
+13:42:26.648 [INFO] notified hb watcher
+13:42:26.648 [INFO] hb timeout in 51 ms
+13:42:26.648 [WARN] dir added
+13:42:27.066 [INFO] notified hb watcher
+13:42:27.066 [INFO] hb timeout in 188 ms
+13:42:27.067 [WARN] dir added
+13:42:27.468 [INFO] notified hb watcher
+13:42:27.468 [INFO] hb timeout in 70 ms
+13:42:27.468 [WARN] dir added
+13:42:27.879 [INFO] notified hb watcher
+13:42:27.879 [INFO] hb timeout in 289 ms
+13:42:27.879 [WARN] dir added
+13:42:28.285 [INFO] notified hb watcher
+13:42:28.285 [INFO] hb timeout in 338 ms
+13:42:28.286 [WARN] dir added
+13:42:28.691 [INFO] notified hb watcher
+13:42:28.692 [INFO] hb timeout in 145 ms
+13:42:28.692 [WARN] dir added
+13:42:29.101 [INFO] notified hb watcher
+13:42:29.101 [INFO] hb timeout in 96 ms
+13:42:29.102 [WARN] dir added
+13:42:29.502 [INFO] notified hb watcher
+13:42:29.502 [INFO] hb timeout in 105 ms
+13:42:29.502 [WARN] dir added
+13:42:29.906 [INFO] notified hb watcher
+13:42:29.906 [INFO] hb timeout in 32 ms
+13:42:29.908 [WARN] dir added
+13:42:30.312 [INFO] notified hb watcher
+13:42:30.312 [INFO] hb timeout in 24 ms
+13:42:30.312 [WARN] dir added
+13:42:30.717 [INFO] notified hb watcher
+13:42:30.718 [INFO] hb timeout in 280 ms
+13:42:30.718 [INFO] hb timeout in 280 ms
+13:42:30.718 [WARN] dir added
+13:42:31.125 [INFO] notified hb watcher
+13:42:31.125 [INFO] hb timeout in 255 ms
+13:42:31.125 [WARN] dir added
+13:42:31.531 [INFO] notified hb watcher
+13:42:31.531 [INFO] hb timeout in 165 ms
+13:42:31.531 [WARN] dir added
+13:42:31.935 [INFO] notified hb watcher
+13:42:31.935 [INFO] hb timeout in 344 ms
+13:42:31.936 [WARN] dir added
+13:42:32.340 [INFO] notified hb watcher
+13:42:32.341 [INFO] hb timeout in 149 ms
+13:42:32.342 [WARN] dir added
+13:42:32.745 [INFO] notified hb watcher
+13:42:32.745 [INFO] hb timeout in 265 ms
+13:42:32.746 [WARN] dir added
+13:42:33.151 [INFO] notified hb watcher
+13:42:33.151 [INFO] hb timeout in 82 ms
+13:42:33.154 [WARN] dir added
+13:42:33.554 [INFO] notified hb watcher
+13:42:33.554 [INFO] hb timeout in 258 ms
+13:42:33.554 [WARN] dir added
+13:42:33.958 [INFO] notified hb watcher
+13:42:33.958 [INFO] hb timeout in 75 ms
+13:42:33.958 [WARN] dir added
+13:42:34.362 [INFO] notified hb watcher
+13:42:34.362 [INFO] hb timeout in 327 ms
+13:42:34.363 [WARN] dir added
+13:42:34.768 [INFO] notified hb watcher
+13:42:34.768 [INFO] hb timeout in 64 ms
+13:42:34.770 [WARN] dir added
+13:42:35.169 [INFO] notified hb watcher
+13:42:35.169 [INFO] hb timeout in 265 ms
+13:42:35.169 [WARN] dir added
+13:42:35.574 [INFO] notified hb watcher
+13:42:35.574 [INFO] hb timeout in 114 ms
+13:42:35.575 [WARN] dir added
+13:42:35.980 [INFO] notified hb watcher
+13:42:35.980 [INFO] hb timeout in 7 ms
+13:42:35.980 [WARN] dir added
+13:42:36.384 [INFO] notified hb watcher
+13:42:36.384 [INFO] hb timeout in 212 ms
+13:42:36.385 [WARN] dir added
+13:42:36.787 [INFO] notified hb watcher
+13:42:36.787 [INFO] hb timeout in 221 ms
+13:42:36.788 [WARN] dir added
+13:42:37.210 [INFO] overriding term to 3
+13:42:37.216 [INFO] new master: 10.141.0.2
+13:42:37.216 [INFO] notified hb watcher
+13:42:37.221 [INFO] hb timeout in 2 ms
+13:42:37.273 [WARN] ignoring hb from main: 10.141.0.4:48107, term 2 to old (our term: 3))
+13:42:37.415 [INFO] notified hb watcher
+13:42:37.416 [INFO] hb timeout in 541 ms
+13:42:37.473 [WARN] ignoring hb from main: 10.141.0.4:48113, term 2 to old (our term: 3))
+13:42:37.416 [INFO] hb timeout in 541 ms                                                                                  [1180/1288]
+13:42:37.473 [WARN] ignoring hb from main: 10.141.0.4:48113, term 2 to old (our term: 3))
+13:42:37.618 [INFO] notified hb watcher
+13:42:37.622 [INFO] hb timeout in 314 ms
+13:42:37.673 [WARN] ignoring hb from main: 10.141.0.4:48119, term 2 to old (our term: 3))
+13:42:37.820 [INFO] notified hb watcher
+13:42:37.822 [INFO] hb timeout in 423 ms
+13:42:37.877 [WARN] ignoring hb from main: 10.141.0.4:48125, term 2 to old (our term: 3))
+13:42:38.024 [INFO] notified hb watcher
+13:42:38.026 [INFO] hb timeout in 234 ms
+13:42:38.079 [WARN] ignoring hb from main: 10.141.0.4:48131, term 2 to old (our term: 3))
+13:42:38.226 [INFO] notified hb watcher
+13:42:38.228 [INFO] hb timeout in 278 ms
+13:42:38.280 [WARN] ignoring hb from main: 10.141.0.4:48137, term 2 to old (our term: 3))
+13:42:38.427 [INFO] notified hb watcher
+13:42:38.431 [INFO] hb timeout in 526 ms
+13:42:38.482 [WARN] ignoring hb from main: 10.141.0.4:48143, term 2 to old (our term: 3))
+13:42:38.630 [INFO] notified hb watcher
+13:42:38.633 [INFO] hb timeout in 257 ms
+13:42:38.683 [WARN] ignoring hb from main: 10.141.0.4:48149, term 2 to old (our term: 3))
+13:42:38.837 [INFO] notified hb watcher
+13:42:38.839 [INFO] hb timeout in 314 ms
+13:42:38.886 [WARN] ignoring hb from main: 10.141.0.4:48155, term 2 to old (our term: 3))
+13:42:39.034 [INFO] notified hb watcher
+13:42:39.036 [INFO] hb timeout in 302 ms
+13:42:39.090 [WARN] ignoring hb from main: 10.141.0.4:48161, term 2 to old (our term: 3))
+13:42:39.239 [INFO] notified hb watcher
+13:42:39.241 [INFO] hb timeout in 567 ms
+13:42:39.294 [WARN] ignoring hb from main: 10.141.0.4:48167, term 2 to old (our term: 3))
+13:42:39.444 [INFO] notified hb watcher
+13:42:39.446 [INFO] hb timeout in 288 ms
+13:42:39.489 [WARN] ignoring hb from main: 10.141.0.4:48173, term 2 to old (our term: 3))
+13:42:39.647 [INFO] notified hb watcher
+13:42:39.650 [INFO] hb timeout in 564 ms
+13:42:39.689 [WARN] ignoring hb from main: 10.141.0.4:48179, term 2 to old (our term: 3))
+13:42:39.844 [INFO] notified hb watcher
+13:42:39.848 [INFO] hb timeout in 497 ms
+13:42:39.899 [WARN] ignoring hb from main: 10.141.0.4:48185, term 2 to old (our term: 3))
+13:42:40.049 [INFO] notified hb watcher
+13:42:40.051 [INFO] hb timeout in 327 ms
+13:42:40.099 [WARN] ignoring hb from main: 10.141.0.4:48191, term 2 to old (our term: 3))
+13:42:40.250 [INFO] notified hb watcher
+13:42:40.252 [INFO] hb timeout in 339 ms
+13:42:40.298 [WARN] ignoring hb from main: 10.141.0.4:48197, term 2 to old (our term: 3))
+13:42:40.450 [INFO] notified hb watcher
+13:42:40.453 [INFO] hb timeout in 591 ms
+13:42:40.504 [WARN] ignoring hb from main: 10.141.0.4:48203, term 2 to old (our term: 3))
+13:42:40.655 [INFO] notified hb watcher
+13:42:40.659 [INFO] hb timeout in 272 ms
+13:42:40.703 [WARN] ignoring hb from main: 10.141.0.4:48209, term 2 to old (our term: 3))
+13:42:40.857 [INFO] notified hb watcher
+13:42:40.861 [INFO] hb timeout in 360 ms
+13:42:40.905 [WARN] ignoring hb from main: 10.141.0.4:48215, term 2 to old (our term: 3))
+13:42:41.058 [INFO] notified hb watcher
+13:42:41.061 [INFO] hb timeout in 308 ms
+13:42:41.104 [WARN] ignoring hb from main: 10.141.0.4:48221, term 2 to old (our term: 3))
+13:42:41.061 [INFO] hb timeout in 308 ms                                                                                  [1126/1288]
+13:42:41.104 [WARN] ignoring hb from main: 10.141.0.4:48221, term 2 to old (our term: 3))
+13:42:41.259 [INFO] notified hb watcher
+13:42:41.262 [INFO] hb timeout in 227 ms
+13:42:41.305 [WARN] ignoring hb from main: 10.141.0.4:48227, term 2 to old (our term: 3))
+13:42:41.464 [INFO] notified hb watcher
+13:42:41.468 [INFO] hb timeout in 377 ms
+13:42:41.508 [WARN] ignoring hb from main: 10.141.0.4:48233, term 2 to old (our term: 3))
+13:42:41.661 [INFO] notified hb watcher
+13:42:41.666 [INFO] hb timeout in 511 ms
+13:42:41.709 [WARN] ignoring hb from main: 10.141.0.4:48239, term 2 to old (our term: 3))
+13:42:41.862 [INFO] notified hb watcher
+13:42:41.865 [INFO] hb timeout in 599 ms
+13:42:41.912 [WARN] ignoring hb from main: 10.141.0.4:48245, term 2 to old (our term: 3))
+13:42:42.063 [INFO] notified hb watcher
+13:42:42.068 [INFO] hb timeout in 301 ms
+13:42:42.113 [WARN] ignoring hb from main: 10.141.0.4:48251, term 2 to old (our term: 3))
+13:42:42.265 [INFO] notified hb watcher
+13:42:42.268 [INFO] hb timeout in 435 ms
+13:42:42.313 [WARN] ignoring hb from main: 10.141.0.4:48257, term 2 to old (our term: 3))
+13:42:42.467 [INFO] notified hb watcher
+13:42:42.470 [INFO] hb timeout in 224 ms
+13:42:42.516 [WARN] ignoring hb from main: 10.141.0.4:48263, term 2 to old (our term: 3))
+13:42:42.670 [INFO] notified hb watcher
+13:42:42.674 [INFO] hb timeout in 453 ms
+13:42:42.716 [WARN] ignoring hb from main: 10.141.0.4:48269, term 2 to old (our term: 3))
+13:42:42.870 [INFO] notified hb watcher
+13:42:42.876 [INFO] hb timeout in 247 ms
+13:42:42.922 [WARN] ignoring hb from main: 10.141.0.4:48275, term 2 to old (our term: 3))
+13:42:43.074 [INFO] notified hb watcher
+13:42:43.091 [INFO] hb timeout in 560 ms
+13:42:43.124 [WARN] ignoring hb from main: 10.141.0.4:48281, term 2 to old (our term: 3))
+13:42:43.275 [INFO] notified hb watcher
+13:42:43.277 [INFO] hb timeout in 447 ms
+13:42:43.326 [WARN] ignoring hb from main: 10.141.0.4:48287, term 2 to old (our term: 3))
+13:42:43.475 [INFO] notified hb watcher
+13:42:43.478 [INFO] hb timeout in 349 ms
+13:42:43.530 [WARN] ignoring hb from main: 10.141.0.4:48293, term 2 to old (our term: 3))
+13:42:43.679 [INFO] notified hb watcher
+13:42:43.684 [INFO] hb timeout in 265 ms
+13:42:43.729 [WARN] ignoring hb from main: 10.141.0.4:48299, term 2 to old (our term: 3))
+13:42:43.880 [INFO] notified hb watcher
+13:42:43.885 [INFO] hb timeout in 510 ms
+13:42:43.932 [WARN] ignoring hb from main: 10.141.0.4:48305, term 2 to old (our term: 3))
+13:42:44.083 [INFO] notified hb watcher
+13:42:44.089 [INFO] hb timeout in 380 ms
+13:42:44.136 [WARN] ignoring hb from main: 10.141.0.4:48311, term 2 to old (our term: 3))
+13:42:44.283 [INFO] notified hb watcher
+13:42:44.287 [INFO] hb timeout in 343 ms
+13:42:44.336 [WARN] ignoring hb from main: 10.141.0.4:48317, term 2 to old (our term: 3))
+13:42:44.488 [INFO] notified hb watcher
+13:42:44.493 [INFO] hb timeout in 486 ms
+13:42:44.535 [WARN] ignoring hb from main: 10.141.0.4:48323, term 2 to old (our term: 3))
+13:42:44.688 [INFO] notified hb watcher
+13:42:44.693 [INFO] hb timeout in 314 ms
+13:42:44.737 [WARN] ignoring hb from main: 10.141.0.4:48329, term 2 to old (our term: 3))
+13:42:44.693 [INFO] hb timeout in 314 ms                                                                                  [1072/1288]
+13:42:44.737 [WARN] ignoring hb from main: 10.141.0.4:48329, term 2 to old (our term: 3))
+13:42:44.892 [INFO] notified hb watcher
+13:42:44.895 [INFO] hb timeout in 327 ms
+13:42:44.942 [WARN] ignoring hb from main: 10.141.0.4:48335, term 2 to old (our term: 3))
+13:42:45.091 [INFO] notified hb watcher
+13:42:45.093 [INFO] hb timeout in 563 ms
+13:42:45.145 [WARN] ignoring hb from main: 10.141.0.4:48341, term 2 to old (our term: 3))
+13:42:45.296 [INFO] notified hb watcher
+13:42:45.302 [INFO] hb timeout in 324 ms
+13:42:45.345 [WARN] ignoring hb from main: 10.141.0.4:48347, term 2 to old (our term: 3))
+13:42:45.496 [INFO] notified hb watcher
+13:42:45.503 [INFO] hb timeout in 315 ms
+13:42:45.551 [WARN] ignoring hb from main: 10.141.0.4:48353, term 2 to old (our term: 3))
+13:42:45.701 [INFO] notified hb watcher
+13:42:45.704 [INFO] hb timeout in 378 ms
+13:42:45.750 [WARN] ignoring hb from main: 10.141.0.4:48359, term 2 to old (our term: 3))
+13:42:45.896 [INFO] notified hb watcher
+13:42:45.900 [INFO] hb timeout in 293 ms
+13:42:45.954 [WARN] ignoring hb from main: 10.141.0.4:48365, term 2 to old (our term: 3))
+13:42:46.097 [INFO] notified hb watcher
+13:42:46.100 [INFO] hb timeout in 408 ms
+13:42:46.155 [WARN] ignoring hb from main: 10.141.0.4:48371, term 2 to old (our term: 3))
+13:42:46.300 [INFO] notified hb watcher
+13:42:46.303 [INFO] hb timeout in 594 ms
+13:42:46.360 [WARN] ignoring hb from main: 10.141.0.4:48377, term 2 to old (our term: 3))
+13:42:46.498 [INFO] notified hb watcher
+13:42:46.502 [INFO] hb timeout in 302 ms
+13:42:46.563 [WARN] ignoring hb from main: 10.141.0.4:48383, term 2 to old (our term: 3))
+13:42:46.704 [INFO] notified hb watcher
+13:42:46.710 [INFO] hb timeout in 248 ms
+13:42:46.761 [WARN] ignoring hb from main: 10.141.0.4:48389, term 2 to old (our term: 3))
+13:42:46.905 [INFO] notified hb watcher
+13:42:46.909 [INFO] hb timeout in 366 ms
+13:42:46.964 [WARN] ignoring hb from main: 10.141.0.4:48397, term 2 to old (our term: 3))
+13:42:47.107 [INFO] notified hb watcher
+13:42:47.112 [INFO] hb timeout in 582 ms
+13:42:47.163 [WARN] ignoring hb from main: 10.141.0.4:48403, term 2 to old (our term: 3))
+13:42:47.308 [INFO] notified hb watcher
+13:42:47.312 [INFO] hb timeout in 392 ms
+13:42:47.366 [WARN] ignoring hb from main: 10.141.0.4:48409, term 2 to old (our term: 3))
+13:42:47.511 [INFO] notified hb watcher
+13:42:47.517 [INFO] hb timeout in 583 ms
+13:42:47.570 [WARN] ignoring hb from main: 10.141.0.4:48415, term 2 to old (our term: 3))
+13:42:47.713 [INFO] notified hb watcher
+13:42:47.720 [INFO] hb timeout in 526 ms
+13:42:47.776 [WARN] ignoring hb from main: 10.141.0.4:48421, term 2 to old (our term: 3))
+13:42:47.914 [INFO] notified hb watcher
+13:42:47.918 [INFO] hb timeout in 475 ms
+13:42:47.976 [WARN] ignoring hb from main: 10.141.0.4:48427, term 2 to old (our term: 3))
+13:42:48.117 [INFO] notified hb watcher
+13:42:48.121 [INFO] hb timeout in 223 ms
+13:42:48.176 [WARN] ignoring hb from main: 10.141.0.4:48433, term 2 to old (our term: 3))
+13:42:48.318 [INFO] notified hb watcher
+13:42:48.322 [INFO] hb timeout in 458 ms
+13:42:48.382 [WARN] ignoring hb from main: 10.141.0.4:48439, term 2 to old (our term: 3))
