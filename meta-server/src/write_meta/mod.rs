@@ -26,7 +26,7 @@ async fn rmdir(directory: &mut Directory, path: PathString) -> Response {
     }
 }
 
-#[instrument(skip(directory))]
+#[instrument(level = "debug", skip(directory))]
 async fn open(directory: &mut Directory, path: PathString, existance: Existence) -> Response {
     match directory.open(path, existance).await {
         Ok(_lease) => todo!(),
@@ -34,7 +34,7 @@ async fn open(directory: &mut Directory, path: PathString, existance: Existence)
     }
 }
 
-#[instrument(skip(directory, stream))]
+#[instrument(level = "debug", skip(directory, stream))]
 async fn client_conn(mut stream: ClientStream, mut directory: Directory) {
     while let Ok(msg) = stream.try_next().await {
         let msg = match msg {
@@ -46,7 +46,7 @@ async fn client_conn(mut stream: ClientStream, mut directory: Directory) {
 }
 
 
-#[instrument(skip(stream, directory))]
+#[instrument(level = "debug", skip(stream, directory))]
 async fn client_msg(stream: &mut ClientStream, msg: Request, directory: &mut Directory) {
     use Request::*;
     let response = match msg {

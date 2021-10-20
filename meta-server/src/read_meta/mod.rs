@@ -48,7 +48,6 @@ async fn client_msg(
     use Request::*;
     match msg {
         Ls(path) => {
-            info!("got ls req");
             let resp = Response::Ls(dir.ls(path));
             let _res = stream.send(resp).await;
         }

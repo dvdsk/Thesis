@@ -1,3 +1,5 @@
+use std::time::{Duration, Instant};
+
 use client::{ls, mkdir, Conn, ReadServer, ServerList, WriteServer};
 
 fn serverlist_from_args() -> ServerList {
@@ -17,7 +19,7 @@ fn setup_tracing() {
 }
 
 async fn make_list(wconn: &mut WriteServer, prefix: &str) {
-    for numb in 0..30 {
+    for numb in 0..20 {
         let path = format!("{}/{}", prefix, numb);
         mkdir(wconn, &path).await;
     }
@@ -25,6 +27,7 @@ async fn make_list(wconn: &mut WriteServer, prefix: &str) {
 
 #[tokio::main]
 async fn main() {
+    println!("bench ls started");
     setup_tracing();
     let list = serverlist_from_args();
 
@@ -39,16 +42,17 @@ async fn main() {
     make_list(&mut wconn, &prefix).await;
     tracing::info!("made list");
 
-    for _ in 0..5 {
+    let start = Instant::now();
+    let tasks = (0..2000).into_iter().map(|_| {
         let list = list.clone();
         let prefix = prefix.clone();
         tokio::spawn(async move {
-            tracing::info!("spawned job");
             let mut rconn = ReadServer::from_serverlist(list).await.unwrap();
-            for _ in 0..10 {
+            for _ in 0..1000 {
                 let _ = ls(&mut rconn, &prefix).await;
-                tracing::info!("ran ls");
             }
-        });
-    }
+        })
+    });
+    futures::future::join_all(tasks).await;
+    println!("elapsed: {:?}", start.elapsed());
 }
