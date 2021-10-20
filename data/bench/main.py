@@ -48,22 +48,23 @@ for cluster_size, data in data.items():
 
         y = np.array(measurements)
         x = x_for(y)
-        y = y/x/100
+        n_requests = np.array(x)*100
+        y = y / n_requests * 1000
 
-        plt.scatter(x, y, label=f"nodes: {cluster_size}")
+        plt.scatter(x, y, label=f"#nodes: {cluster_size}")
 
 label_pos = x_for(range(0, 12))
 label_text = [str(x) for x in label_pos]
 ax.set_yscale("log")
 ax.set_xscale("log")
-# ax.get_xaxis().get_major_formatter().labelOnlyBase = False
 ax.set_xticks(label_pos)
 ax.set_xticklabels(label_text)
-plt.minorticks_off()
+ax.set_yticks([0.025, 0.1, 0.5, 1])
+ax.set_yticklabels(["0.05", "0.1", "0.5", "1"])
+ax.tick_params(axis="x", which="minor", bottom=False)
 plt.xticks(rotation=45)
-plt.xlabel("parallel connections")
-plt.ylabel("request duration")
+plt.xlabel("# parallel connections")
+plt.ylabel("request duration (ms)")
 plt.legend()
 plt.tight_layout()
-plt.show()
 plt.savefig("../ls_request_dur.png", dpi=300)

@@ -22,4 +22,12 @@ As third test I focussed on the stablility and performance of the system under t
 	\label{fig:hbt}
 \end{figure}
 
-Finally we test read performance. I increase the load on the system until it starts malfunctioning
+Finally we test 'read' performance using the list directory request. I used a single client to open between 2 and 4096 simultanious connections to the cluster. Over each connection a list directory request was send 100 times. The total time between start and finish was measured for different combinations of simultaieous connections and cluster size. These times are converted to seconds per request. The results can be seen in \cref{fig:ls}. 
+It was difficult to geather the data as larger cluster sizes often ran into heartbeat issues. Except for the run with 6 nodes the data presented here is selected from succesful tests. To get this data the tests had te be ran many times.
+
+\begin{figure}[htbp]
+	\centering
+	\includegraphics{../data/ls_request_dur.png}
+	\caption{Average duration of a list directory request vs number of simultanious connections for various cluster sizes (\#nodes). The run with with 6 nodes experianced problems during its run slowing it down.}
+	\label{fig:ls}
+\end{figure}
