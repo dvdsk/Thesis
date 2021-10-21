@@ -22,12 +22,20 @@ As third test I focussed on the stablility and performance of the system under t
 	\label{fig:hbt}
 \end{figure}
 
-Finally we test 'read' performance using the list directory request. I used a single client to open between 2 and 4096 simultanious connections to the cluster. Over each connection a list directory request was send 100 times. The total time between start and finish was measured for different combinations of simultaieous connections and cluster size. These times are converted to seconds per request. The results can be seen in \cref{fig:ls}. 
+Finally we test 'read' performance using the list directory request. I used a single client to open between 2 and 4096 simultanious connections to the cluster. Over each connection a list directory request was send 100 times. The total time between start and finish was measured for different combinations of simultaieous connections and cluster size. These times are converted to milliseconds per request. The results can be seen in \cref{fig:ls_log} and \cref{fig:ls_lin}. 
 It was difficult to geather the data as larger cluster sizes often ran into heartbeat issues. Except for the run with 6 nodes the data presented here is selected from succesful tests. To get this data the tests had te be ran many times.
+Note in \cref{fig:ls_log} as the number of requests increases the average request time goes down logarithmicly. In \cref{fig:ls_lin} we see that (excluding the malfunctioning 6 node run) larger cluster sizes give shorter response times.
 
 \begin{figure}[htbp]
 	\centering
-	\includegraphics{../data/ls_request_dur.png}
+	\includegraphics{../data/ls_log.png}
 	\caption{Average duration of a list directory request vs number of simultanious connections for various cluster sizes (\#nodes). The run with with 6 nodes experianced problems during its run slowing it down.}
-	\label{fig:ls}
+	\label{fig:ls_log}
+\end{figure}
+
+\begin{figure}[htbp]
+	\centering
+	\includegraphics{../data/ls_lin.png}
+	\caption{Average duration of a list directory request vs number of simultanious connections for various cluster sizes (\#nodes). The run with with 6 nodes experianced problems during its run slowing it down.}
+	\label{fig:ls_lin}
 \end{figure}

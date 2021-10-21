@@ -1,0 +1,21 @@
+The filesystem is consistent and stable under the lightests write and high read loads. Since I did not test other filesystems under the same workload I can not conclude weather the read performance is good. 
+
+In \cref{fig:hbt} we see a write load throws off the heartbeat timing of the writeserver resulting in readservers starting elections. The writeserver does not convert to a readserver\footnote{follower in \textit{Raft} terms} which is an implementation error. The readservers, having elected a new leader, no longer awknowledge the writeservers changes which it handles by crashing. This brings the cluster to a consistent state but errors the client connection which stopped the test. 
+There are two underlying problems here:
+
+\begin{enumerate}
+	\item A load of $5$ requests per second should not throw off heartbeat timing. An increase in heartbeat timeout did not solve the problem pointing to a problem in my consistancy model. It might have to do with the way heartbeat messages are canceld and replaced by publish change messages (see \cref{fig:mkdir} \textit{'cancel next heartbeat'}).
+	\item The writeserver should put up some \textit{backpressure} when the load becomes to high. It should stop handling new client requests instead of missing heartbeats.
+\end{enumerate}
+
+I also ran into a fundamental issue with the FS. Only a single change can be published to the readservers at the time. If multiple changes are send concurrently the readserver will eventually recieve some out of order and conclude it is outdated and should go down. 
+
+I can conclude the system, though consistant, is highly unstable during writes. The current implementation is faulty and there is a fundamental problem using raft that limits performance. It seems that read performance scales liniarly with cluster size. 
+
+\subsection{Future work}
+I think the fundamental issue can be solved with a slight change to \textit{Raft}. In \textit{Raft} a message is rejecting if the previous log index (\textit{prevLogIndex}) of the message is not found in the recievers log. I propose to introduce a pending state in which a message can be partially accepted for some duration. If the previous log index is not found a message wil not (yet) be accepted but be put into a pending state until a message with the pervious log index is accepted. The message is only awknowledged to the master if one with the missing previous log index is accepted. This should be worked out on paper then implemented.
+
+Further work should add a form of backpressure and change the task schedualling such that heartbeats will be send on time even under the highest possible load. As we use cooperative mutitasking this shoud be possible.
+To quantiy performance a I need to compare the system to existing solutions such as HDFS. For this a (minimal) data plane needs to be added and a real world workload found. Then both systems can be benchmarked on the same cluster.
+Currently a readserver that is outdated asks the writeserver for the complete directory. With a large directory and a high amount of changes this can result in an endless loop as the readserver is outdated by the time the writeserver has send the directory. This can be fixed with the log entry part of \textit{Raft} or another system for incremental updates.
+Finally there are a lot of optimisations possible. For example currently, except for publishing changes, a new connection is started for each request.

@@ -30,41 +30,62 @@ data = {
 
 def convert_ms(data: List[float]):
     prev = 0
-    for i in range(len(data)):
-        if prev > data[i]:
+    newdata = [i for i in data]
+    for i in range(len(newdata)):
+        if prev > newdata[i]:
             break
-        prev = data[i]
-        data[i] /= 1000
+        prev = newdata[i]
+        newdata[i] /= 1000
+    return newdata
 
 
-def x_for(measurements) -> List[float]:
-    return [2**i for i in range(1, len(measurements)+1)]
+def x_for(y) -> List[float]:
+    return [2**i for i in range(1, len(y)+1)]
 
 
-fig, ax = plt.subplots(figsize=(9, 4))
-for cluster_size, data in data.items():
-    for measurements in data:
-        convert_ms(measurements)
+def plot(ax, data):
 
-        y = np.array(measurements)
-        x = x_for(y)
-        n_requests = np.array(x)*100
-        y = y / n_requests * 1000
+    for cluster_size, data in data.items():
+        for raw_data in data:
+            measurements = convert_ms(raw_data)
 
-        plt.scatter(x, y, label=f"#nodes: {cluster_size}")
+            y = np.array(measurements)
+            x = x_for(y)
+            n_requests = np.array(x)*100
+            y = y / n_requests * 1000
 
-label_pos = x_for(range(0, 12))
-label_text = [str(x) for x in label_pos]
+            ax.scatter(x, y, label=f"#nodes: {cluster_size}")
+
+
+def shared_plot_markup(ax):
+    label_pos = x_for(range(0, 12))
+    label_text = [str(x) for x in label_pos]
+
+    ax.set_xscale("log")
+    ax.set_xticks(label_pos)
+    ax.set_xticklabels(label_text)
+    ax.tick_params(axis="x", which="minor", bottom=False)
+    plt.xticks(rotation=45)
+    plt.xlabel("# parallel connections")
+    plt.ylabel("request duration (ms)")
+    plt.legend()
+    plt.tight_layout()
+
+
+fig, ax = plt.subplots(figsize=(9, 4), sharex=True)
+plot(ax, data)
+shared_plot_markup(ax)
 ax.set_yscale("log")
-ax.set_xscale("log")
-ax.set_xticks(label_pos)
-ax.set_xticklabels(label_text)
 ax.set_yticks([0.025, 0.1, 0.5, 1])
 ax.set_yticklabels(["0.05", "0.1", "0.5", "1"])
-ax.tick_params(axis="x", which="minor", bottom=False)
-plt.xticks(rotation=45)
-plt.xlabel("# parallel connections")
-plt.ylabel("request duration (ms)")
-plt.legend()
-plt.tight_layout()
-plt.savefig("../ls_request_dur.png", dpi=300)
+plt.savefig("../ls_log.png", dpi=300)
+plt.close(fig)
+
+
+fig, ax = plt.subplots(figsize=(9, 4), sharex=True)
+plot(ax, data)
+shared_plot_markup(ax)
+plt.xlim(60, 4420)
+plt.ylim(0, 0.129)
+plt.savefig("../ls_lin.png", dpi=300)
+plt.show()
