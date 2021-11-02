@@ -15,7 +15,7 @@ async fn get_two_sites_async() {
 }
 \end{lstlisting}
 
-Notice the \texttt{async} keyword in front of the function definition it means the function will return a promise to complete in the future. The \texttt{join!} statement on line 8 combines the two promises for a future answer to a single promise for two answers. In line 10 we await or 'block' the program until \texttt{futures\_joined} turns into two value. Those can then be used in normal and async functions.
+Notice the \texttt{async} keyword in front of the function definition, it means the function will return a promise to complete in the future. The \texttt{join!} statement on line 8 combines the two promises for a future answer to a single promise for two answers. In line 10 we await or 'block' the program until \texttt{futures\_joined} turns into two value. Those can then be used in normal and async functions.
 
 The caller of our \texttt{async} \textit{get\_two\_sites\_async} function will need to be an another async function that can await \textit{get\_two\_sites\_async}, or it can be an executor. An executor allows a normal function to await async functions.
 
