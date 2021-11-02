@@ -1,0 +1,19 @@
+To run the implementation simply clone the git repository\footnote{\url{https://github.com/dvdsk/mock-fs}} on a cluster which uses preserve for node allocation and which has bash, wget, make > 1.7, tar and curl availible. Then adjust the \textit{SCRATCH} target at the top of the makefile to point to a directory with about 5 gigabytes of storage\footnote{The rust build system is very hungry for storage}. Now the experiments can be run using (make <target-name> and one of these targets. 
+
+\begin{enumerate}
+	\item \texttt{test\_mkdir}: Runs the steps of the first test described in \cref{sec:res}. Prints the nodes used and provides live log output in tmux for the various nodes. Used in combination with some manual \texttt{ssh}, \texttt{ps aux | grep mock} and \texttt{kill} to kill the writeserver in the second test. 
+	\item \texttt{bench\_mkdir}: Recreates the third test.
+	\item \texttt{bench\_ls}: Runs the fourth and final test: read performance.
+\end{enumerate}
+
+This will set up a rust toolchain in your \textit{SCRATCH}, use it to build the needed binaries and then deploy them to the nodes. The experiments can be modified by editing the shell scripts in the \texttt{scripts/bench} and \texttt{scripts/test} directories. The logs where reduced to raw data using the following bash line:
+
+\begin{lstlisting}[language=bash, style=boxed, tabsize=2]
+cat hb_timeout.txt \
+	| uniq -u \
+	| grep "timeout in" \
+	| cut -d " " -f 1,6 \
+	| cut -d ":" -f 3- >> hb_timeout.dat
+\end{lstlisting}
+
+And then the python script \texttt{data/main.py} created the plots.
