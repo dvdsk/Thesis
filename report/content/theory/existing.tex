@@ -1,0 +1,27 @@
+\subsection{Existing distributed file systems}
+
+% nfs
+% 	- details 
+% 	- oh oh data corruption
+% 		- cache 30s by default
+% 		- only written upon close (loss of data)
+% 	- locking since v4 (https://linux.die.net/man/2/flock)
+		% https://gavv.github.io/articles/file-locks/
+% 		- locking advisable on unix (https://www.kernel.org/doc/html/v5.14-rc5/filesystems/mandatory-locking.html)
+
+% locking problamatic and badly supported easy data corruption -> unix also no mandatory locking support (use as bridge to next section which details why locking is needed in a distributed context)
+
+\subsubsection{Network File System}
+Often we want to share filesystems over a network to share files using a \textit{Network file system}. These integrate in the interface of the client. A widely supported system is \textsc{NFS}. In \textsc{NFS} a part of a local directory is exported/shared by a local \textsc{NFS}-server. Other machines can then connect and overlay part of their directory with the exported one. The NFS protocol forwards file operations from the client to the host over the network. When an operation has been applied on the host the result is traced back to the client. To increase performance the client (almost always) caches file blocks and metadata. 
+
+In a shared envirement it is commanplace for multiple users to simultaniously access the same files. In \textsc{NFS} this can be problamatic, as meta data is cached new files can appear to other users after 30 seconds. Further more simultaneous writes can become interleaved as each write gets split into multiple network packets \cite[p. 527]{os}, writing corrupt data. Version 4 improves the semantics respecting unix advisory file locks \cite{rfc3530}. Most applications do not take advisory locks into account still risking data corruption. 
+
+\begin{enumerate}
+	\item GFS, single node so easy
+	\item Hadoop FS HA, opt in consensus
+	\item Ceph, subtree partitioning
+\end{enumerate}
+
+% 	- GFS, single node so easy
+% 	- Hadoop FS HA, opt in consensus
+% 	- Ceph, subtree partitioning
