@@ -6,7 +6,7 @@ Imagine a node hard at work processing requests from its siblings, suddently it 
 
 We can solve this by voting over each descision. It will be a strange vote, no node cares about the descision itself. In most implementations the nodes only checks if it regards the sender as trustwothy or alive and then vote yes. To prove liveliness the vote proposal could include a number. Voters only vote yes if the number is correct. For example if the number is the highest they have seen. If a majority votes yes the node that requested the vote can be sure its not dead or disconnected. This is the idea behind "Quorums," majorities of nodes that vote.
 
-\subsubsection*{paxos}
+\subsubsection*{Paxos}
 The \textsc{Paxos} algorithm\cite{paxos} uses a quorum to provide concensus. It does this by chosing a value among proposals such that only that value can be read as the accepted value. Usually it is used to build a fault tolerant distributed state machine. 
 
 In \textsc{Paxos} there are three roles: proposer, acceptor and learner. It is possible for nodes to fullfil only one or two of these roles. For the rest of this explanation assume each node fullfils all three. To reach consensus on a new value we go through two phases: prepare and accept. Once the majority of the nodes has accepted a proposal the vale of that proposal been chosen. In \textsc{Paxos} nodes keep track of the highest proposal number $n$ they have seen. Lets go through a \textsc{Paxos} iteration from the perspective of a node trying to share something, \textit{a value}.
@@ -26,18 +26,28 @@ The acceptors accept the request if they did not yet recieve a prepare request n
 
 Lets get a feeling why this works by looking at what happens during node failure. Imagine a case where a minimal majority $m$ accept value $v_a$. A single node in $m$ freezes after the first learners learned of the now chosen value $v_a$. After freezing $m-1$ of the nodes will reply $v_a$ as value to learners. The learners will conclude no value has been chosen given $m-1$ is not a majority\footnote{this is not yet inconsistent, \textit{Paxos} does not guarentee consistency over wether a value has been chosen}. As seen above acceptors change their value if they recieve a higher numberd accept request. If a single node changes its value to $v_b$ consensus will break since $v_a$ has already been seen as the chosen value by a learner. A new proposal that can result into higher numberd accept requests needs a majority response. A majority response will include a node from $m-1$. That node will incude $v_a$ as the accepted value. The value for the accept request changes to $v_a$. No accept request with another value then $v_a$ can thus be issued. Another value $v_b$ will therefore never be accepted. The new accept by issued to a majority changing at least one node to have accepted $v_a$. Now at least $m+1$ nodes have $v_a$ as accepted value.
 
+To build a distributed state machine you run multiple instances of \textsc{Paxos}. This is often referd to as \textsc{Multi-Paxos}. The value for each instance is a command to change the shared state. Unfortunatly multi paxos is not specified in literature and has never been verified.
+
+\subsubsection*{Raft}
+The Paxos algorithm allows us to reach consensus on a single value. The Raft algorithm allowes us to shared a log between nodes. We can only append to and reading from the. That is the log wil always be the same on all nodes. As long as a majority of the nodes still function the log will be readable and appendable.
+
+In Raft there is always a single leader. The leader is determined using a \textit{quorum}. Appanding to the log is sequential because only the leader is allowed to append to the log. There are two parts to Raft, \textit{electing leaders} and \textit{log replication}.
+
+\subparagraph{Leader election}
+A Raft\cite{raft} cluster starts without a leader and when one is elected it can fail at any time. Nodes in raft start as followers, monitor the leader by waiting for heartbeats. If a follower does not recieve a heartbeat on time it will try to become the leader, it becomes a candidate. In a fresh cluster without a leader one or more nodes will switch to candidates.
+
+A candidate tries to get itself elected. For that it needs the votes of a majority of the cluster. It first asks all servers for their vote. If a majority responds with their vote the candidate becomes a leader. When there are multiple candidates the votes can split, no candidate reaches a majority. When it takes to long to recieve a majority of the votes the candidate starts a fresh election. A candidate loses the election as soon as it recieves a heartbeat from a \emph{valid} leader.
+
+\begin{figure}[htbp]
+	\centering
+	\includesvg{raft_states.svg}
+	\caption{Node states. Most of the time all nodes exept one are followers. One node is a leader. As failures are detected by time outs the nodes change state. Ajusted from \cite{raft}}
+	\label{fig:raft_states}
+\end{figure}
 
 
-Three roles proposer, acceptor and learner
-Two phases, prepare and accept
- 	key insight: an accepted prepare with a higher number will spread by being the awnser to new prepares
-Usually build upon with an distributed state machine 
-	a leader is elected and will handle all proposals
-	leader recieves client requests and turns them into state machine commands
-	these are proposed, when accepted they are executed (applied) to the current state
-	
+\subparagraph{Log replication}
 
-
-\subsubsection*{raft}
-\subsubsection*{consensus as a service}
+\subsubsection*{Consensus as a service}
+Test text
 % zookeeper
