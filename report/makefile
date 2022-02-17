@@ -1,5 +1,6 @@
 text_sources = $(addpostfix content $(addpostfix .tex main.tex))
-figs = $(addprefix figs/, placeholder.png)
+figs = $(addprefix figs/papers/, raft_states.svg)
+figs += $(addprefix figs/plots/, placeholder.png)
 latex_temps = main.aux main.bbl main.blg main.log main.toc main.out \
 main.fls main.xdv missfont.log main.fdb_latexmk main.run.xml main.bcf "main.synctex(busy)"
 

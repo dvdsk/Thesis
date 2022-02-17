@@ -1,4 +1,4 @@
-\section{Consensus Algorithms}
+\subsection{Consensus Algorithms}
 In this world where the network can not be trusted, time lies to us and servers will randomly crash and burn how can we get anything done at all? Lets discuss how we can build a system we can trust, a system that behaves \textit{consistantly}. To build such a system we need the parts that make up the system to agree with eachother, the must have \emph{Consensus}. Here I discuss three well known solutions. Before we get to that lets look at the principle that underlies them all: \emph{The truth is defined by the majority}.
 
 \subsubsection*{Quorums}
@@ -7,9 +7,9 @@ Imagine a node hard at work processing requests from its siblings, suddently it 
 We can solve this by voting over each descision. It will be a strange vote, no node cares about the descision itself. In most implementations the nodes only checks if it regards the sender as trustwothy or alive and then vote yes. To prove liveliness the vote proposal could include a number. Voters only vote yes if the number is correct. For example if the number is the highest they have seen. If a majority votes yes the node that requested the vote can be sure its not dead or disconnected. This is the idea behind "Quorums," majorities of nodes that vote.
 
 \subsubsection*{Paxos}
-The \textsc{Paxos} algorithm\cite{paxos} uses a quorum to provide concensus. It does this by chosing a value among proposals such that only that value can be read as the accepted value. Usually it is used to build a fault tolerant distributed state machine. 
+The \textsc{paxos} algorithm\cite{paxos} uses a quorum to provide concensus. It does this by chosing a value among proposals such that only that value can be read as the accepted value. Usually it is used to build a fault tolerant distributed state machine. 
 
-In \textsc{Paxos} there are three roles: proposer, acceptor and learner. It is possible for nodes to fullfil only one or two of these roles. For the rest of this explanation assume each node fullfils all three. To reach consensus on a new value we go through two phases: prepare and accept. Once the majority of the nodes has accepted a proposal the vale of that proposal been chosen. In \textsc{Paxos} nodes keep track of the highest proposal number $n$ they have seen. Lets go through a \textsc{Paxos} iteration from the perspective of a node trying to share something, \textit{a value}.
+In \textsc{paxos} there are three roles: proposer, acceptor and learner. It is possible for nodes to fullfil only one or two of these roles. For the rest of this explanation assume each node fullfils all three. To reach consensus on a new value we go through two phases: prepare and accept. Once the majority of the nodes has accepted a proposal the vale of that proposal been chosen. In \textsc{paxos} nodes keep track of the highest proposal number $n$ they have seen. Lets go through a \textsc{paxos} iteration from the perspective of a node trying to share something, \textit{a value}.
 
 In the first phase a new \textit{value} is proposed by our node. It sends a \textit{perpare} request to a majority of acceptors. The request contains a proposal number $n$ higher then the highest number our node has seen up till now. The number is unique to our node. Each acceptor only responds if our number $n$ is the highest it has seen. If an acceptor had already accepted one or more requests it includes the accepted proposal with the highest $n$ in its respons.
 
@@ -24,29 +24,58 @@ The acceptors accept the request if they did not yet recieve a prepare request n
 
 % Lets get a feeling why this works by looking at what happens during network failure. Imagine the case where an accept with value $v_a$ is send to the majority $m$. The network fails and only $m-1$ nodes accept. Now 50\% of the nodes will reply $v_a$ as chosen value to learners. Any majority response to a propose request will include a node from $m-1$, thus with the accepted value. No accept request with another value then $v_a$ can therefore be send. Another value $v_b$ will thus never be accepted.
 
-Lets get a feeling why this works by looking at what happens during node failure. Imagine a case where a minimal majority $m$ accept value $v_a$. A single node in $m$ freezes after the first learners learned of the now chosen value $v_a$. After freezing $m-1$ of the nodes will reply $v_a$ as value to learners. The learners will conclude no value has been chosen given $m-1$ is not a majority\footnote{this is not yet inconsistent, \textit{Paxos} does not guarentee consistency over wether a value has been chosen}. As seen above acceptors change their value if they recieve a higher numberd accept request. If a single node changes its value to $v_b$ consensus will break since $v_a$ has already been seen as the chosen value by a learner. A new proposal that can result into higher numberd accept requests needs a majority response. A majority response will include a node from $m-1$. That node will incude $v_a$ as the accepted value. The value for the accept request changes to $v_a$. No accept request with another value then $v_a$ can thus be issued. Another value $v_b$ will therefore never be accepted. The new accept by issued to a majority changing at least one node to have accepted $v_a$. Now at least $m+1$ nodes have $v_a$ as accepted value.
+Lets get a feeling why this works by looking at what happens during node failure. Imagine a case where a minimal majority $m$ accept value $v_a$. A single node in $m$ freezes after the first learners learned of the now chosen value $v_a$. After freezing $m-1$ of the nodes will reply $v_a$ as value to learners. The learners will conclude no value has been chosen given $m-1$ is not a majority\footnote{this is not yet inconsistent, \textsc{paxos} does not guarentee consistency over wether a value has been chosen}. As seen above acceptors change their value if they recieve a higher numberd accept request. If a single node changes its value to $v_b$ consensus will break since $v_a$ has already been seen as the chosen value by a learner. A new proposal that can result into higher numberd accept requests needs a majority response. A majority response will include a node from $m-1$. That node will incude $v_a$ as the accepted value. The value for the accept request changes to $v_a$. No accept request with another value then $v_a$ can thus be issued. Another value $v_b$ will therefore never be accepted. The new accept by issued to a majority changing at least one node to have accepted $v_a$. Now at least $m+1$ nodes have $v_a$ as accepted value.
 
-To build a distributed state machine you run multiple instances of \textsc{Paxos}. This is often referd to as \textsc{Multi-Paxos}. The value for each instance is a command to change the shared state. Unfortunatly multi paxos is not specified in literature and has never been verified.
+To build a distributed state machine you run multiple instances of \textsc{paxos}. This is often referd to as \textsc{Multi-paxos}. The value for each instance is a command to change the shared state. Unfortunatly multi paxos is not specified in literature and has never been verified.
 
 \subsubsection*{Raft}
-The Paxos algorithm allows us to reach consensus on a single value. The Raft algorithm allowes us to shared a log between nodes. We can only append to and reading from the. That is the log wil always be the same on all nodes. As long as a majority of the nodes still function the log will be readable and appendable.
+The \textsc{paxos} algorithm allows us to reach consensus on a single value. The \textsc{raft} algorithm allowes us to shared a log between nodes. We can only append to and reading from the log. That is the log wil always be the same on all nodes. As long as a majority of the nodes still function the log will be readable and appendable.
 
-In Raft there is always a single leader. The leader is determined using a \textit{quorum}. Appanding to the log is sequential because only the leader is allowed to append to the log. There are two parts to Raft, \textit{electing leaders} and \textit{log replication}.
+\textsc{Raft} maintains a single leader. The leader is decided on by a \textit{quorum}. Appanding to the log is sequential because only the leader is allowed to append. There are two parts to \textsc{raft}, \textit{electing leaders} and \textit{log replication}.
 
-\subparagraph{Leader election}
-A Raft\cite{raft} cluster starts without a leader and when one is elected it can fail at any time. Nodes in raft start as followers, monitor the leader by waiting for heartbeats. If a follower does not recieve a heartbeat on time it will try to become the leader, it becomes a candidate. In a fresh cluster without a leader one or more nodes will switch to candidates.
-
-A candidate tries to get itself elected. For that it needs the votes of a majority of the cluster. It first asks all servers for their vote. If a majority responds with their vote the candidate becomes a leader. When there are multiple candidates the votes can split, no candidate reaches a majority. When it takes to long to recieve a majority of the votes the candidate starts a fresh election. A candidate loses the election as soon as it recieves a heartbeat from a \emph{valid} leader.
+\subparagraph{Leader election} \label{sec:valid}
+A \textsc{raft}\cite{raft} cluster starts without a leader and when it has a leader it can fail at any time. The cluster must be able to reliable decide on a new leader. Nodes in \textsc{raft} start as followers, monitor the leader by waiting for heartbeats. If a follower does not recieve a heartbeat from a \emph{valid} leader on time it will try to become the leader, it becomes a candidate. In a fresh cluster without a leader one or more nodes become candidates.
 
 \begin{figure}[htbp]
 	\centering
-	\includesvg{raft_states.svg}
-	\caption{Node states. Most of the time all nodes exept one are followers. One node is a leader. As failures are detected by time outs the nodes change state. Ajusted from \cite{raft}}
+	\includesvg{figs/papers/raft_states}
+	\caption{A \textsc{raft} node states. Most of the time all nodes exept one are followers. One node is a leader. As failures are detected by time outs the nodes change state. Ajusted from \cite{raft}}
 	\label{fig:raft_states}
 \end{figure}
+%
+A candidate tries to get itself elected. For that it needs the votes of a majority of the cluster. It asks all nodes for their vote. Note that servers vote only once and only if the candidate would become a \emph{valid} leader. If a majority of the cluster responds with a vote the candidate it becomes the leader. If it takes to long to recieve a majority of the votes a candidate starts a fresh election. When there are multiple candidates asking for votes the votes might split\footnote{Election timeouts are randomised so this does not repeat infinitly.}, no candidate then reaches a majority. A candidate immidiatly loses the election if it recieves a heartbeat from a \emph{valid} leader. These state changes are illustrated in \cref{fig:raft_states}.
 
+\begin{figure}[htbp]
+	\centering
+	\includesvg{figs/papers/raft_terms}
+	\caption{An example of how time is devided in terms in a \textsc{raft} cluster}
+	\label{fig:raft_terms}
+\end{figure}
+
+In \textsc{raft} time can be devided in terms. A term is the period from the election of a node to leader to its failure or a failed election where no node won, illustrated in \cref{fig:raft_terms}. Terms are used to determine the cluster leader, the leader with the highest terms. A heartbeat is \emph{valid} if, as far as the reciever knows, it origionates from the current cluster leader. A message can only be from the \textit{current} leader if the message \textit{term} is equal or higher then the recieving nodes term. If a node recieves a message with a higher term it replaces its own with that of the message.
+
+When a node starts its \textit{term} is zero. If a node becomes a candidate it increments its \textit{term} by one. Imagine a candidates with a \textit{term} equal or higher then that of the majority of the cluster. When recieving a vote request the majority will determine this candidate could become a \emph{valid} leader. This candidate will get the majority vote in the absence of another candidate and become \textit{the} leader.
 
 \subparagraph{Log replication}
+To append an entry to the log a leader sends a append request to all nodes. Messages from invalid leaders (\cref{sec:valid}) are rejected. The leader knows an entry is committed after a majority of nodes acknowledged. For exampl entry 5 in \cref{fig:raft_entries} is committed. The leader includes the index up to which entries are comitted in all its messages. This means entries will become comitted on all followers at the latest with the next heartbeat. If the leader approaches the timeout and no entry needs to be added it sends an empty append. There is no need for a special heartbeat message.
+
+\begin{figure}[htbp]
+	\centering
+	\includesvg{figs/papers/raft_entries}
+	\caption{Logs for multiple nodes. Each row is a different node. The log entries are commands to change shared variables $x$ and $y$ to different values. The shade boxes and the number at their top indictate the term.}
+	\label{fig:raft_entries}
+\end{figure}
+
+There are a few edge cases that require carefull followers to be carefull when appending. A follower may have an incomplete log if it did not recieve a previous append, it may have messages the leader does not and finally we must prevent a candidate missing committed entries from becoming the leader.
+%
+\begin{enumerate}
+	\item To detect missing logs entries are indexed incrementally. The leader includes the index of the previous log entry in the request and the term when it was appended. If a followers last log entry does not match the included entry and term it responds with an error. The leader will send back its complete log for the follower to duplicate\footnote{This is rather inefficient, in the next paragraph we will come back to this}.
+	\item When a follower has entries the leader does not these will occupy indices the leader wil use in the future. This happens when a previous leader crashed having pushed logs to some but not majority of followers. When the leader pushes a new entry with index $k$ the follower wil notice it already has an entry with index $k$. At that point it simply overwrites what it had at $k$.
+	\item A new leader missing commited entries will push a wrong log to followers missing entries. For a entry to be committed it must be stored on the majority of the cluster. To win the election a node has to have the votes from the majority. Thus restricting followers to only vote for candidates that are as up-to-date as they are is enough.
+\end{enumerate}
+
+\subparagraph{Log compaction} \label{par:logcomp}
+% TODO more efficient thingy, also rename next paragraph a bit
 
 \subsubsection*{Consensus as a service}
 Test text

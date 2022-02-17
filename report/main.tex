@@ -4,12 +4,16 @@
 \addbibresource{References.bib}
 
 \usepackage[hidelinks]{hyperref}
-\usepackage{svg}
 \usepackage{graphicx} % allow embedded images
-  \setkeys{Gin}{width=\linewidth,totalheight=\textheight,keepaspectratio}
-  \graphicspath{{figs/}} % set of paths to search for images
+	\setkeys{Gin}{width=\linewidth,totalheight=\textheight,keepaspectratio}
+	\graphicspath{{figs/papers/, figs/plots/}} % set of paths to search for images
+\usepackage{svg}
+	\svgpath{{figs/papers/, figs/plots/}} % not working for some reason
+
 \usepackage{ragged2e}
 \usepackage{ctable}
+\usepackage{cleveref}
+
 % \usepackage{float}
 % \usepackage{subcaption}
 %   \captionsetup{compatibility=false}
