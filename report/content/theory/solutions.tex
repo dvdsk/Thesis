@@ -75,8 +75,27 @@ There are a few edge cases that require carefull followers to be carefull when a
 \end{enumerate}
 
 \subparagraph{Log compaction} \label{par:logcomp}
-% TODO more efficient thingy, also rename next paragraph a bit
+Keeping the entire log since the cluster was first started is rather inefficient. Especially as nodes are added and need to get send the log. Usually raft is used to build a state machine, in that case sending over the state is faster then the log. The state machine send is a snapshot of the system state, only valid for the moment in time it was taken. All nodes take snapshots independently of the leader. 
+
+To take a snapshot a nodes writes the state machine to file together with the current \textit{term} and \textit{index}. It then discards all comitted entries up to the snapshotted \textit{index} from its log. 
+
+Followers that lag far behind are now send the snapshot and all logs that follow. The follower wipes its log before accepting the snapshot.
 
 \subsubsection*{Consensus as a service}
-Test text
-% zookeeper
+So the problem of consensus has been solved, but the solutions are non trivial to implement. We need to shape our application to fit the models the solutions use. If we are using \textsc{raft} that means our systems must be build around a log. Then we need to build the application praying we implement the solution correctly. A popular alternative is to use a coordination service. Here we look at \textsc{ZooKeeper}\cite{zookeeper} an example of a wait free coordination service. I first focus on the implementation, drawing parallels to \textsc{raft} before we look at the \textit{Api} \textsc{ZooKeeper} exposes.
+
+A ZooKeeper cluster has a designated leader that replicates a database on all nodes. Only the leader can modify the database, therefore only the leader handles \textit{write} requests. The nodes handle \textit{read} requests themself, \textit{write} requests are forwarded to the leader. To handle a \textit{write} requests \textsc{ZooKeeper} relies on a consensus algorithm called \textsc{Zab}\cite{zab}. It is an atomic broadcast capable of crash recovery. It uses a strong leader quite similar to \textsc{raft} and guarentees that changes broadcast by the leader are delivered in the order they where send and after changes from previous (crashed) leaders. \textsc{Zab} can deliver messages twice during recovery. ZooKeeper turns change requests into \textit{idempotent} transactions. Theses can be applied multiple times with the same result bypassing the double delivery problem of \textsc{zab}.
+
+ZooKeeper exposes its strongly consistent database as a hierarchical name space of \textit{znodes}. Each {znode} contains a small amount of data and is identified by its \textit{path}. Using the \textit{Api} clients can operate on the znodes. They can: 
+\begin{enumerate}
+	\begin{multicols}{2}
+	\item create new znodes
+	\item change the data in a znode
+	\item delete existing znodes
+	\item -- TODO -- sync
+	\item query if a znode exists
+	\item read the data in a znode
+	\item get list of the children of the znode
+	\end{multicols}
+\end{enumerate}
+The last three operations support watching, that is the client gets a single notification when the result of the operation changed. The notification does not contain any information regarding the change and the value is no longer watched after the notification. Clients can use this to safely cache data locally.
