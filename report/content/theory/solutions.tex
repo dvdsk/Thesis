@@ -92,10 +92,14 @@ ZooKeeper exposes its strongly consistent database as a hierarchical name space 
 	\item create new znodes
 	\item change the data in a znode
 	\item delete existing znodes
-	\item -- TODO -- sync
+	\item sync with the leader
 	\item query if a znode exists
 	\item read the data in a znode
 	\item get list of the children of the znode
 	\end{multicols}
 \end{enumerate}
-The last three operations support watching, that is the client gets a single notification when the result of the operation changed. The notification does not contain any information regarding the change and the value is no longer watched after the notification. Clients can use this to safely cache data locally.
+The last three operations support watching, the client then gets a single notification when the result of the operation changed. The notification does not contain any information regarding the change and the value is no longer watched after the notification. Clients can use this to ensure locally cached data is up-to-date. 
+
+Clients communicating outside of \textsc{ZooKeeper} need to take special measures to ensure consistancy. For example let client A updates some znode from value $v_1$ to value $v_2$ then communicates to client B, through another medium then ZooKeeper. In this example client A and B are connected to different \textsc{ZooKeeper} nodes. If the communication from A causes B to read the znode it will get the previous value $v_1$ from \textsc{ZooKeeper} if its \textsc{ZooKeeper} node is lagging behind. To avoid this race condition client B can call \textit{sync} first which will make the zookeeper node processes all outstanding requests from the leader before returning.
+
+\textsc{Raft} has this same race condition. Intuitively it seems as we can just ensure a heartbeat has passed, by then all (functioning) node will be updated. However this is not enough, as a faulty node could be suspended and not notice it is outdated at all. Instead the solution is to include the last log index client A saw in its communication to client B. \textsc{Paxos} does not \textit{need} to suffer from this problem but it can. In \textsc{Paxos} reading means asks a \textit{learner} for the value, the \textit{learner} can then ask the majority of the system if they have accepted a value and if so what it is. Usually \textsc{paxos} is optimized up by making acceptors inform learners of a change. In this case a leader that missed a message from an acceptor that there is a value will incorrectly return to client B there is no value.

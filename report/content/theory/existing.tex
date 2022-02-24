@@ -1,4 +1,6 @@
-\subsection{Existing distributed file systems}
+% motivation for distributed storage will be discussed in the introduction
+\subsection{Distributed file systems}
+Here I will discuss the two most widely used destributed fily systems. We will look at how they work and the implementation. Before I get to that I will use a very basic file sharing system, Network File System, to illustrate why these distributed systems need their complexity.
 
 % nfs
 % 	- details 
@@ -12,12 +14,22 @@
 % locking problamatic and badly supported easy data corruption -> unix also no mandatory locking support (use as bridge to next section which details why locking is needed in a distributed context)
 
 \subsubsection*{Network File System}
-Often we want to share filesystems over a network to share files using a \textit{Network file system}. These integrate in the interface of the client. A widely supported system is \textsc{NFS}. In \textsc{NFS} a part of a local directory is exported/shared by a local \textsc{NFS}-server. Other machines can then connect and overlay part of their directory with the exported one. The NFS protocol forwards file operations from the client to the host over the network. When an operation has been applied on the host the result is traced back to the client. To increase performance the client (almost always) caches file blocks and metadata. 
+A basic way to share files is to expose a filesystems via a network to share. For this you use a Network File System. These integrate in the interface of the client. A widely supported system is \textsc{NFS}. In \textsc{NFS} a part of a local directory is exported/shared by a local \textsc{NFS}-server. Other machines can then connect and overlay part of their directory with the exported one. The NFS protocol forwards file operations from the client to the host over the network. When an operation has been applied on the host the result is traced back to the client. To increase performance the client (almost always) caches file blocks and metadata. 
 
 In a shared envirement it is commanplace for multiple users to simultaniously access the same files. In \textsc{NFS} this can be problamatic, as meta data is cached new files can appear to other users after 30 seconds. Further more simultaneous writes can become interleaved as each write gets split into multiple network packets \cite[p. 527]{os}, writing corrupt data. Version 4 improves the semantics respecting unix advisory file locks \cite{rfc3530}. Most applications do not take advisory locks into account still risking data corruption. 
 
 \subsubsection*{Google file system}
-\subsubsection*{Hadoop FS}
+The Google File System~\cite{GFS} was developed in 2003 in a response to Googles rapidly growing search index. The key to the system is the seperation of the control plane from the data plane. That is, the file data is stored on many \textit{chunk servers} while a single server coordinates where that data is stored, how it is replicated and access to it. The single coordinating server dramatically simplifies the design, \textsc{GFS} needs no consensus algorithm as all descisions are made on a single machine.
+%
+When a \textsc{GFS} client wants to use a file it contacts the main node for metadata. The client then uses the metadata to determine on which chunk servers the file content is located. Finally it streams the bytes directly of the chunk servers. \textsc{Gfs} is meant to server huge files as many small files could easily bottleneck the single coordinating server.
+%
+With large files the load will be dominated by streaming bytes. File metadata a single machine can handle those requests, simplifying consistency. The much higher load of streaming file data is spread over many \textit{chunk servers}.
+
+
+\subparagraph*{Hadoop FS}
+- implementation of GFS that has expanded over the years. drives Hadoop (map reduce) 
+- high availibility module uses quorum
+- opt in consistency
 
 \subsubsection*{Ceph}
 
