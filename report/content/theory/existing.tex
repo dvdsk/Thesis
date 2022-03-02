@@ -16,14 +16,28 @@ Here I will discuss the two most widely used destributed fily systems. We will l
 \subsubsection*{Network File System}
 A basic way to share files is to expose a filesystems via a network to share. For this you use a Network File System. These integrate in the interface of the client. A widely supported system is \textsc{NFS}. In \textsc{NFS} a part of a local directory is exported/shared by a local \textsc{NFS}-server. Other machines can then connect and overlay part of their directory with the exported one. The NFS protocol forwards file operations from the client to the host over the network. When an operation has been applied on the host the result is traced back to the client. To increase performance the client (almost always) caches file blocks and metadata. 
 
-In a shared envirement it is commanplace for multiple users to simultaniously access the same files. In \textsc{NFS} this can be problamatic, as meta data is cached new files can appear to other users after 30 seconds. Further more simultaneous writes can become interleaved as each write gets split into multiple network packets \cite[p. 527]{os}, writing corrupt data. Version 4 improves the semantics respecting unix advisory file locks \cite{rfc3530}. Most applications do not take advisory locks into account still risking data corruption. 
+In a shared envirement it is commanplace for multiple users to simultaniously access the same files. In \textsc{NFS} this can be problamatic, as meta data is cached new files can appear to other users after 30 seconds. Further more simultaneous writes can become interleaved as each write gets split into multiple network packets~\cite[p. 527]{os}, writing corrupt data. Version 4 improves the semantics respecting unix advisory file locks~\cite{rfc3530}. Most applications do not take advisory locks into account still risking data corruption. 
 
 \subsubsection*{Google file system}
-The Google File System~\cite{GFS} was developed in 2003 in a response to Googles rapidly growing search index. The key to the system is the seperation of the control plane from the data plane. That is, the file data is stored on many \textit{chunk servers} while a single server coordinates where that data is stored, how it is replicated and access to it. The single coordinating server dramatically simplifies the design, \textsc{GFS} needs no consensus algorithm as all descisions are made on a single machine.
+The Google File System~\cite{GFS} was developed in 2003 in a response to Googles rapidly growing search index which generated unusually large files~\cite{GFS_interview}. The key to the system is the seperation of the control plane from the data plane. That is, the file data is stored on many \textit{chunk servers} while a single server coordinates access to, location of and replicated of the data. The coordinating server also serves the metadata. Because all descisions are made on a single machine \textsc{GFS} needs no consensus algorithm. A chunk server simply executes all client requests as the coordinating server will already have decided if the request is allowed. 
+
+When a \textsc{GFS} client wants to operate on a file it contacts the main node for metadata. The client then uses the metadata to determine on which chunk servers the file content is located. Finally it streams bytes directly to or from the chunk servers. If multiple clients whish to operate on the same file one of the chunk servers serializes those requests to a fixed order. The resulting architecture can be seen in \cref{fig:GFS_arch}.
 %
-When a \textsc{GFS} client wants to use a file it contacts the main node for metadata. The client then uses the metadata to determine on which chunk servers the file content is located. Finally it streams the bytes directly of the chunk servers. \textsc{Gfs} is meant to server huge files as many small files could easily bottleneck the single coordinating server.
-%
-With large files the load will be dominated by streaming bytes. File metadata a single machine can handle those requests, simplifying consistency. The much higher load of streaming file data is spread over many \textit{chunk servers}.
+
+\begin{figure}[htbp]
+	\centering
+	\includesvg[width=1.12\columnwidth, pretex=\scriptsize]{figs/papers/gfs_arch}
+	\caption{The \textsc{GFS} architecture with the coordinating server, the \textsc{GFS} \textit{master}, adopted from~\cite{GFS}}
+	\label{fig:GFS_arch}
+\end{figure}
+ 
+% Replica (primary vs followers)
+To ensure data integrity data is checksummed and replicated over multiple servers. The replicas are carefully spread around to cluster to prevent a network switch or power supply failure taking all replicas offline and to ensure equal utilization of network and disks. The coordinating server re-creates lost chuncks as needed. The cluster periodically rebalances chunks between machines filling up newly added servers.
+
+To speed up performance \textsc{GFS} relaxes file mutation consistency. Metadata operations are atomic 
+% TODO relaxed consistency -> append
+
+A single machine can efficiently handle all file metadata requests, as long as files are sufficiently large. If the cluster grows sufficiently large while the files stay small the metadata will no longer fit in the coordinating servers memory. Effectively \textsc{GFS} has a limit on the number of files. This limit became a problem as it was used for services with smaller files. To work around this applications packed smaller files together before submitting the bundle as a single file to \textsc{GFS}~\cite{GFS_interview}.
 
 
 \subparagraph*{Hadoop FS}

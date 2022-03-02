@@ -1,17 +1,15 @@
 \subsection{Faults and Delays}
-Before we can build a fault resistant system we need to know what we need to keep in mind. While hardware failures are, the norm in distributed computing, faults are not the only issue to keep in mind. 
+Before we can build a fault resistant system we need to know what we can rely on. While hardware failures are the norm in distributed computing, faults are not the only issue to keep in mind. 
 
-It is entirely normal for the clock of a computer to run slichty to fast or to slow. The drift will be tens of milliseconds \cite{time} unless special measures are taken\footnote{One could synchronize the time within a datacenter or provide nodes with more accurate clocks}. Worse a process can be paused and then resumed at any time. Such a pause could be because the process thread is pre-emted, because its virtual machine is paused or because the process was stopped and resumed after a while\footnote{On linux by sending SigStop then SigCont}. 
+It is entirely normal for the clock of a computer to run slightly to fast or to slow. The resulting drift will normally be tens of milliseconds~\cite{time} unless special measures are taken\footnote{One could synchronize the time within a datacenter or provide nodes with more accurate clocks}. Event worse a process can be paused and then resumed at any time. Such a pause could be because the process thread is pre-emted, because its virtual machine is paused or because the process was paused and resumed after a while\footnote{On linux by sending SigStop then SigCont}. 
 
-In a distributed system the computers that form the system or \textit{the nodes}, are connected by IP over ethernet. Ethernet gives no guarentee a packet is deliverd on time or at all. A node can be unreachable before suddenly working fine again.
+In a distributed system the computers (\textit{nodes})that form the system are connected by IP over ethernet. Ethernet gives no guarentee a packet is deliverd on time or at all. A node can be unreachable before seemingly working fine again.
 
-A system model is an abstraction defining what an algorithm can assume. Regarding timing there are three models. 
+Using a system model we formalize the faults that can occur. For timing there are three models. 
 \begin{enumerate}
 	\item The Synchronous model allowes an algorithm to assumes that clocks are synchronized within some bound and network traffic will arrive within a fixed time.
 	\item The Partially synchronous model is a more realistic model. Most of the time clocks will be correct within a bound and network traffic will arrive within a fixed bound. However sometimes clocks will drift unbounded and some traffic might be delayed forever.
 	\item The Asynchronous model has no clock, it is very restrictive.
 \end{enumerate}
 
-For most distributed systems we work with the Partially Synchronous model. We assume hardware faults cause a crash from which the node can be recoverd later. Either automatically as it restarts or after maintenance.
-
-% TODO CONSENSUS
+For most distributed systems we assume the Partially Synchronous model. Hardware faults cause a crash from which the node can be recoverd later. Either automatically as it restarts or after maintenance.
