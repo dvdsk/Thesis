@@ -19,32 +19,35 @@ A basic way to share files is to expose a filesystems via a network to share. Fo
 In a shared envirement it is commanplace for multiple users to simultaniously access the same files. In \textsc{NFS} this can be problamatic, as meta data is cached new files can appear to other users after 30 seconds. Further more simultaneous writes can become interleaved as each write gets split into multiple network packets~\cite[p. 527]{os}, writing corrupt data. Version 4 improves the semantics respecting unix advisory file locks~\cite{rfc3530}. Most applications do not take advisory locks into account still risking data corruption. 
 
 \subsubsection*{Google file system}
-The Google File System~\cite{GFS} was developed in 2003 in a response to Googles rapidly growing search index which generated unusually large files~\cite{GFS_interview}. The key to the system is the seperation of the control plane from the data plane. That is, the file data is stored on many \textit{chunk servers} while a single server coordinates access to, location of and replicated of the data. The coordinating server also serves the metadata. Because all descisions are made on a single machine \textsc{GFS} needs no consensus algorithm. A chunk server simply executes all client requests as the coordinating server will already have decided if the request is allowed. 
+The Google File System~\cite{GFS} was developed in 2003 in a response to Googles rapidly growing search index which generated unusually large files~\cite{GFS_interview}. The key to the system is the seperation of the control plane from the data plane. That is, the file data is stored on many \textit{chunk servers} while a single server, the coordinator, regulates access to, location of and replication of data. The coordinator also serves the metadata. Because all descisions are made on a single machine \textsc{GFS} needs no consensus algorithm. A chunk server simply executes all client requests as the coordinator will already have decided if the request is allowed. 
 
-When a \textsc{GFS} client wants to operate on a file it contacts the main node for metadata. The client then uses the metadata to determine on which chunk servers the file content is located. Finally it streams bytes directly to or from the chunk servers. If multiple clients whish to operate on the same file one of the chunk servers serializes those requests to a fixed order. The resulting architecture can be seen in \cref{fig:GFS_arch}.
+When a \textsc{GFS} client wants to operate on a file it contacts the main node for metadata. The client then uses the metadata to determine on which chunk servers the file content is located. If it requests to change the data it also recieves which is the primary chunk server. Finally it streams bytes directly to the primary or from the chunk servers. If multiple clients whish to mutate the same file concurrently the primary serializes those requests to some undefined order. See the resulting architecture in \cref{fig:GFS_arch}.
 %
-
 \begin{figure}[htbp]
 	\centering
 	\includesvg[width=1.12\columnwidth, pretex=\scriptsize]{figs/papers/gfs_arch}
 	\caption{The \textsc{GFS} architecture with the coordinating server, the \textsc{GFS} \textit{master}, adopted from~\cite{GFS}}
 	\label{fig:GFS_arch}
 \end{figure}
- 
-% Replica (primary vs followers)
-To ensure data integrity data is checksummed and replicated over multiple servers. The replicas are carefully spread around to cluster to prevent a network switch or power supply failure taking all replicas offline and to ensure equal utilization of network and disks. The coordinating server re-creates lost chuncks as needed. The cluster periodically rebalances chunks between machines filling up newly added servers.
+%
+When clients mutate multiple chunks of data concurrently and the mutations share one or more chunks the result will be undefined. Because primary chunkserver serializes operations on the chunk level the mutations of multiple clients will be interspersed. For example the concurrent writes of client \textit{A} and \textit{B} translate to mutating chunks $1_a$ $2_a$ $3_a$ for \textit{client A} and $2_b$ $3_b$ for \textit{client B}. The primary could pick serialization: $1_a$ $2_a$ $2_b$ $3_b$ $3_a$. The writes of \textit{A} and \textit{B} have now been interspersed with eachoter. This can become a problem when using \textsc{GFS} to collect logs. As a solution \textsc{GFS} offers atomic appends, here the primary picks the offset at which the data is written. By tracking the length of each append the primary assures none of them overlap. The client is returned the offset the primary picked.
 
-To speed up performance \textsc{GFS} relaxes file mutation consistency. Metadata operations are atomic 
-% TODO relaxed consistency -> append
+To ensure data does not get corrupted it is checksummed and replicated over multiple servers. The replicas are carefully spread around to cluster to prevent a network switch or power supply failure taking all replicas offline and to ensure equal utilization resources. The coordinating server re-creates lost chuncks as needed. The cluster periodically rebalances chunks between machines filling up newly added servers. 
 
 A single machine can efficiently handle all file metadata requests, as long as files are sufficiently large. If the cluster grows sufficiently large while the files stay small the metadata will no longer fit in the coordinating servers memory. Effectively \textsc{GFS} has a limit on the number of files. This limit became a problem as it was used for services with smaller files. To work around this applications packed smaller files together before submitting the bundle as a single file to \textsc{GFS}~\cite{GFS_interview}.
 
-
 \subparagraph*{Hadoop FS}
-- implementation of GFS that has expanded over the years. drives Hadoop (map reduce) 
-- high availibility module uses quorum
-- opt in consistency
+When Hadoop, a framework for distributed data processing, needed a filesystem Apache developed the Hadoop Filesystem (HDFS)~\cite{hdfs}. It is based on the \textsc{GFS} architecture, open source and, as of writing, actively worked on. While it still suffers from the file limit it offers improved availibility.
+
+The single coordinating server is a single point of failure in the design. If it fails the file system will be down and worse if its drive fails all data is lost. This limits the use of HDFS to applications. To solve this HDFS adds standby nodes that can take the place of the metadata node. These share the coordinators data either using shared storage~\cite{hdfs_ha_nfs}, which only moves the point of failure, or using a cluster of \textit{journal nodes}~\cite{hdfs_ha_q} which use a quorum to maintain internal consensus under faults. 
+
+Around 90\% of metadata requests are reads~\cite{hdfs_ha_reads}, therefore \textsc{HDFS} can serve reads from the standby nodes. The coordinator shares metadata changes with the journal cluster. Because the standby nodes update via the journal nodes they can lag behind the coordinator. This breaks breaks consistency notably \textit{read after write}: a client that wrote data tries to reads back what it did, the read request is send to a standby node, it has not yet been updated with the metadata change from the coordinator and awnsers with the wrong metadata, possibly denying the file exists at all. 
+
+\textsc{HDFS} provides consistency using \textit{coordinated reds}. The coordinator trackes the state of the metadata, incrementing a counter on every change. The counter is included in the coordinaters response to a write. Clients performing a \textit{read} include the lastest counter they got. A standby node will hold the request until its metadata is up to date with the counter. In the scenario where two clients communicate via a third channel consistency can be achieved by explicitly requesting up to date metadata. The standby node then checks wit the coordinator if it is up to date.
 
 \subsubsection*{Ceph}
+Building a distributed system that scales, that is performance stays the same as capacity increases, is quite the challange. The \textsc{GFS} architecture is limited by the metadata serving coordinator. \textsc{CEPH}~\cite{ceph} enables clients to locate data for reading and writing without needing a metadata server. It provides a \textit{metadata cluster} that can grow as needed to awnser queries about the filesystem content. Data integrity is also achieved without need for coordination. And finally it maps the entire system with a growable \textit{monitor cluster}. This is enabled by \textsc{CEPH}s defining feature: the \emph{CRUSH} algorithm, given a file path, replication factor and map of the cluster it outputs a list of nodes on which the data is or should be stored.
 
+\subparagraph{Rados}
+\subparagraph{Metadata}
 \subparagraph{Subtree partitioning}
