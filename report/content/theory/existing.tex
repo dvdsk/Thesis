@@ -45,9 +45,38 @@ Around 90\% of metadata requests are reads~\cite{hdfs_ha_reads}, therefore \text
 
 \textsc{HDFS} provides consistency using \textit{coordinated reds}. The coordinator trackes the state of the metadata, incrementing a counter on every change. The counter is included in the coordinaters response to a write. Clients performing a \textit{read} include the lastest counter they got. A standby node will hold the request until its metadata is up to date with the counter. In the scenario where two clients communicate via a third channel consistency can be achieved by explicitly requesting up to date metadata. The standby node then checks wit the coordinator if it is up to date.
 
+%TODO formatting \textsc might not be optimal
+%TODO naming, uses ceph for everything (rename GFS/Hadoop) and add footnotes listing the GFS/Hadoop names
 \subsubsection*{Ceph}
-Building a distributed system that scales, that is performance stays the same as capacity increases, is quite the challange. The \textsc{GFS} architecture is limited by the metadata serving coordinator. \textsc{CEPH}~\cite{ceph} enables clients to locate data for reading and writing without needing a metadata server. It provides a \textit{metadata cluster} that can grow as needed to awnser queries about the filesystem content. Data integrity is also achieved without need for coordination. And finally it maps the entire system with a growable \textit{monitor cluster}. This is enabled by \textsc{CEPH}s defining feature: the \emph{CRUSH} algorithm, given a file path, replication factor and map of the cluster it outputs a list of nodes on which the data is or should be stored.
+Building a distributed system that scales, that is performance stays the same as capacity increases, is quite the challange. The \textsc{GFS} architecture is limited by the metadata serving coordinator. \textsc{CEPH}~\cite{ceph} minimizes central coordination enabling it to scale infinitly. Metadata is stored on multiple servers (MDS) instead of a single machine and needs not track data distribution. Instead objects are located using \textsc{CEPH}s defining feature: \emph{CRUSH}, a controlable hash algorithm. Given an innode number and map of the object stores \textsc{CEPH} uses the \emph{CRUSH} algorithm to locate where a files data is stored. 
 
-\subparagraph{Rados}
+enables clients to locate data needing only the \textit{innode number} instead of a metadata server tracking data distribution. Given a path metadata such as the innode is be retrieved from the \textit{metadata cluster}. It can scales linearly with cluster load. Data integrity is also achieved without need for central coordination. Finally \textsc{CEPH} charts the entire system with a growable \textit{monitor cluster}. This is enabled by \textsc{CEPH}s defining feature: the \emph{CRUSH} algorithm which given an innode number outputs a list of nodes on which the data is or should be stored.
+
+\subparagraph{File Mapping}
+Lets take a closer look at how \textsc{ceph} uses hashing to map a file to object locations on different servers. The process is illustrated in \cref{fig:ceph_crush}. Similar to \textsc{gfs} files are first split into fixed size objects, each object is assigned an id based on the files innode number. These object ids are hashed into placement groups (PGs). \textsc{Crush} outputs a list of $n$ nodes on which an object should be placed given a placement group, cluster map and replication factor $n$ . The cluster map not only lists all the object stores but defines failure domains, such as servers sharing a network switch. \textsc{Crush} uses the map to minimize the chance all replicas are taken down by one failure.
+
+\begin{figure}[htbp]
+	\centering
+	\includesvg[width=0.8\columnwidth, pretex=\scriptsize]{figs/papers/ceph_crush}
+	\caption{How Ceph stripes a file to objects and distributes these to different machines}
+	\label{fig:ceph_crush}
+\end{figure}
+
+The use of \textsc{Crush} reduces the amount of work for the metadata servers. They only need to manage the namespace and need not bother regulating where objects are stored and replicated.
+
+\subparagraph{Capabilities}
+File consistency is enforced using capabilities. Before a client will do anything with a files content it requests these from the MDS (metadata servers). There are four capabilities: \textit{read}, \textit{cache} \textit{reads}, \textit{write} and \textit{buffer writes}. When a client is done writing it returns the capability together with the new file size. The MDS can revoke capabilities as needed, in the case of write forcing the client to return the new size. For example before issuing the \textit{write} capability for a file the MDS needs to revoke all \textit{cache reads} capabilities for that file. If it did not a client caching reads would 'read' stale data from its cache while not noticing the file has changed. The MDS also revoke capabilities to provide correct metadata about a file being written to such as when its file size is requested.
+
+% TODO nodes or servers get consistent on terminology
+% TODO write about journal location (RADOS)
 \subparagraph{Metadata}
+Clients need an innode number and capabilities before they can find and access file data. This is handled by the metadata server cluster. These maintain consistancy while resolving paths to innodes, issuing capabilities and providing access to file metadata. Issuing write capabilities for an innode or changing its metadata can only be done  by a single node, the innodes authoritative MDS. In the next section we will dicuss how innodes are assigned an authoritative MDS. The authoritative MDS additionally maintains cache coherency with other MDS that cache information for the innode. These other MDS are used to issue read capabilities and read the innodes metadata.
+
+To recover from crashes changes to metadata are journaled to shared storage. Journalling, appending changes to a log, is faster then storing the updated state of the system. When a node crashes the MDS cluster reads through the journal to recover the state.
+
 \subparagraph{Subtree partitioning}
+If all innodes would share the same authoritative MDS metadata changes and write capability requests would bottleneck \textsc{ceph}. This would be similar to HDFS with standby nodes. Instead we group innodes based on their position in the file system hierachy. Each of these groups, each a subtree of the file system, are assigned their own authoritative MDS balancing the load. The subtrees adapt to the load on the system. The most popular subtrees are split and those responsible for low load are merged.
+
+To determine the popularity each authoritative MDS track the populatity of their subtree by tracking a counter for each innode. The counters decayes exponantially with time. They are increased whenever the corrosponding innode or one of its decendents is used. Periodically all subtrees are compared migrating part the most popular subtrees to their own authoritative MDS while merging less popular subtrees.
+
+Since servers can crash at any time migration needs to be performed carefully. First the journal on the new MDS is appended to noting a migration is in progress. The metadata to be migrated is now appended to the new MDS's journal. When the transfer is done an extra entry in both the migrated to and migrated from server marks completion and the transfer of authority. 
