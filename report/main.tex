@@ -12,6 +12,7 @@
 
 \usepackage{ragged2e}
 \usepackage{cleveref}
+\usepackage[nolist]{acronym}
 
 % \usepackage{float}
 % \usepackage{subcaption}
@@ -37,6 +38,18 @@
 \end{titlepage}
 \tableofcontents
 \clearpage
+
+% constant formatting for names/concepts
+\newcommand{\n}[1]{\lowercase{\textsc{#1}}}
+
+\begin{acronym}
+	\acro{mds}[\n{MDS}]{metadata server}
+	\acro{hdfs}[\n{HDFS}]{Hadoop file system}
+	\acro{pg}[\n{PG}]{placement group}
+	\acro{crush}[\n{CRUSH}]{controlled, scalable, decentralized placement of replicated data}
+	\acro{gfs}[\n{GFS}]{Google file system}
+	\acro{nfs}[\n{NFS}]{network file system}
+\end{acronym}
 
 
 %\section{Introduction}
