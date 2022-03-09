@@ -14,22 +14,13 @@
 \usepackage{cleveref}
 \usepackage[nolist]{acronym}
 
-% \usepackage{float}
-% \usepackage{subcaption}
-%   \captionsetup{compatibility=false}
-% \usepackage[toc,page]{appendix} %appendices with sections
-% \usepackage{amsmath}  % extended mathematics
-% \usepackage{booktabs} % book-quality tables
-% \usepackage{units}    % non-stacked fractions and better unit spacing
-% \usepackage{multicol} % multiple column layout facilities
-% \usepackage{lipsum}   % filler text
-% \usepackage{fancyvrb} % extended verbatim environments
-% \usepackage{multicol} % multi column lists
-
 \raggedright
 \colortheme{skdoc}
 \title{Title to be decided}
 \author{David Kleingeld}
+
+% double spacing
+% \linespread{1.5}
 
 \begin{document}
 
@@ -39,24 +30,33 @@
 \tableofcontents
 \clearpage
 
-% constant formatting for names/concepts
-\newcommand{\n}[1]{\textsc{#1}}
 
+% constant formatting for names/concepts
+\newcommand{\zookeeper}{ZooKeeper}
+\newcommand{\raft}{Raft}
+\newcommand{\paxos}{Paxos}
+\newcommand{\multipaxos}{Multi-Paxos}
+\newcommand{\ceph}{Ceph}
+\newcommand{\zab}{Zab}
+
+\newcommand{\textacro}[1]{\small{#1}}
 \begin{acronym}
-	\acro{mds}[\n{mds}]{metadata server}
-	\acro{hdfs}[\n{hdfs}]{Hadoop file system}
-	\acro{pg}[\n{pg}]{placement group}
-	\acro{crush}[\n{crush}]{controlled, scalable, decentralized placement of replicated data}
-	\acro{gfs}[\n{gfs}]{Google file system}
-	\acro{nfs}[\n{nfs}]{network file system}
-	\acro{osd}[\n{osd}]{object store device}
+	\acro{mds}[\textacro{MDS}]{metadata server}
+	\acro{hdfs}[\textacro{HDFS}]{Hadoop file system}
+	\acro{pg}[\textacro{PG}]{placement group}
+	\acro{crush}[\textacro{CRUSH}]{controlled, scalable, decentralized placement of replicated data}
+	\acro{gfs}[\textacro{GFS}]{Google file system}
+	\acro{nfs}[\textacro{NFS}]{network file system}
+	\acro{osd}[\textacro{OSD}]{object store device}
 \end{acronym}
 
 
 %\section{Introduction}
 %\input{content/intro}
 \section{Background}
-\textbf{TODO write tiney intro}
+
+
+\textbf{TODO write tiney intro, do after introduction has been written}
 \input{content/theory/distributed.tex}
 \input{content/theory/pitfalls.tex}
 \input{content/theory/solutions.tex}
