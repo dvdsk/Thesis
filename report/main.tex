@@ -11,7 +11,7 @@
 	\svgpath{{figs/papers/, figs/plots/}} % not working for some reason
 
 \usepackage{ragged2e}
-\usepackage{cleveref}
+\usepackage[nameinlink]{cleveref}
 \usepackage[nolist]{acronym}
 
 \raggedright
@@ -19,8 +19,8 @@
 \title{Title to be decided}
 \author{David Kleingeld}
 
-% double spacing
-\linespread{1.5}
+% % double spacing
+% \linespread{1.5}
 
 \begin{document}
 
@@ -30,7 +30,6 @@
 \tableofcontents
 \clearpage
 
-
 % constant formatting for names/concepts
 \newcommand{\zookeeper}{ZooKeeper}
 \newcommand{\raft}{Raft}
@@ -38,6 +37,10 @@
 \newcommand{\multipaxos}{Multi-Paxos}
 \newcommand{\ceph}{Ceph}
 \newcommand{\zab}{Zab}
+
+% one day I will think of a name for this
+% ideas: range fs?
+\newcommand{\name}{my system}
 
 \newcommand{\textacro}[1]{\small{#1}}
 \begin{acronym}
@@ -49,14 +52,15 @@
 	\acro{nfs}[\textacro{NFS}]{network file system}
 	\acro{osd}[\textacro{OSD}]{object store device}
 	\acro{api}[\textacro{API}]{application programming interface}
+	\acro{posix}[\textacro{POSIX}]{portable operation system interface}
+	\acro{hpc}[\textacro{HPC}]{high performance computing}
 \end{acronym}
 
 
-%\section{Introduction}
-%\input{content/intro}
+\section{Introduction} \label{sec:intro}
+\input{content/intro} 
+
 \section{Background}
-
-
 \textbf{TODO write tiney intro, do after introduction has been written}
 \input{content/theory/distributed.tex}
 \input{content/theory/pitfalls.tex}
@@ -64,8 +68,10 @@
 \input{content/theory/file_systems.tex}
 \input{content/theory/existing.tex}
 
-%\section{Implementation}
-%\input{content/impl}
+\acresetall{}
+\acused{api}
+\section{Design}
+\input{content/design/architecture}
 %\section{Results}
 %\input{content/res}
 %\section{Conclusion}

@@ -1,0 +1,37 @@
+Here I will discuss my approach to getting scalable consistent distributed file storage. First I will discuss the \ac{api} exposed by my system then I will present the architecture, finally I will detail some of the system behaviour using state machine diagrams.
+
+\subsection{API and Capabilities}
+\ac{posix} has allowed applications to be developed for any complying filesystem. Not implementing \ac{posix} severly limits the use of a system. Similarly expanding the \ac{api} beyond \ac{posix} realising performance gains in the new methods excludes existing applications from these gains. \ceph{}~\cref{sec:ceph} for example trades some usability for performance implementing part of the \ac{posix} \ac{hpc} IO extensions~\cite{hpc_posix}. \ceph{} also trades in all consistency for files using the \ac{hpc} \ac{api}
+
+As alluded to in the introduction (\cref{sec:intro}) a key to my approach is expanding the file system \ac{api} beyond posix. While this makes my system harder to use it gains back the consistency lost by \ceph{} while keeping its scalability. Where \name{} expands upon \ac{posix} is the addition of \textsl{open ranged}. A client that \textit{opens} a file \textit{ranged} can access to only a range of data in the file. This \ac{api} enables limited \emph{parallel concurrent} writes on or combinations of reading and writing in the same file while maintaining consistency.
+
+Like in \ceph{} in \name{} clients gain capability when they open files. These capabilities determine what a client may perform on a file. There are four capablities:
+
+\begin{enumerate}
+	\item read
+	\item read ranged
+	\item write
+	\item write ranged
+\end{enumerate}
+
+The \acp{mds} track which client has what capabilities for each file. Consistency is guarenteed at a file level as long as the \acp{mds} check if capabilities conflict before issueing them. This means the following conditions must hold:
+
+\begin{enumerate} % rewrite to limitations
+	\item A client can have multiple capabilities on the same file, writing or reading multiple nonoverlappig ranges.
+	\item A client can have read \textit{and} write capablities to the same file or region as long as no other client has capabilities to that file or region.
+\end{enumerate}
+ 
+
+% \subsection{Architecture}
+
+% enabled by a scalable, informed \acf{mds} cluster.
+
+% \subsection{Behaviour}
+% architecture
+% 	president
+% 	mds groups
+% 	aMds
+% 	cMds
+% 	uMds
+
+

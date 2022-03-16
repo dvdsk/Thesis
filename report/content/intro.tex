@@ -1,10 +1,14 @@
 %
-% problem statement
+% problem statement: TODO rewrite consistency vs consensus
 %
 % In distributed storage there is a balance between consensus and scalability.
 %
 % Tight consensus requirs orderd operations limiting parallel work.
 %
-% Existing solutions such as HadoopFS limit scalability using a single learder but provide fast tight consensus.
+% Existing solutions, such as HadoopFS, limit scalability using a single learder but provide fast tight consensus.
 %
 % Here I will develop a hybrid approach using a dedicated leaders for different file system subtrees.
+%
+% 
+% workloads requiring concurrently writing to the same file, get an opt out of consistency. This moves the task of maintaining consisency to the task task this makes it harder to write. Range write and read solve this
+%

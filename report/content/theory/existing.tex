@@ -25,7 +25,7 @@ To ensure data will not get corrupted by hardware failure the data is checksumme
 
 A single machine can efficiently handle all file metadata requests, as long as files are large. If the cluster grows sufficiently large while the files stay small the metadata will no longer fit in the coordinating servers memory. Effectively \ac{gfs} has a limit on the number of files. This limit became a problem as it was used for services with smaller files. To work around this applications packed smaller files together before submitting the bundle as a single file to \ac{gfs}~\cite{GFS_interview}.
 
-\subparagraph*{Hadoop FS}
+\subparagraph*{Hadoop FS} \label{sec:hdfs}
 When Hadoop, a framework for distributed data processing, needed a filesystem Apache developed the \ac{hdfs}~\cite{hdfs}. It is based on the \ac{gfs} architecture, open source and (as of writing) actively worked on. While it kept the file limit it offers improved availibility.
 
 The single \ac{mds}\footnote{\ac{hdfs} refers to it as the namenode} is a single point of failure in the original \ac{gfs} design. If it fails the file system will be down and worse if its drive fails all data is lost. To solve this \ac{hdfs} adds standby nodes that can take the place of the \ac{mds}. These share the \ac{mds}'s data using either shared storage~\cite{hdfs_ha_nfs} (which only moves the point of failure) or using a cluster of \textit{journal nodes}~\cite{hdfs_ha_q} which use a quorum to maintain internal consensus under faults. 
@@ -34,7 +34,7 @@ Around 90\% of metadata requests are reads~\cite{hdfs_ha_reads} in \ac{hdfs} the
 
 \ac{hdfs} solves this using \textit{coordinated reads}. The \ac{mds} increments a counter on every metadata change change. The counter is included in the response of the \ac{mds} to a write request. Clients performing a \textit{read} include the lastest counter they got. A standby node will hold a read request until the nodes metadata is up to date with the counter included in the request. In the scenario where two clients communicate via a third channel consistency can be achieved by explicitly requesting up to date metadata. The standby node then checks with the \ac{mds} if it is up to date.
 
-\subsubsection*{Ceph}
+\subsubsection*{Ceph} \label{sec:ceph}
 Building a distributed system that scales, that is performance stays the same as capacity increases, is quite the challange. The \ac{gfs} architecture is limited by the \acf{mds}. \ceph{}~\cite{ceph} minimizes central coordination enabling it to scale infinitly. Metadata is stored on multiple \ac{mds} instead of a single machine and needs not track where data is located. Instead objects are located using \ceph{}'s defining feature: \emph{\ac{crush}}, a controlable hash algorithm. Given an \textit{innode} number and map of the \ac{obs} \ceph{} uses \emph{\ac{crush}} to locate where a files data is or should be stored. 
 
 A client resolves a path to an \textit{innode} by retrieving metadata from the \ac{mds} cluster. It can scales as needed. Data integrity is achieved without need for central coordination as \acp{obs} compare replicas directly. 
