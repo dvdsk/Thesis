@@ -9,6 +9,8 @@
 	\graphicspath{{figs/papers/, figs/plots/}} % set of paths to search for images
 \usepackage{svg}
 	\svgpath{{figs/papers/, figs/plots/}} % not working for some reason
+\usepackage{tikz}
+\usetikzlibrary{positioning, shapes, shapes.symbols, backgrounds, fit, arrows.meta, calc}
 
 \usepackage{ragged2e}
 \usepackage[nameinlink]{cleveref}
@@ -41,10 +43,15 @@
 % one day I will think of a name for this
 % ideas: range fs?
 \newcommand{\name}{my system}
+\newcommand{\Name}{My system}
 
 \newcommand{\textacro}[1]{\small{#1}}
 \begin{acronym}
 	\acro{mds}[\textacro{MDS}]{metadata server}
+	\acro{amds}[\textacro{aMDS}]{authoratative MDS}
+	\acro{cmds}[\textacro{cMDS}]{caching MDS}
+	\acro{umds}[\textacro{uMDS}]{uninitialized MDS}
+
 	\acro{hdfs}[\textacro{HDFS}]{Hadoop file system}
 	\acro{pg}[\textacro{PG}]{placement group}
 	\acro{crush}[\textacro{CRUSH}]{controlled, scalable, decentralized placement of replicated data}
@@ -72,15 +79,9 @@
 \acused{api}
 \section{Design}
 \input{content/design/architecture}
-%\section{Results}
-%\input{content/res}
-%\section{Conclusion}
-%\input{content/conclusion}
 
 \clearpage
 \appendix
-%\section{Run Instructions}
-% \input{content/run_instructions}
 \printbibliography
 
 \end{document}

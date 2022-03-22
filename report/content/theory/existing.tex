@@ -38,7 +38,7 @@ Around 90\% of metadata requests are reads~\cite{hdfs_ha_reads} in \ac{hdfs} the
 Building a distributed system that scales, that is performance stays the same as capacity increases, is quite the challange. The \ac{gfs} architecture is limited by the \acf{mds}. \ceph{}~\cite{ceph} minimizes central coordination enabling it to scale infinitly. Metadata is stored on multiple \ac{mds} instead of a single machine and needs not track where data is located. Instead objects are located using \ceph{}'s defining feature: \emph{\ac{crush}}, a controlable hash algorithm. Given an \textit{innode} number and map of the \ac{obs} \ceph{} uses \emph{\ac{crush}} to locate where a files data is or should be stored. 
 
 A client resolves a path to an \textit{innode} by retrieving metadata from the \ac{mds} cluster. It can scales as needed. Data integrity is achieved without need for central coordination as \acp{obs} compare replicas directly. 
-
+%
 \subparagraph{File Mapping}
 Lets take a closer look at how \ceph{} uses \ac{crush} to map a file to object locations on different servers. The process is illustrated in \cref{fig:ceph_crush}. Similar to \ac{gfs} files are first split into fixed size piecesor objects\footnote{\ac{gfs} called these chunks} each is assigned an id based on the files \textit{innode} number. These object ids are hashed into \acp{pg}. \ac{crush} outputs a list of $n$~\acp{osd} on which an object should be placed given a placement group, cluster map and replication factor~$n$. The cluster map not only lists the \acp{osd} but also defines failure domains, such as servers sharing a network switch. \ac{crush} uses the map to minimize the chance all replicas are taken down by part of the infrastructure failing.
 
@@ -50,18 +50,17 @@ Lets take a closer look at how \ceph{} uses \ac{crush} to map a file to object l
 \end{figure}
 
 The use of \ac{crush} reduces the amount of work for the \acp{mds}. They only need to manage the namespace and need not bother regulating where objects are stored and replicated.
-
+%
 \subparagraph{Capabilities}
 File consistency is enforced using capabilities. Before a client will do anything with file content it requests these from a \acp{mds}. There are four capabilities: \textit{read}, \textit{cache} \textit{reads}, \textit{write} and \textit{buffer writes}. When a client is done it returns the capability together with the new file size. A \ac{mds} can revoke capabilities as needed if a client was writing this forces the client to return the new file size if it wrote to the file. Before issuing the \textit{write} capability for a file a \ac{mds} needs to revoke all \textit{cache read} capabilities for that file. If it did not a client caching reads would 'read' stale data from its cache not noticing the file has changed. A \ac{mds} also revoke capabilities to provide correct metadata for file being written to. This is nessesary as the \ac{mds} only learns about the current file upon response of the writer.
-
-% TODO nodes or servers get consistent on terminology
+%
 \subparagraph{Metadata}
 The \ac{mds} cluster maintains consistancy while resolving paths to innodes, issuing capabilities and providing access to file metadata. Issuing write capabilities for an innode or changing its metadata can only be done  by a unique \ac{mds}, the innodes authoritative \ac{mds}. In the next section we will dicuss how innodes are assigned an authoritative \ac{mds}. The authoritative \ac{mds} additionally maintains cache coherency with other \acp{mds} that cache information for the innode. These other \acp{mds} issue read capabilities and handle metadata reads.
 
 The \ac{mds} cluster must be able to recover from crashes. Changes to metadata are therefore journaled to \ceph{}'s \acfp{osd}. Journalling, appending changes to a log, is faster then updating an on disk state of the system. When a \ac{mds} crashes the \ac{mds} cluster reads through the journal applying each change to recover the state. Since \acp{osd} are replicated metadata can not realistically be lost.
-
-\subparagraph{Subtree partitioning}
-If all innodes could share the same authoritative \ac{mds} metadata changes and write capability requests would bottleneck \ceph{}. Instead we group innodes based on their position in the file system hierachy. These groups, each a subtree of the file system, are all assigned their own authoritative \ac{mds}. The members of a group, representing a subtree, dynamically adjust to balance load. The most popular subtrees are split and those hardly taking any load are merged.
+%
+\subparagraph{Subtree partitioning} \label{sec:subtree}
+If all innodes shared the same authoritative \ac{mds} changing metadata and issuing write capabilities would quickly bottleneck \ceph{}. Instead innodes are grouped based on their position in the file system hierachy. These groups, each a subtree of the file system, are all assigned their own authoritative \ac{mds}. The members of a group, representing a subtree, dynamically adjust to balance load. The most popular subtrees are split and those hardly taking any load are merged.
 
 To determine the popularity of their subtree each authoritative \ac{mds} keeps a counter for each of their innodes. The counters decayes exponantially with time. It is are increased whenever the corrosponding innode or one of its decendents is used. Periodically all subtrees are compared to decide which to merge and which to split.
 

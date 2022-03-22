@@ -1,4 +1,4 @@
-\subsection{Faults and Delays}
+\subsection{Faults and Delays} \label{sec:faults}
 Before we can build a fault resistant system we need to know what we can rely on. While hardware failures are the norm in distributed computing, faults are not the only issue to keep in mind. 
 
 It is entirely normal for the clock of a computer to run slightly to fast or to slow. The resulting drift will normally be tens of milliseconds~\cite{time} unless special measures are taken\footnote{One could synchronize the time within a datacenter or provide nodes with more accurate clocks}. Event worse a process can be paused and then resumed at any time. Such a pause could be because the process thread is pre-emted, because its virtual machine is paused or because the process was paused and resumed after a while\footnote{On linux by sending SigStop then SigCont}. 

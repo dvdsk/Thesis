@@ -1,37 +1,50 @@
 Here I will discuss my approach to getting scalable consistent distributed file storage. First I will discuss the \ac{api} exposed by my system then I will present the architecture, finally I will detail some of the system behaviour using state machine diagrams.
-
+%
 \subsection{API and Capabilities}
-\ac{posix} has allowed applications to be developed for any complying filesystem. Not implementing \ac{posix} severly limits the use of a system. Similarly expanding the \ac{api} beyond \ac{posix} realising performance gains in the new methods excludes existing applications from these gains. \ceph{}~\cref{sec:ceph} for example trades some usability for performance implementing part of the \ac{posix} \ac{hpc} IO extensions~\cite{hpc_posix}. \ceph{} also trades in all consistency for files using the \ac{hpc} \ac{api}
+The \ac{posix} has allowed applications to be developed once for all complying filesystem. Not implementing \ac{posix} severly limits the use of a system. Similarly expanding the \ac{api} beyond \ac{posix} realising performance gains in the new methods excludes existing applications from these gains. \ceph{}~\cref{sec:ceph} for example trades some usability for performance implementing part of the \ac{posix} \ac{hpc} IO extensions~\cite{hpc_posix}. \ceph{} also trades in all consistency for files using the \ac{hpc} \ac{api}
 
-As alluded to in the introduction (\cref{sec:intro}) a key to my approach is expanding the file system \ac{api} beyond posix. While this makes my system harder to use it gains back the consistency lost by \ceph{} while keeping its scalability. Where \name{} expands upon \ac{posix} is the addition of \textsl{open ranged}. A client that \textit{opens} a file \textit{ranged} can access to only a range of data in the file. This \ac{api} enables limited \emph{parallel concurrent} writes on or combinations of reading and writing in the same file while maintaining consistency.
+As alluded to in the introduction (\cref{sec:intro}) a key to my approach is expanding the file system \ac{api} beyond posix. While this makes my system harder to use it gains back the consistency lost by \ceph{} while keeping its scalability. Where \name{} expands upon \ac{posix} is the addition of \textsl{open region}. A client that \textit{opens} a file \textit{region} can access to only a range of data in the file. This \ac{api} enables consistent limited \emph{parallel concurrent} writes on or combinations of reading and writing in the same file.
 
-Like in \ceph{} in \name{} clients gain capability when they open files. These capabilities determine what a client may perform on a file. There are four capablities:
-
-\begin{enumerate}
+Like in \ceph{} in \name{} clients gain capability when they open files. These capabilities determine what a client may perform on a file. There are four capablities: \nopagebreak
+%
+\begin{multicols}{4} % 2 does not work, anyway this way the list is nice, tight and centerd
+\begin{itemize}
 	\item read
-	\item read ranged
+	\item read region
 	\item write
-	\item write ranged
-\end{enumerate}
+	\item write region
+\end{itemize}
+\end{multicols}
+%
+A client with write capabilities may also read data. 
 
-The \acp{mds} track which client has what capabilities for each file. Consistency is guarenteed at a file level as long as the \acp{mds} check if capabilities conflict before issueing them. This means the following conditions must hold:
+\begin{samepage}
+An \ac{mds} tracks the capabilities for a each of its files. The \ac{mds} will not give out a capability that breaks the following condidtion:
+%
+\begin{itemize}
+	\item Multiple clients can have capabilities on the same file as long as write capabilities have no overlap with any region.
+\end{itemize}
+\end{samepage}
+% 
+\subsection{Architecture}
+\begin{figure}
+	\input{figs/diagrams/arch.tex}
+	\caption{The systems architecture. Note there are $n$ \acf{amds} groups, each group can have a different number of \acfp{cmds}. Not all servers in a cluster are always actively used as represented by the grey \acfp{umds}}
+\end{figure}
 
-\begin{enumerate} % rewrite to limitations
-	\item A client can have multiple capabilities on the same file, writing or reading multiple nonoverlappig ranges.
-	\item A client can have read \textit{and} write capablities to the same file or region as long as no other client has capabilities to that file or region.
-\end{enumerate}
- 
+\Name{} uses hierarchical leadership, there is one president elected by all \acp{mds}. The president appoints multiple \acfp{amds} and assigns them a group of \acfp{umds}. An \ac{amds} contacts its group, and promotes each member from unassigned to caching. The president monitors the population, assigning new \acp{amds} on failures, adjusting group given failures and load balances between all groups. Each \ac{amds} periodically sends information characterisig the load it is under to the president. Using this information the president decides how to balance file system tasks between groups. When an \ac{amds} modifies the metadata the changes are communicated to the groups. The modification is only done when the changes are written to all \acp{cmds}.
+%
+\subsubsection*{Consensus}
+Using \raft{} incurs a performance penalty and complicates the design. Not all communication is critical to data integrity or system availibilty therefore I use simpler protocols where possible. 
 
-% \subsection{Architecture}
+Communication from the \ac{amds} to its group members uses log replication similar to \raft{}. When an \ac{amds} is appointed it gets a \raft{} term. Changes to the metadata are shared with \acp{cmds} using log replication. When the \ac{amds} fails the president selects the \ac{cmds} with the highest \textsl{commit index} as the new \ac{amds}.
 
-% enabled by a scalable, informed \acf{mds} cluster.
+Load reports to the president are send over normal TCP ensuring the arrive in order. An \ac{amds} that froze, was replaced and starts working again however can still send outdated reports. By including the term of the sending \ac{amds} the president detects outdated reports and discards them.
+%
+\subsection{Behaviour}
 
-% \subsection{Behaviour}
-% architecture
-% 	president
-% 	mds groups
-% 	aMds
-% 	cMds
-% 	uMds
+\subsubsection*{Metadata groups}
 
+\subsubsection*{Load balancing}
+Load balancing is done using subtree partitioning (see:~\cref{sec:subtree}). The popularity of each 
 
