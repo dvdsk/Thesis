@@ -1,4 +1,4 @@
-use mac_address::get_mac_address;
+use std::net::TcpListener;
 use std::env;
 use tracing::Level;
 
@@ -9,20 +9,21 @@ async fn main() {
         .with_max_level(Level::TRACE)
         .init();
 
-    let cluster_size: u16 = env::args()
-        .skip(1)
+    let mut args = env::args().skip(1);
+    let cluster_size: u16 = args
         .next()
-        .expect("have to pass at least one arg")
+        .expect("have to pass at least two args")
         .parse()
-        .expect("pass id as u16");
+        .expect("pass cluster size as u16");
+    let id = args
+        .next()
+        .expect("pass the id as second argument")
+        .parse()
+        .expect("pass id as u64");
 
-    let id = id_from_mac();
-    let (sock, chart) = discovery::setup(id, 8080).await;
-    let discover = discovery::cluster(&chart, cluster_size);
-    let maintain = discovery::maintain(sock, chart.clone());
-
-    futures::join!(discover, maintain);
-}
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = listener.local_addr().unwrap().port();
+    assert_ne!(port, 0);
 
 fn id_from_mac() -> u64 {
     let mac_bytes = get_mac_address()

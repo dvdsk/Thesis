@@ -178,7 +178,7 @@ async fn main() {
     // setup_tracing(&opt);
 
     let id = id_from_mac();
-    let (sock, chart) = discovery::setup(id, opt.control_port).await;
+    let (sock, chart) = discovery::setup(id).await;
     let (dir, change_idx) = readserv::Directory::new();
     let state = consensus::State::new(&opt, change_idx);
     let state = Arc::new(state);
