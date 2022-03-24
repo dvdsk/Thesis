@@ -6,6 +6,8 @@ use std::time::Duration;
 use rand::{Rng, SeedableRng};
 use tokio::net::UdpSocket;
 use tokio::time::sleep;
+use tokio::time::timeout;
+use tokio::sync::Mutex;
 use tracing::info;
 use serde::{Serialize, Deserialize};
 
@@ -58,18 +60,53 @@ impl Chart {
     }
 }
 
+#[derive(Debug, Clone)]
+struct FixedUdpSocket (Arc<Mutex<UdpSocket>>);
+impl FixedUdpSocket {
+    async fn recv(&self, buf: &mut [u8]) -> Result<(usize, std::net::SocketAddr), std::io::Error> {
+        loop {
+            sleep(Duration::from_millis(250)).await;
+            let sock = self.0.lock().await;
+            dbg!("got recv lock");
+            let recv = sock.recv_from(buf);
+
+            if let Ok(res) = timeout(Duration::from_millis(250), recv).await {
+                dbg!("succesfully recvd");
+                break res;
+            }
+            dbg!("timed out recv");
+        }
+    }
+    async fn send_to(&self, buf: &[u8], addr: impl tokio::net::ToSocketAddrs) -> Result<usize, std::io::Error> {
+        dbg!("trying to send msg");
+        let sock = loop {
+            match self.0.try_lock() {
+                Ok(l) => break l,
+                Err(_) => sleep(Duration::from_millis(100)).await,
+            }
+            dbg!("stuck trying to get lock");
+        };
+        // let sock = self.0.lock().await;
+        dbg!("sending msg");
+        sock.send_to(&buf, addr).await
+    }
+}
+
+
 #[tracing::instrument]
-async fn awnser_incoming(sock: &UdpSocket, chart: &Chart) {
+async fn register_incoming(sock: FixedUdpSocket, chart: Chart) {
+    let mut rng = rand::rngs::SmallRng::from_entropy();
     let mut buf = [0; 1024];
     loop {
-        let (len, addr) = sock.recv_from(&mut buf).await.unwrap();
-        sock.send_to(&chart.id.to_ne_bytes(), addr).await.unwrap();
-        chart.add_response(&buf[0..len], addr);
+        let random_sleep = rng.gen_range(Duration::from_secs(0)..Duration::from_secs(1));
+        sleep(random_sleep).await;
+        let (len, addr) = sock.recv(&mut buf).await.unwrap();
+        // chart.add_response(&buf[0..len], addr);
     }
 }
 
 #[tracing::instrument]
-async fn sleep_then_request_responses(sock: Arc<UdpSocket>, period: Duration, msg: DiscoveryMsg) {
+async fn sleep_then_request_responses(sock: FixedUdpSocket, period: Duration, msg: DiscoveryMsg) {
     let mut rng = rand::rngs::SmallRng::from_entropy();
 
     loop {
@@ -81,7 +118,7 @@ async fn sleep_then_request_responses(sock: Arc<UdpSocket>, period: Duration, ms
 
 #[tracing::instrument]
 pub async fn maintain(sock: UdpSocket, chart: Chart) {
-    let sock = Arc::new(sock);
+    let sock = FixedUdpSocket (Arc::new(Mutex::new(sock)));
     let msg = chart.discovery_msg();
     let f1 = tokio::spawn(register_incoming(sock.clone(), chart));
     let f2 = tokio::spawn(sleep_then_request_responses(sock, Duration::from_secs(5), msg));
@@ -90,8 +127,7 @@ pub async fn maintain(sock: UdpSocket, chart: Chart) {
 }
 
 #[tracing::instrument]
-async fn request_respons(sock: &Arc<UdpSocket>, msg: DiscoveryMsg) {
-    dbg!("requesting response");
+async fn request_respons(sock: &FixedUdpSocket, msg: DiscoveryMsg) {
     let multiaddr = Ipv4Addr::from([224, 0, 0, 251]);
     let buf = bincode::serialize(&msg).unwrap();
     let _len = sock
