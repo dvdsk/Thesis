@@ -1,12 +1,22 @@
 use std::net::TcpListener;
 use std::env;
-use tracing::Level;
+
+use tracing_subscriber::EnvFilter;
+use tracing_subscriber::fmt;
+use tracing_subscriber::prelude::*;
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
-    tracing_subscriber::fmt()
-        .pretty()
-        .with_max_level(Level::TRACE)
+    // let filter = EnvFilter::from_default_env();
+    let console_layer = console_subscriber::spawn();
+    // let fmt_layer = fmt::layer()
+    //     .with_target(false)
+    //     .pretty();
+
+    tracing_subscriber::registry()
+        .with(console_layer)
+        // .with(filter)
+        // .with(fmt_layer)
         .init();
 
     let mut args = env::args().skip(1);
@@ -25,13 +35,13 @@ async fn main() {
     let port = listener.local_addr().unwrap().port();
     assert_ne!(port, 0);
 
-fn id_from_mac() -> u64 {
-    let mac_bytes = get_mac_address()
-        .unwrap()
-        .expect("there should be at least one network decive")
-        .bytes();
+    let (sock, chart) = discovery::setup(id, port).await;
+    let discover = discovery::cluster(chart.clone(), cluster_size);
+    let discover = tokio::spawn(discover);
+    let maintain = discovery::maintain(sock, chart.clone());
+    let maintain = tokio::spawn(maintain);
 
-    let mut id = 0u64.to_ne_bytes();
-    id[0..6].copy_from_slice(&mac_bytes);
-    u64::from_ne_bytes(id)
+    let (e1, e2) = futures::join!(discover, maintain);
+    e1.unwrap();
+    e2.unwrap();
 }

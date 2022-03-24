@@ -81,9 +81,12 @@ async fn sleep_then_request_responses(sock: Arc<UdpSocket>, period: Duration, ms
 
 #[tracing::instrument]
 pub async fn maintain(sock: UdpSocket, chart: Chart) {
-    let f1 = awnser_incoming(&sock, &chart);
-    let f2 = sleep_then_request_responses(&sock, Duration::from_secs(5), chart.id);
-    futures::join!(f1, f2);
+    let sock = Arc::new(sock);
+    let msg = chart.discovery_msg();
+    let f1 = tokio::spawn(register_incoming(sock.clone(), chart));
+    let f2 = tokio::spawn(sleep_then_request_responses(sock, Duration::from_secs(5), msg));
+    let (_, _) = futures::join!(f1, f2);
+    unreachable!("never returns")
 }
 
 #[tracing::instrument]
