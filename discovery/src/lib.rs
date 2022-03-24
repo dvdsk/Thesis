@@ -1,33 +1,41 @@
-use std::convert::TryInto;
 use std::net::Ipv4Addr;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 
+use rand::{Rng, SeedableRng};
 use tokio::net::UdpSocket;
 use tokio::time::sleep;
 use tracing::info;
+use serde::{Serialize, Deserialize};
 
 pub use dashmap;
+use tracing::trace;
 type Id = u64;
 
 #[derive(Debug, Clone)]
 pub struct Chart {
     id: Id,
+    port: u16, // port the node is listening on for work
     map: Arc<dashmap::DashMap<Id, SocketAddr>>,
-    port_to_store: u16,
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy, Debug)]
+struct DiscoveryMsg {
+    id: Id,
+    port: u16,
 }
 
 impl Chart {
     pub fn add_response(&self, buf: &[u8], mut addr: SocketAddr) {
-        let id = u64::from_be_bytes(buf.try_into().expect("incorrect length"));
+        let DiscoveryMsg {port, id} = bincode::deserialize(buf).unwrap();
         if id == self.id {
             return;
         }
-        addr.set_port(self.port_to_store);
+        addr.set_port(port);
         let old_key = self.map.insert(id, addr);
         if old_key.is_none() {
-            info!("added new address: {:?}, total: ({})", addr, self.len());
+            info!("added node: id: {id}, address: {addr:?}, n discoverd: ({})", self.len());
         }
     }
     pub fn adresses(&self) -> Vec<SocketAddr> {
@@ -40,6 +48,13 @@ impl Chart {
 
     pub fn our_id(&self) -> u64 {
         self.id
+    }
+
+    fn discovery_msg(&self) -> DiscoveryMsg {
+        DiscoveryMsg {
+            id: self.id,
+            port: self.port,
+        }
     }
 }
 
@@ -54,14 +69,13 @@ async fn awnser_incoming(sock: &UdpSocket, chart: &Chart) {
 }
 
 #[tracing::instrument]
-async fn sleep_then_request_responses(sock: &UdpSocket, period: Duration, id: Id) {
-    use rand::{Rng, SeedableRng};
+async fn sleep_then_request_responses(sock: Arc<UdpSocket>, period: Duration, msg: DiscoveryMsg) {
     let mut rng = rand::rngs::SmallRng::from_entropy();
 
     loop {
         let random_sleep = rng.gen_range(Duration::from_secs(0)..period);
         sleep(random_sleep).await;
-        request_responses(&sock, period, id).await;
+        request_respons(&sock, msg).await;
     }
 }
 
@@ -73,15 +87,14 @@ pub async fn maintain(sock: UdpSocket, chart: Chart) {
 }
 
 #[tracing::instrument]
-async fn request_responses(sock: &UdpSocket, period: Duration, id: Id) {
+async fn request_respons(sock: &Arc<UdpSocket>, msg: DiscoveryMsg) {
+    dbg!("requesting response");
     let multiaddr = Ipv4Addr::from([224, 0, 0, 251]);
-    loop {
-        sleep(period).await;
-        let _len = sock
-            .send_to(&id.to_ne_bytes(), (multiaddr, 8080))
-            .await
-            .unwrap();
-    }
+    let buf = bincode::serialize(&msg).unwrap();
+    let _len = sock
+        .send_to(&buf, (multiaddr, 8080))
+        .await
+        .unwrap();
 }
 
 #[tracing::instrument]
@@ -94,7 +107,7 @@ async fn listen_for_response(sock: &UdpSocket, chart: &Chart, cluster_majority: 
 }
 
 #[tracing::instrument]
-pub async fn cluster(chart: &Chart, full_size: u16) {
+pub async fn cluster(chart: Chart, full_size: u16) {
     assert!(full_size > 2, "minimal cluster size is 3");
 
     let cluster_majority = (full_size as f32 * 0.5).ceil() as usize;
@@ -105,16 +118,26 @@ pub async fn cluster(chart: &Chart, full_size: u16) {
     info!("found majority of cluster, ({} nodes)", chart.len());
 }
 
-pub async fn setup(id: Id, port_to_store: u16) -> (UdpSocket, Chart) {
+pub async fn setup(id: Id, port: u16) -> (UdpSocket, Chart) {
     let interface = Ipv4Addr::from([0, 0, 0, 0]);
     let multiaddr = Ipv4Addr::from([224, 0, 0, 251]);
 
-    let sock = UdpSocket::bind((interface, 8080)).await.unwrap();
-    sock.join_multicast_v4(multiaddr, interface).unwrap();
-    sock.set_broadcast(true).unwrap();
+    use socket2::{Socket, Domain, Type, SockAddr};
+    let sock = Socket::new(Domain::IPV4, Type::DGRAM, None).unwrap();
+    sock.set_reuse_port(true).unwrap(); // allow binding to a port already in use
+    sock.set_broadcast(true).unwrap(); // enable udp broadcasting
+    sock.set_multicast_loop_v4(true).unwrap(); // send broadcast to self
+
+    let address = SocketAddr::from((interface, 8080));
+    let address = SockAddr::from(address);
+    sock.bind(&address).unwrap();
+    sock.join_multicast_v4(&multiaddr, &interface).unwrap();
+
+    let sock = std::net::UdpSocket::from(sock); 
+    let sock = UdpSocket::from_std(sock).unwrap();
 
     let chart = Chart {
-        port_to_store,
+        port,
         id,
         map: Arc::new(dashmap::DashMap::new()),
     };
