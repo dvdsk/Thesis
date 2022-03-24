@@ -10,7 +10,6 @@ use tracing::info;
 use serde::{Serialize, Deserialize};
 
 pub use dashmap;
-use tracing::trace;
 type Id = u64;
 
 #[derive(Debug, Clone)]
@@ -59,11 +58,10 @@ impl Chart {
 }
 
 #[tracing::instrument]
-async fn awnser_incoming(sock: &UdpSocket, chart: &Chart) {
+async fn register_incoming(sock: Arc<UdpSocket>, chart: Chart) {
     let mut buf = [0; 1024];
     loop {
         let (len, addr) = sock.recv_from(&mut buf).await.unwrap();
-        sock.send_to(&chart.id.to_ne_bytes(), addr).await.unwrap();
         chart.add_response(&buf[0..len], addr);
     }
 }
@@ -91,7 +89,6 @@ pub async fn maintain(sock: UdpSocket, chart: Chart) {
 
 #[tracing::instrument]
 async fn request_respons(sock: &Arc<UdpSocket>, msg: DiscoveryMsg) {
-    dbg!("requesting response");
     let multiaddr = Ipv4Addr::from([224, 0, 0, 251]);
     let buf = bincode::serialize(&msg).unwrap();
     let _len = sock

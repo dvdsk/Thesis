@@ -7,16 +7,16 @@ use tracing_subscriber::prelude::*;
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
-    // let filter = EnvFilter::from_default_env();
-    let console_layer = console_subscriber::spawn();
-    // let fmt_layer = fmt::layer()
-    //     .with_target(false)
-    //     .pretty();
+    let filter = EnvFilter::from_default_env();
+    // let console_layer = console_subscriber::spawn();
+    let fmt_layer = fmt::layer()
+        .with_target(false)
+        .pretty();
 
     tracing_subscriber::registry()
-        .with(console_layer)
-        // .with(filter)
-        // .with(fmt_layer)
+        // .with(console_layer)
+        .with(filter)
+        .with(fmt_layer)
         .init();
 
     let mut args = env::args().skip(1);
