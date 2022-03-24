@@ -7,7 +7,7 @@ edition = "2018"
 
 [dependencies]
 rand = {version = "0.8", features = ["small_rng"]}
-tokio = {version = "1", features=["time", "net", "macros", "rt", "tracing", "sync"]}
+tokio = {version = "1", features=["time", "net", "macros", "rt", "tracing"]}
 futures = "0.3"
 dashmap = "4"
 tracing = "0.1"
