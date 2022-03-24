@@ -1,8 +1,10 @@
+use std::net::{IpAddr, Ipv4Addr};
 use std::sync::Arc;
 
 use gethostname::gethostname;
 use mac_address::get_mac_address;
 use structopt::StructOpt;
+use tokio::net::TcpListener;
 use tracing::info;
 
 pub mod directory;
@@ -35,10 +37,14 @@ struct Opt {
     #[structopt(long)]
     name: Option<String>,
 
-    #[structopt(long, default_value = "23811")]
+    /// If no port is passed the server will pick its own
+    /// the port is printed durign startup
+    #[structopt(long, default_value = "0")]
     client_port: u16,
 
-    #[structopt(long, default_value = "23812")]
+    /// If no port is passed the server will pick its own
+    /// the port is printed durign startup
+    #[structopt(long, default_value = "0")]
     control_port: u16,
 
     #[structopt(long)]
@@ -114,7 +120,7 @@ async fn write_server(
 
 #[tracing::instrument(skip(state, chart, dir))]
 async fn host_meta_or_update(
-    client_port: u16,
+    mut client_listener: TcpListener,
     state: &Arc<consensus::State>,
     chart: &discovery::Chart,
     dir: &readserv::Directory,
@@ -122,7 +128,7 @@ async fn host_meta_or_update(
     use read_meta::meta_server;
     loop {
         tokio::select! {
-            _ = meta_server(client_port, dir, chart, &state) => panic!("should not return"),
+            _ = meta_server(&mut client_listener, dir, chart, &state) => panic!("should not return"),
             _ = state.outdated.notified() => (),
         }
         consensus::update(state, dir).await;
@@ -131,7 +137,8 @@ async fn host_meta_or_update(
 
 #[tracing::instrument(skip(state, chart, dir))]
 async fn read_server(
-    opt: &Opt,
+    control_listener: TcpListener,
+    client_listener: TcpListener,
     state: &Arc<consensus::State>,
     chart: &discovery::Chart,
     dir: &readserv::Directory,
@@ -143,11 +150,12 @@ async fn read_server(
     //  - it notifies the meta_server which kills all current requests
     //  - then the meta server starts updating the directory using the master (if any)
     //    or blocks until there is a master
+    let control_port = control_listener.local_addr().unwrap().port();
     loop {
         tokio::select! {
-            () = read_meta::cmd_server(opt.control_port, state.clone(), dir) => todo!(),
-            _res = host_meta_or_update(opt.client_port, &state, &chart, dir) => panic!("should not return"),
-            _won = election::cycle(opt.control_port, &state, &chart) => {info!("won the election"); return},
+            () = read_meta::cmd_server(control_listener, state.clone(), dir) => todo!(),
+            _res = host_meta_or_update(client_listener, &state, &chart, dir) => panic!("should not return"),
+            _won = election::cycle(control_port, &state, &chart) => {info!("won the election"); return},
         }
     }
 }
@@ -155,13 +163,15 @@ async fn read_server(
 #[tracing::instrument(skip(state, dir, chart))]
 async fn server(
     opt: Opt,
+    control_listener: TcpListener,
+    client_listener: TcpListener,
     state: Arc<consensus::State>,
     mut dir: readserv::Directory,
     chart: discovery::Chart,
 ) {
-    discovery::cluster(&chart, opt.cluster_size).await;
+    discovery::cluster(chart.clone(), opt.cluster_size).await;
     info!("finished discovery");
-    read_server(&opt, &state, &chart, &mut dir).await;
+    read_server(control_listener, client_listener, &state, &chart, &mut dir).await;
 
     info!("promoted to write server");
     let (hb_controller, rx) = consensus::HbControl::new();
@@ -178,12 +188,29 @@ async fn main() {
     // setup_tracing(&opt);
 
     let id = id_from_mac();
-    let (sock, chart) = discovery::setup(id).await;
+
+    let addr = (IpAddr::V4(Ipv4Addr::UNSPECIFIED), opt.control_port);
+    let control_listener = TcpListener::bind(addr).await.unwrap();
+    let addr = (IpAddr::V4(Ipv4Addr::UNSPECIFIED), opt.client_port);
+    let client_listener = TcpListener::bind(addr).await.unwrap();
+
+    let control_port = control_listener.local_addr().unwrap().port();
+    let client_port = client_listener.local_addr().unwrap().port();
+    println!("control port: {control_port}, client_port: {client_port}");
+
+    let (sock, chart) = discovery::setup(id, control_port).await;
     let (dir, change_idx) = readserv::Directory::new();
     let state = consensus::State::new(&opt, change_idx);
     let state = Arc::new(state);
 
-    tokio::spawn(server(opt, state, dir, chart.clone()));
+    tokio::spawn(server(
+        opt,
+        control_listener,
+        client_listener,
+        state,
+        dir,
+        chart.clone(),
+    ));
     discovery::maintain(sock, chart).await;
 
     opentelemetry::global::shutdown_tracer_provider();
