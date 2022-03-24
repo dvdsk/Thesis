@@ -73,7 +73,7 @@ fn setup_tracing(opt: &Opt) {
         .unwrap();
 
     use tracing_subscriber::prelude::*;
-    use tracing_subscriber::{fmt, Registry};
+    use tracing_subscriber::Registry;
     let telemetry = tracing_opentelemetry::subscriber().with_tracer(tracer);
 
     let subscriber = Registry::default().with(telemetry);

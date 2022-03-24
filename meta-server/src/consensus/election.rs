@@ -7,7 +7,7 @@ use tokio::net::TcpStream;
 use tokio::sync::Notify;
 use tokio::time::{self, timeout_at, Duration, Instant};
 
-use tracing::{info, trace, warn};
+use tracing::{info, warn};
 
 use super::{State, HB_TIMEOUT};
 use crate::server_conn::protocol::{FromRS, ToRs};

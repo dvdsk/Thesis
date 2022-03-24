@@ -9,8 +9,6 @@ use std::net::Ipv4Addr;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::net::TcpListener;
-use tracing::info;
-use tracing::warn;
 
 use crate::consensus::State;
 use crate::directory::readserv::Directory;
