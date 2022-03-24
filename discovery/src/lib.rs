@@ -173,6 +173,7 @@ pub async fn setup(id: Id, port: u16) -> (UdpSocket, Chart) {
     sock.join_multicast_v4(&multiaddr, &interface).unwrap();
 
     let sock = std::net::UdpSocket::from(sock); 
+    sock.set_nonblocking(true).unwrap();
     let sock = UdpSocket::from_std(sock).unwrap();
 
     let chart = Chart {
