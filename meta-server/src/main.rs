@@ -1,9 +1,9 @@
 use std::net::{IpAddr, Ipv4Addr};
 use std::sync::Arc;
 
+use clap::{Parser, Subcommand};
 use gethostname::gethostname;
 use mac_address::get_mac_address;
-use structopt::StructOpt;
 use tokio::net::TcpListener;
 use tracing::info;
 
@@ -21,41 +21,37 @@ pub struct Config {
     pub control_port: u16,
 }
 
-impl From<&Opt> for Config {
-    fn from(opt: &Opt) -> Self {
-        Self {
-            control_port: opt.control_port,
-            client_port: opt.client_port,
-            cluster_size: opt.cluster_size,
-        }
-    }
+#[derive(Debug, Clone, Subcommand)]
+enum Command {
+    Local {
+        id: u64,
+    },
+    Deploy {
+        #[clap(long)]
+        client_port: u16,
+
+        #[clap(long)]
+        control_port: u16,
+    },
 }
 
-#[derive(Debug, Clone, StructOpt)]
+#[derive(Debug, Clone, Parser)]
 struct Opt {
+    #[clap(subcommand)]
+    command: Command,
     /// Name used to identify this instance in distributed tracing solutions
-    #[structopt(long)]
+    #[clap(long)]
     name: Option<String>,
 
-    /// If no port is passed the server will pick its own
-    /// the port is printed durign startup
-    #[structopt(long, default_value = "0")]
-    client_port: u16,
-
-    /// If no port is passed the server will pick its own
-    /// the port is printed durign startup
-    #[structopt(long, default_value = "0")]
-    control_port: u16,
-
-    #[structopt(long)]
+    #[clap(long)]
     cluster_size: u16,
 
     /// ip/host dns of the opentelemetry tracing endpoint
-    #[structopt(long, default_value = "localhost")]
+    #[clap(long, default_value = "localhost")]
     tracing_endpoint: String,
 
     /// optional run number defaults to -1
-    #[structopt(long, default_value = "-1")]
+    #[clap(long, default_value = "-1")]
     run_numb: i64,
 }
 
@@ -103,7 +99,6 @@ fn setup_logging() {
 
 #[tracing::instrument(skip(dir, state, chart, hb_control))]
 async fn write_server(
-    opt: Opt,
     dir: readserv::Directory,
     state: &Arc<consensus::State>,
     chart: discovery::Chart,
@@ -111,10 +106,10 @@ async fn write_server(
 ) {
     use write_meta::{server, Directory, ReadServers};
 
-    let servers = ReadServers::new(chart, opt.control_port);
+    let servers = ReadServers::new(chart, state.config.control_port);
     let dir = Directory::from(dir, servers, state, hb_control);
 
-    server(opt.client_port, dir).await;
+    server(state.config.client_port, dir).await;
     info!("starting write server");
 }
 
@@ -176,31 +171,39 @@ async fn server(
     info!("promoted to write server");
     let (hb_controller, rx) = consensus::HbControl::new();
     let send_hb = consensus::maintain_heartbeat(state.clone(), chart.clone(), rx);
-    let host = write_server(opt, dir, &state, chart, hb_controller);
+    let host = write_server(dir, &state, chart, hb_controller);
     tokio::spawn(send_hb);
     host.await
 }
 
 #[tokio::main]
 async fn main() {
-    let opt = Opt::from_args();
+    let opt = Opt::parse();
     setup_logging();
     // setup_tracing(&opt);
 
-    let id = id_from_mac();
+    let (control_port, client_port, id) = match opt.command {
+        Command::Deploy {
+            client_port,
+            control_port,
+        } => (client_port, control_port, id_from_mac()),
+        Command::Local { id } => (0, 0, id), // let os pick ports
+    };
 
-    let addr = (IpAddr::V4(Ipv4Addr::UNSPECIFIED), opt.control_port);
+    let addr = (IpAddr::V4(Ipv4Addr::UNSPECIFIED), control_port);
     let control_listener = TcpListener::bind(addr).await.unwrap();
-    let addr = (IpAddr::V4(Ipv4Addr::UNSPECIFIED), opt.client_port);
+    let addr = (IpAddr::V4(Ipv4Addr::UNSPECIFIED), client_port);
     let client_listener = TcpListener::bind(addr).await.unwrap();
 
     let control_port = control_listener.local_addr().unwrap().port();
     let client_port = client_listener.local_addr().unwrap().port();
-    println!("control port: {control_port}, client_port: {client_port}");
+    info!("id: {id}, control port: {control_port}, client_port: {client_port}");
 
     let (sock, chart) = discovery::setup(id, control_port).await;
     let (dir, change_idx) = readserv::Directory::new();
-    let state = consensus::State::new(&opt, change_idx);
+
+    let config = Config { client_port, control_port, cluster_size: opt.cluster_size };
+    let state = consensus::State::new(config, change_idx);
     let state = Arc::new(state);
 
     tokio::spawn(server(

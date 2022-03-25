@@ -16,14 +16,15 @@ touch $run_numb.last_run
 
 # deploy cluster
 client_port=50978
-numb_nodes=3
+nserver_nodes=3
 bin="meta-server"
-args="
-	--client-port $client_port \
-	--cluster-size $numb_nodes \
-	--control-port 50972 \
+args="\
+	--cluster-size $nserver_nodes \
 	--tracing-endpoint fs1.cm.cluster \
-	--run-numb $run_numb"
+	--run-numb $run_numb \
+	deploy \
+	--client-port 50975 \
+	--control-port $client_port"
 
 res=$(deploy $numb_nodes $bin $args)
 echo $res

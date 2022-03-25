@@ -10,6 +10,6 @@ pub use db::DbError;
 
 type ChunkId = u64;
 pub struct File {
-    lease: Option<Instant>,
-    chunks: Vec<ChunkId>,
+    _lease: Option<Instant>,
+    _chunks: Vec<ChunkId>,
 }
