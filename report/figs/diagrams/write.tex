@@ -1,0 +1,31 @@
+\begin{tikzpicture}[node distance=0.5cm and 1.0cm, auto]
+
+	\node (start) [client] {start};
+	\node (find_amds) [client, subdiagram, right=1.5 of start] {find \ac{amds}};
+	\draw[text_large] (start) to [out=0, in=180] node [] {} (find_amds);
+
+	\node (check_lease) [aMds, right=1.5 of find_amds] {clear conflicting leases};
+	\draw[text_small] (find_amds) to [out=0, in=180] node [] {req write} (check_lease);
+
+	\node (cmds0) [cMds, subdiagram, below left=of check_lease] {revoke overlapping\\ read leases};
+	\node (cmds1) [cMds, subdiagram, below=of cmds0] {revoke overlapping\\ read leases};
+	\node (cmds2) [cMds, subdiagram, below=of cmds1] {revoke overlapping\\ read leases};
+	\node (cmds_in) [invisible, right=-0.1 of cmds0] {};
+	\node (cmds_out) [invisible, right=-0.1 of cmds2] {};
+	\node (outstanding) [aMds, subdiagram, below right=of check_lease] {revoke overlapping\\ write lease};
+
+	\draw[text_small] (check_lease) to [out=0, in=90] node [] {needed range} (outstanding);
+	\draw[text_small] (check_lease) to [out=270, in=0] node [] {needed range} (cmds_in);
+
+	\node (issue) [aMds, below right= of cmds_out] {no conflicting leases};
+	\node (end) [client, right=of issue] {got file handle};
+
+	\draw[text_small] (cmds_out) to [out=0, in=90] node [] {} (issue);
+	\draw[text_small] (issue) to [out=0, in=180] node [] {lease} (end);
+	\draw[text_small] (outstanding) to [out=270, in=90] node [] {} (issue);
+
+	\begin{pgfonlayer}{background}
+		\node [fill=black!8, fit=(cmds0) (cmds2)] {};
+	\end{pgfonlayer}
+
+\end{tikzpicture}

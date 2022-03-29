@@ -1,0 +1,19 @@
+\begin{tikzpicture}
+
+	\node (start) [client] {Contact random node};
+	\node (wrong_tree) [uMds, below =of start] {\ac{mds}\\wrong subtree};
+	\node (spacer) [invisible, below=of wrong_tree] {};
+	\node (amds) [aMds, left=of spacer] {\ac{amds}};
+	\node (right_subtree) [cMds, right=of amds] {\ac{mds}\\right subtree};
+
+	\begin{pgfonlayer}{background}
+		\node [fill=black!8, fit=(right_subtree) (amds)] {};
+	\end{pgfonlayer}
+
+	\draw[text_small] (start) to [out=270, in=90] node [] {} (wrong_tree);
+	\draw[dotted_line] (start) to [out=200, in=90] node [] {} ($(amds.north)-(0.2,0)$);
+	\draw[text_small] (wrong_tree) to [out=270, in=90] node [] {} ($(amds.north)+(0.2,0)$);
+	\draw[dotted_line] (wrong_tree) to [out=270, in=90] node [] {} (right_subtree);
+	\draw[text_small] (right_subtree) to [out=180, in=0] node [] {} (amds);
+
+\end{tikzpicture}

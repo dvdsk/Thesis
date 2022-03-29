@@ -1,0 +1,33 @@
+\definecolor{skBlue}{rgb}{0.04,0.28,0.42}
+\definecolor{skRed}{rgb}{0.56,0.17,0.13}
+\definecolor{skPurple}{rgb}{0.29,0.19,0.59}
+
+\def\itsquare{\setbox0=\hbox{$\blacksquare$}%
+   \pdfliteral{q 1 0 .2 1 0 0 cm}\rlap{$\blacksquare$}\pdfliteral{Q}\kern 8pt }
+\def\itsquareWhite{\setbox0=\hbox{$\blacksquare$}%
+   \pdfliteral{q 1 0 .2 1 0 0 cm}\rlap{$\square$}\pdfliteral{Q}\kern 8pt }
+
+% legend box
+\newcommand{\leg}[1]{\textcolor{#1}{\itsquare}}
+\newcommand{\legWhite}[1]{\textcolor{#1}{\itsquareWhite}}
+\newcommand{\clientLeg}{\leg{skPurple!30}}
+\newcommand{\presidentLeg}{\leg{skRed!30}}
+\newcommand{\amdsLeg}{\leg{skBlue!30}}
+\newcommand{\cmdsLeg}{\legWhite{gray!80}}
+\newcommand{\umdsLeg}{\leg{gray!20}}
+
+% node styles
+\tikzstyle{invisible}=[]
+\tikzstyle{base}=[minimum width=0.5cm, minimum height=0.5cm, font=\footnotesize, align=center]
+\tikzstyle{subdiagram}=[base, dashed, line width=1.0, draw=black!40]
+
+\tikzstyle{client}=[base, rectangle, fill=skPurple!30]
+\tikzstyle{president}=[base, rectangle, fill=skRed!30, font=\normalsize]
+\tikzstyle{aMds}=[base, rectangle, align=left, fill=skBlue!30]
+\tikzstyle{cMds}=[base, rectangle, align=left, fill=white]
+\tikzstyle{uMds}=[base, rectangle, align=left, fill=gray!20]
+
+% text styles
+\tikzstyle{text_large}=[->, -to, thick, font=\normalsize, align=center]
+\tikzstyle{text_small}=[->, -to, thick, font=\footnotesize, align=center]
+\tikzstyle{dotted_line}=[->, -to, dashed, thick, font=\footnotesize, align=center]
