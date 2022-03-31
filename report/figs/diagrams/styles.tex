@@ -17,6 +17,9 @@
 \newcommand{\umdsLeg}{\leg{gray!20}}
 
 % node styles
+\usetikzlibrary{positioning, shapes, shapes.symbols, 
+	backgrounds, fit, arrows.meta, calc, decorations.pathreplacing, shapes, chains, math, arrows.meta}
+
 \tikzstyle{invisible}=[]
 \tikzstyle{base}=[minimum width=0.5cm, minimum height=0.5cm, font=\footnotesize, align=center]
 \tikzstyle{subdiagram}=[base, dashed, line width=1.0, draw=black!40]
@@ -31,3 +34,4 @@
 \tikzstyle{text_large}=[->, -to, thick, font=\normalsize, align=center]
 \tikzstyle{text_small}=[->, -to, thick, font=\footnotesize, align=center]
 \tikzstyle{dotted_line}=[->, -to, dashed, thick, font=\footnotesize, align=center]
+\tikzstyle{bracket}=[decorate, decoration={brace, amplitude=5pt, raise=5pt}, line width=0.5mm, xshift=20pt]

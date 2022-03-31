@@ -42,22 +42,12 @@ Metadata changes are coordinated by an \ac{amds} it serializes metadata modifyin
 
 A groups \acp{cmds} handle metadata queries: issueing read capabilities and providing information about the filesystem tree. Additionally each \ac{cmds} tracks file innode popularity to provide to the \ac{amds}. 
 %
-\subsubsection*{Consensus}
+\subsubsection*{Consensus} \label{sec:concensus} \label{sec:praft}
 Consensus communication has a performance penalty and complicates system design. Not all communication is critical to data integrity or system. I use simpler protocols where possible. 
 
 The president is elected using \raft{}. Its coordination is communicated using \raft{}'s log replication. On failure a new president is elected by all \acp{mds} using \raft{}.
 
-Communication from the \ac{amds} to its group members uses log replication similar to \raft{}. When an \ac{amds} is appointed it gets a \raft{} term. Changes to the metadata are shared with \acp{cmds} using log replication. When the \ac{amds} fails the president selects the \ac{cmds} with the highest \textsl{commit index} as the new \ac{amds}.
+Communication from the \ac{amds} to its group members uses log replication similar to \raft{}. When an \ac{amds} is appointed it gets a \raft{} term. Changes to the metadata are shared with \acp{cmds} using log replication. An \ac{amds} can fail after the change was comitted but before the client was informed of the success. The log index is shared with the client before it is committed, on \ac{amds} failure the client can check with an \ac{cmds} to see if its log entry exists\footnote{Without the log index the client can not distinquish between failure to apply the change and a new change overriding its own.}. When the \ac{amds} fails the president selects the \ac{cmds} with the highest \textsl{commit index} as the new \ac{amds}. I call this \ac{praft}.
 
 Load reports to the president are send over normal TCP ensuring the arrive in order. An \ac{amds} that froze, was replaced and starts working again however can still send outdated reports. By including the term of the sending \ac{amds} the president detects outdated reports and discards them.
 %
-\subsection{Operations}
-The workings of \name{} can be split in two catagories: handling client requests and the presidents coordinating of the \ac{mds} groups. Lets go over two operations for each of these catagories and show how these are fault tolerant.
-
-\subsubsection*{Client requests}
-% - get ranged write capability
-% - delete directory spread over two groups
-
-\subsubsection*{Coordination}
-% - elect a new president after failure
-% - split off a subtree from a group and move it over

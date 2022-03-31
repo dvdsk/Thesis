@@ -1,0 +1,59 @@
+\begin{tikzpicture}[node distance=0.5cm and 0.5cm, auto]
+
+	\node (1) [text_large] {1)};
+	\node (pres) [president, right=of 1] {President};
+	\node (amds) [aMds, right = 1 of pres] {\ac{amds} (failing)};
+	\node (c1) [cMds, right=of amds] {$\text{cMDS}_{1}$};
+	\node (c2) [cMds, right=of c1] {$\text{cMDS}_{2}$};
+	\node (cn) [cMds, right=of c2] {$\text{cMDS}_{n}$};
+	\node at ($(c2.east)!.5!(cn.west)$) {\ldots}; 
+	\begin{pgfonlayer}{background}
+		\node [fill=black!8, fit=(amds) (cn)] {};
+	\end{pgfonlayer}
+
+	\draw[text_small] (amds) to [out=180, in=0] node [] {} (pres);
+	\node at ($(amds.west)!.5!(pres.east)$) {X}; 
+
+	\node (2) [text_large, below=1 of 1] {2)};
+	\node (pres) [president, right=of 2] {President};
+
+	\node (c1) [cMds, right=2 of pres] {$\text{cMDS}_{1}$};
+	\node (c2) [cMds, right=of c1] {$\text{cMDS}_{2}$};
+	\node (cn) [cMds, right=of c2] {$\text{cMDS}_{n}$};
+	\node at ($(c2.east)!.5!(cn.west)$) {\ldots}; 
+	\begin{pgfonlayer}{background}
+		\node [fill=black!8, fit=(c1) (cn)] {};
+	\end{pgfonlayer}
+
+	\draw[text_small] (pres) to [out=0, in=180] node [] {request\\commit idx} (c1);
+	\draw[text_small] (pres) to [out=270, in=270, looseness = 0.2]   node [left, below, xshift=20pt, yshift=3pt] {req. commit idx} (c2);
+	\draw[text_small] (pres) to [out=270, in=270, looseness = 0.3]   node [below] {req. commit idx} (cn);
+
+	\node (3) [text_large, below=1.5 of 2] {3)};
+	\node (pres) [president, right=of 3] {President};
+
+	\node (c1) [cMds, right=2 of pres] {$\text{cMDS}_{1}$};
+	\node (c2) [cMds, right=of c1] {$\text{cMDS}_{2}$};
+	\node (cn) [cMds, right=of c2] {$\text{cMDS}_{n}$};
+	\node at ($(c2.east)!.5!(cn.west)$) {\ldots}; 
+	\begin{pgfonlayer}{background}
+		\node [fill=black!8, fit=(c1) (cn)] {};
+	\end{pgfonlayer}
+
+	\draw[text_small, <-] (pres) to [out=0, in=180] node [] {idx: $k$} (c1);
+	\draw[text_small, <-] (pres) to [out=270, in=270, looseness = 0.2]   node [left, below, xshift=20pt, yshift=3pt] {idx: $k-1$} (c2);
+	\draw[text_small, <-] (pres) to [out=270, in=270, looseness = 0.3]   node [below] {idx: $k-j$} (cn);
+
+	\node (4) [text_large, below=1.5 of 3] {4)};
+	\node (pres) [president, right=of 4] {President};
+
+	\node (amds) [aMds, right=1.7 of pres] {$\text{aMDS}$};
+	\node (c2) [cMds, right=of amds] {$\text{cMDS}_{2}$};
+	\node (cn) [cMds, right=of c2] {$\text{cMDS}_{n}$};
+	\node at ($(c2.east)!.5!(cn.west)$) {\ldots}; 
+	\begin{pgfonlayer}{background}
+		\node [fill=black!8, fit=(amds) (cn)] {};
+	\end{pgfonlayer}
+	\draw[text_small] (amds) to [out=180, in=0] node [above] {heartbeat} (pres);
+
+\end{tikzpicture}

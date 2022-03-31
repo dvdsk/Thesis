@@ -1,0 +1,48 @@
+\subsection{Operations} %TODO rename leases -> capabilities or get clear on what the difference is
+Here we go over all the operations of the system while discussing four in greater detail. I also discuss how other operations are simplere forms of these four. This section is split in two parts: client requests and coordination by the president.
+%
+\subsubsection*{Client requests}
+For all requests a client needs to find a \ac{mds} to talk to. If the request modifies the namespace, such as write, create and delete, the client needs to contact the \ac{amds}. In \Cref{fig:find_aMDS} we see how this works. Since load balancing changes and \ac{amds} appointments are communicated through \raft{} each cluster member knows which \ac{mds} group and \ac{amds} owns a given subtree. Because client does not know the current \raft{} \textit{term} nor \textit{commit} they can not judge if the information is up to date. At worst this means a few extra jumps through irralivent \acp{mds} before they get up to date information.
+%
+\begin{figure}[htbp]
+	\centering
+	\input{figs/diagrams/find_aMDS.tex}
+	\caption{A new client~\clientLeg{} finding an \ac{amds}~\amdsLeg{} for a file. Its route can go through the wrong subtree~\umdsLeg{} or via a group member~\cmdsLeg{}. Whenever there is a choice dotted lines indicate the less likely path.}
+	\label{fig:find_aMDS}
+\end{figure}
+%
+\subparagraph*{Capabilities} 
+A client needing write capability on a file contacts the \ac{amds}. It checks if the lease can be given out and asks its \acp{cmds} to revoke outstanding read leases that conflict. A read lease conflict when its region overlaps with the region needed for the write capability. If a \ac{cmds} lost contact with a client it can not revoke the lease and has to wait till the lease expires. The process is illustrated in \Cref{fig:write}. 
+
+For read capabilities the requests is send to a \ac{cmds}. It checks against the \raft{} log if the leases would conflict with an outstanding write lease. If no conflict is found the lease is issued and the connection to the client kept active. Keeping an active connection makes it possible to revoke or quickly refresh the lease.
+%
+\begin{figure}[htbp]
+	\centering
+	\input{figs/diagrams/write.tex}
+	\caption{A client~\clientLeg{} requesting ranged write capabilities. It finds and contacts the \ac{amds}~\amdsLeg{}. The \ac{amds} then contacts the \acp{cmds}~\cmdsLeg to clear conflicting read capabilities. Meanwhile it waits for any conflicting write leases it gave out to expire.}
+	\label{fig:write}
+\end{figure}
+%
+\subparagraph*{Namespace Changes}
+Most changes to the namespace are simpel edits to a \ac{mds} groups metadata table. The client sends its request to the \ac{amds}. The change is performed by adding a commands to the \ac{praft} log (see: \Cref{sec:praft}). Before committing the change the client gets the log index for the change. If the \ac{amds} goes down before acknowleding success the client verifies if the change happend using the log index.
+
+Removing a directory spanning one or more load balanced subtrees needs a little more care. One or more \acp{amds} will have to delete their entire subtree. This requires coordination across the entire cluster. The clients remove requests is forwarded by the \ac{amds} to the \textit{president}. It in turn appends \textsl{Subtree Delete} to the cluster wide log. The client recieves the log index for the command to verify success even if the \textit{president} fails. The steps the \ac{amds} takes are shown in \Cref{fig:rm}. 
+%
+\begin{figure}[htbp]
+	\centering
+	\input{figs/diagrams/del_dir.tex}
+	\caption{An \ac{amds}~\amdsLeg{}, here $\ac{amds}_j$, removes a directory (tree) that is load balanced between multiple groups. The president~\presidentLeg{} coordinates the removal by appending a command to the log. Once it is committed the \acp{amds} hosting subtrees of the directory demote themself to \ac{umds} and $\ac{mds}$ group $j$ drops the directory from its db}
+	\label{fig:rm}
+\end{figure}
+%
+\subsubsection*{Coordination}
+
+\begin{figure}[htbp]
+	\centering
+	\input{figs/diagrams/apoint.tex}
+	\caption{An \ac{amds}~\amdsLeg{} fails and does not send a heartbeat on time (1). The president~\presidentLeg{} requests the latest commit index (2). Node $\text{\ac{cmds}}_1$~\cmdsLeg{} has index $k$ and it is the highest (3). The president has promoted $\text{\ac{cmds}}_1$ to \ac{amds}, it has started sending heartbeats (4)}
+	\label{fig:appoint}
+\end{figure}
+
+% - split off a subtree from a group and move it over
+

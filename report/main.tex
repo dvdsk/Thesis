@@ -10,7 +10,7 @@
 \usepackage{svg}
 	\svgpath{{figs/papers/, figs/plots/}} % not working for some reason
 \usepackage{tikz}
-\usetikzlibrary{positioning, shapes, shapes.symbols, backgrounds, fit, arrows.meta, calc}
+\usepackage{subcaption}
 
 \usepackage{ragged2e}
 \usepackage[nameinlink]{cleveref}
@@ -61,7 +61,10 @@
 	\acro{api}[\textacro{API}]{application programming interface}
 	\acro{posix}[\textacro{POSIX}]{portable operation system interface}
 	\acro{hpc}[\textacro{HPC}]{high performance computing}
+	\acro{praft}[\textacro{pRaft}]{Presidential Raft}
 \end{acronym}
+
+\input{figs/diagrams/styles.tex}
 
 \section{Introduction} \label{sec:intro}
 \input{content/intro} 
@@ -77,7 +80,8 @@
 \acresetall{}
 \acused{api}
 \section{Design}
-\input{content/design}
+\input{content/design/architecture.tex}
+\input{content/design/operations.tex}
 
 \clearpage
 \appendix
