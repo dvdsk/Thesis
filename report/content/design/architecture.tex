@@ -41,6 +41,8 @@ The president coordinates the cluster: monitoring the population, assigning new 
 Metadata changes are coordinated by an \ac{amds} it serializes metadata modifying requests and ensures the changes proliferate to the group's \acp{cmds}. Changes are only completed when they are written to half of the \acp{cmds}. Additionally the \ac{amds} keeps track of file innode popularity querying its \acp{cmds} periodically.
 
 A groups \acp{cmds} handle metadata queries: issueing read capabilities and providing information about the filesystem tree. Additionally each \ac{cmds} tracks file innode popularity to provide to the \ac{amds}. 
+
+It is not a good idea to assign as much \acp{cmds} to groups as possible. Each extra \ac{cmds} is one more machine the \ac{amds} needs to contact for each change. The cluster might therefore keep some \acp{umds} unassigned. I will get back to this when discussing how to add a new subtree in \Cref{sec:loadb}.
 %
 \subsubsection*{Consensus} \label{sec:concensus} \label{sec:praft}
 Consensus communication has a performance penalty and complicates system design. Not all communication is critical to data integrity or system. I use simpler protocols where possible. 

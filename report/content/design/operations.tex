@@ -35,14 +35,34 @@ Removing a directory spanning one or more load balanced subtrees needs a little 
 	\label{fig:rm}
 \end{figure}
 %
-\subsubsection*{Coordination}
+\subsubsection*{Availibility}
+Ensuring file system avalibility is the responsibility of the \textit{president}. This includes replacing nodes that fail and load balancing. All \acp{amds} and \acp{cmds} periodically send heartbeats to the president. In this design I improve scalability by moving tasks from a central authority (the president) to groups of nodes. Following this pattern we could let the \acp{amds} monitor their \acp{cmds}. This is more complex then letting them report directly to the \textit{president}. Even reporting directly to the president is not needed, instead I use the TCP ack to the \textit{president}'s \raft{} heartbeat. When the \textit{president} fails to send a \raft{} heartbeat to a node it decides it is offline.
+
+\subparagraph*{Failing \ac{mds}}
+When the president notices an \ac{amds} has failed it will try to replace it. It queries the \ac{amds}'s group to find the ideal candidate for promotion. It it gets a response from less then half the group it can not safely replace the \ac{amds}. At that point it marks the file subtree as down and may retry in the future. A succesful replace is illustrated in \Cref{fig:appoint}.
+
+% TODO instead wait till load balance check corrects it?
+% what to do with nodes quickly going down?
+% just check load balance often? (is just calc not the data geathering)
+A \ac{cmds} going down is handled by the president in one of two ways:
+\begin{itemize}
+	\item There is at least one \ac{umds}. The president assigns the \ac{umds} to the failing nodes group. 
+	\item There are no free \ac{umds}. The president, through raft, commands a \ac{cmds} in the group with the lowest load to demote itself. Then the president drops the matter The \ac{cmds} wait till its read leases expire and unassigns.
+\end{itemize}
+When the groups \ac{amds} appends to the groups \ac{praft} log it will notice the replacement \ac{cmds} is outdated and update its log (see \cref{sec:raft}).
 
 \begin{figure}[htbp]
 	\centering
 	\input{figs/diagrams/apoint.tex}
-	\caption{An \ac{amds}~\amdsLeg{} fails and does not send a heartbeat on time (1). The president~\presidentLeg{} requests the latest commit index (2). Node $\text{\ac{cmds}}_1$~\cmdsLeg{} has index $k$ and it is the highest (3). The president has promoted $\text{\ac{cmds}}_1$ to \ac{amds}, it has started sending heartbeats (4)}
+	\caption{An \ac{amds}~\amdsLeg{} fails and does not send a heartbeat on time (1). The president~\presidentLeg{} requests the latest commit index (2). Node $\text{\ac{cmds}}_1$~\cmdsLeg{} has index $k$ and it is the highest (3). The president has promoted $\text{\ac{cmds}}_1$ to \ac{amds}, it has started sending heartbeats (4). Note the heartbeats send by the \acp{cmds} are not shown.}
 	\label{fig:appoint}
 \end{figure}
 
-% - split off a subtree from a group and move it over
+\subparagraph*{New subtree} \label{sec:loadb}
 
+\begin{figure}[htbp]
+	\centering
+	\input{figs/diagrams/subtree.tex}
+	\caption{}
+	\label{fig:subtree}
+\end{figure}

@@ -28,7 +28,7 @@ Lets get a feeling why this works by looking at what happens during node failure
 
 To build a distributed state machine you run multiple instances of \paxos{}. This is often referd to as \multipaxos{}. The value for each instance is a command to change the shared state. \multipaxos{} is not specified in literature and has never been verified.
 
-\subsubsection*{Raft}
+\subsubsection*{Raft} \label{sec:raft}
 The \paxos{} algorithm allows us to reach consensus on a single value. The \raft{} algorithm enables consent on a shared log. We can only append to and reading from the log. The content of the log wil always be the same on all nodes. As long as a majority of the nodes still function the log will be readable and appendable.
 
 \raft{} maintains a single leader. Appanding to the log is sequential because only the leader is allowed to append. The leader is decided on by a \textit{quorum}. There are two parts to \raft{}, \textit{electing leaders} and \textit{log replication}.
