@@ -1,0 +1,80 @@
+\begin{tikzpicture}[node distance=0.5cm and 0.5cm, auto]
+	\node (mds0) [aMds, subdiagram] {write overload};
+	\node (pres) [president, subdiagram, right=1.2 of mds0] {no unassigned};
+	\node (lpres) [invisible, left=2.6 of pres] {};
+	\node (rpres) [circle, fill, inner sep=2pt, right=0.6 of pres] {};
+	\draw[text_small] (mds0) to [out=0, in=180] node [midway] {load\\report} (pres);
+	
+	\node (a0)[aMds, below=of lpres]{$\text{aMDS}_0$};
+    \node (a1)[aMds, below=of a0]{$\text{aMDS}_1$};
+    \node (a2)[aMds, below=of a1]{$\text{aMDS}_2$};
+
+	\foreach \n in {0,1,2}
+	{
+		\node (c0) [cMds, right=of a\n] {$\text{cMDS}_0$};
+		\node (c1) [cMds, right=of c0] {$\text{cMDS}_1$};
+		\node (c2) [cMds, right=of c1] {$\text{cMDS}_2$};
+		\node (c3_\n) [cMds, right=of c2] {$\text{cMDS}_3$};
+
+		\begin{pgfonlayer}{background}
+			\node [fill=black!8, fit=(a\n) (c3_\n)] {};
+		\end{pgfonlayer}
+
+		\draw[text_small, looseness = 0.5] (rpres.center) to [out=0, in=180] node [] {} (c3_\n);
+	}
+	\draw[text_small, -] (pres) to [out=0, in=180] node [xshift=20] {\raft{}(unassign)} (rpres.center);
+
+	\node (c0_dots) [text_small, below=1.2 of a2] {\ldots};
+	\node (c0)[cMds, right=0.2 of c0_dots]{$\text{cMDS}_3$};
+	\node (c1_dots) [text_small, below=0.6 of c0_dots] {\ldots};
+    \node (c1)[cMds, right=0.2 of c1_dots]{$\text{cMDS}_3$};
+	\node (c2_dots) [text_small, below=0.6 of c1_dots] {\ldots};
+    \node (c2)[cMds, right=0.2 of c2_dots]{$\text{cMDS}_3$};
+
+	\begin{pgfonlayer}{background}
+		\foreach \n in {0,1,2}
+			\node [fill=black!8, fit=(c\n) (c\n_dots)] {};
+	\end{pgfonlayer}
+
+	\node (mid) at ($(a2)!.5!(c0)$) {};
+	\node (line_start) [invisible, left=1.5 of mid] {};
+	\node (line_end) [invisible, right=8 of mid] {Raft commit};
+	\draw[thick, dashed] (line_start) to [out=0, in=180] node [] {} (line_end);
+
+	\foreach \n in {0,1,2} 
+	{
+		\node (u\n) [uMds, right=of c\n] {uMDS};
+		\draw[text_small] (c\n) to [out=0, in=180] node [] {} (u\n);
+	}
+
+	\node (pres) [president, right=3 of u1] {President};
+	\node (mds0) [aMds, subdiagram, right=4 of u0] {still overloaded};
+	\draw[text_small] (mds0) to [out=270, in=0] node [] {load report} (pres);
+
+	\foreach \n in {0,1,2}
+	{
+		\draw[text_small, font=\ssmall, color=black!50, dashed] (u\n.north east) 
+			to [out=0, in=180, looseness=0.8, bend left] node [] {hb} (pres);
+	}
+	\draw[text_small, font=\ssmall] (pres) to [out=180, in=0, looseness=0.8, bend left] 
+		node [midway, above, xshift=20, yshift=-5] {\raft{}(assign)} (u0.south east);
+	\draw[text_small, font=\ssmall] (pres) to [out=180, in=0, looseness=0.8, bend left] 
+		node [xshift=-10] {\raft{}(assign)} (u1.south east);
+	\draw[text_small, font=\ssmall] (pres) to [out=180, in=0, looseness=0.8, bend left] 
+		node [] {\raft{}(assign and promote)} (u2.south east);
+
+	\node (a0) [aMds, below=4.8 of a2] {$\text{aMDS}_3$};
+	\node (c0) [cMds, right=of a0] {$\text{cMDS}_0$};
+	\node (c1) [cMds, right=of c0] {$\text{cMDS}_1$};
+	\node (dots) [text_large, right=of c1] {\ldots};
+
+	\begin{pgfonlayer}{background}
+		\node [fill=black!8, fit=(a0) (c1)] {};
+	\end{pgfonlayer}
+
+	\node (mid) at ($(c2)!.6!(a0)$) {};
+	\node (line_start) [invisible, left=1.5 of mid] {};
+	\node (line_end) [invisible, right=8 of mid] {Raft commit};
+	\draw[thick, dashed] (line_start) to [out=0, in=180] node [] {} (line_end);
+
+\end{tikzpicture}
