@@ -1,0 +1,22 @@
+[package]
+name = "discovery"
+version = "0.1.0"
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+rand = {version = "0.8", features = ["small_rng"]}
+tokio = {version = "1", features=["time", "net", "macros", "rt", "tracing"]}
+futures = "0.3"
+dashmap = "4"
+tracing = "0.1"
+tracing-futures = "0.1"
+serde = { version = "1", features = ["derive"] }
+bincode = "1.3"
+socket2 = "0.4"
+
+[dev-dependencies]
+mac_address = "1.1.2"
+tracing-subscriber = {version = "0.3", features = ["fmt", "ansi", "env-filter"]}
+console-subscriber = "0.1"

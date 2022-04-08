@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 report/main.aux
 report/main.bbl
 report/main.bcf
@@ -10,3 +11,19 @@ notes/
 papers/
 nohup.out
 svg-inkscape/
+=======
+client/target
+meta-server/target
+protocol/target
+tracing/jeager-all-in-one
+Cargo.lock
+tracing-min-example
+**/target/
+*.aux
+*.bbl
+*.blg
+*.log
+*.toc
+
+remote
+>>>>>>> prototype/main

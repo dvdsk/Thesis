@@ -1,0 +1,37 @@
+[package]
+name = "meta-server"
+version = "0.1.0"
+edition = "2018"
+
+[dependencies]
+client_protocol = { package = "protocol", path = "../protocol" }
+discovery = { package = "discovery", path = "../discovery" }
+
+clap = { version = "3", features = ["derive"] }
+futures = "0.3"
+gethostname = "0.2"
+rand = {version = "0.8", features = ["small_rng"]}
+tokio = {version = "^1.10", features = ["sync", "time", "net", "macros", "rt-multi-thread"]}
+tokio-util = { version = "0.6", features = ["codec"] }
+tokio-serde = { version = "0.8", features = ["bincode"] }
+flume = { version = "0.10", no-default-features = true, features = ["async"] }
+serde = { version = "1", features = ["derive"] }
+mac_address = "1.1.2"
+
+sled = "0.34"
+
+futures-util = "0.3"
+
+thiserror = "1"
+
+simplelog = "0.10"
+tracing = {git = "https://github.com/tokio-rs/tracing", rev = "8d4d5ac", features = ["log-always"] }
+tracing-futures = {git = "https://github.com/tokio-rs/tracing", rev = "8d4d5ac" }
+tracing-subscriber = {git = "https://github.com/tokio-rs/tracing", rev = "8d4d5ac", features = ["fmt", "json"] }
+tracing-opentelemetry = {git = "https://github.com/tokio-rs/tracing", rev = "8d4d5ac" }
+# tracing-log = {git = "https://github.com/tokio-rs/tracing" }
+
+opentelemetry = { version = "0.16", features = ["trace", "rt-tokio"] }
+opentelemetry-jaeger = { version = "0.15", features = ["reqwest_collector_client", "rt-tokio"]}
+
+# console-subscriber = { git = "https://github.com/tokio-rs/console" }
