@@ -26,7 +26,8 @@ struct DiscoveryMsg {
 }
 
 impl Chart {
-    pub fn add_response(&self, buf: &[u8], mut addr: SocketAddr) {
+    #[tracing::instrument]
+    pub fn process_buf(&self, buf: &[u8], mut addr: SocketAddr) {
         let DiscoveryMsg {port, id} = bincode::deserialize(buf).unwrap();
         if id == self.id {
             return;
@@ -34,15 +35,16 @@ impl Chart {
         addr.set_port(port);
         let old_key = self.map.insert(id, addr);
         if old_key.is_none() {
-            info!("added node: id: {id}, address: {addr:?}, n discoverd: ({})", self.len());
+            info!("added node: id: {id}, address: {addr:?}, n discoverd: ({})", self.size());
         }
     }
     pub fn adresses(&self) -> Vec<SocketAddr> {
-        self.map.iter().map(|m| m.value().clone()).collect()
+        self.map.iter().map(|m| *m.value()).collect()
     }
 
-    pub fn len(&self) -> usize {
-        self.map.len()
+    /// members discoverd including self
+    pub fn size(&self) -> usize {
+        self.map.len() + 1
     }
 
     pub fn our_id(&self) -> u64 {
@@ -58,22 +60,22 @@ impl Chart {
 }
 
 #[tracing::instrument]
-async fn register_incoming(sock: Arc<UdpSocket>, chart: Chart) {
+async fn handle_incoming(sock: Arc<UdpSocket>, chart: Chart) {
     let mut buf = [0; 1024];
     loop {
         let (len, addr) = sock.recv_from(&mut buf).await.unwrap();
-        chart.add_response(&buf[0..len], addr);
+        chart.process_buf(&buf[0..len], addr);
     }
 }
 
 #[tracing::instrument]
-async fn sleep_then_request_responses(sock: Arc<UdpSocket>, period: Duration, msg: DiscoveryMsg) {
+async fn send_periodically(sock: Arc<UdpSocket>, period: Duration, msg: DiscoveryMsg) {
     let mut rng = rand::rngs::SmallRng::from_entropy();
 
     loop {
         let random_sleep = rng.gen_range(Duration::from_secs(0)..period);
         sleep(random_sleep).await;
-        request_respons(&sock, msg).await;
+        send(&sock, msg).await;
     }
 }
 
@@ -81,14 +83,14 @@ async fn sleep_then_request_responses(sock: Arc<UdpSocket>, period: Duration, ms
 pub async fn maintain(sock: UdpSocket, chart: Chart) {
     let sock = Arc::new(sock);
     let msg = chart.discovery_msg();
-    let f1 = tokio::spawn(register_incoming(sock.clone(), chart));
-    let f2 = tokio::spawn(sleep_then_request_responses(sock, Duration::from_secs(5), msg));
+    let f1 = tokio::spawn(handle_incoming(sock.clone(), chart));
+    let f2 = tokio::spawn(send_periodically(sock, Duration::from_secs(5), msg));
     let (_, _) = futures::join!(f1, f2);
     unreachable!("never returns")
 }
 
 #[tracing::instrument]
-async fn request_respons(sock: &Arc<UdpSocket>, msg: DiscoveryMsg) {
+async fn send(sock: &Arc<UdpSocket>, msg: DiscoveryMsg) {
     let multiaddr = Ipv4Addr::from([224, 0, 0, 251]);
     let buf = bincode::serialize(&msg).unwrap();
     let _len = sock
@@ -100,22 +102,33 @@ async fn request_respons(sock: &Arc<UdpSocket>, msg: DiscoveryMsg) {
 #[tracing::instrument]
 async fn listen_for_response(sock: &UdpSocket, chart: &Chart, cluster_majority: usize) {
     let mut buf = [0; 1024];
-    while chart.len() < cluster_majority {
+    while chart.size() < cluster_majority {
         let (len, addr) = sock.recv_from(&mut buf).await.unwrap();
-        chart.add_response(&buf[0..len], addr);
+        chart.process_buf(&buf[0..len], addr);
     }
 }
 
 #[tracing::instrument]
-pub async fn cluster(chart: Chart, full_size: u16) {
+pub async fn found_everyone(chart: Chart, full_size: u16) {
     assert!(full_size > 2, "minimal cluster size is 3");
 
-    let cluster_majority = (full_size as f32 * 0.5).ceil() as usize;
-    while chart.len() < cluster_majority {
+    while chart.size() < full_size.into() {
         sleep(Duration::from_millis(100)).await;
     }
 
-    info!("found majority of cluster, ({} nodes)", chart.len());
+    info!("found every member of the cluster, ({} nodes)", chart.size());
+}
+
+#[tracing::instrument]
+pub async fn found_majority(chart: Chart, full_size: u16) {
+    assert!(full_size > 2, "minimal cluster size is 3");
+
+    let cluster_majority = (full_size as f32 * 0.5).ceil() as usize;
+    while chart.size() < cluster_majority {
+        sleep(Duration::from_millis(100)).await;
+    }
+
+    info!("found majority of cluster, ({} nodes)", chart.size());
 }
 
 pub async fn setup(id: Id, port: u16) -> (UdpSocket, Chart) {

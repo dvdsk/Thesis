@@ -36,7 +36,7 @@ async fn main() {
     assert_ne!(port, 0);
 
     let (sock, chart) = discovery::setup(id, port).await;
-    let discover = discovery::cluster(chart.clone(), cluster_size);
+    let discover = discovery::found_majority(chart.clone(), cluster_size);
     let discover = tokio::spawn(discover);
     let maintain = discovery::maintain(sock, chart.clone());
     let maintain = tokio::spawn(maintain);
