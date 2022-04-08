@@ -48,13 +48,13 @@
 	}
 
 	\node (pres) [president, right=3 of u1] {President};
-	\node (mds0) [aMds, subdiagram, right=4 of u0] {still overloaded};
-	\draw[text_small] (mds0) to [out=270, in=0] node [] {load report} (pres);
+	\node (mds0) [subdiagram, dotted, draw=black, right=4 of u0] {queued load report};
+	\draw[text_small] (mds0) to [out=270, in=0] node [] {} (pres);
 
 	\foreach \n in {0,1,2}
 	{
 		\draw[text_small, font=\ssmall, color=black!50, dashed] (u\n.north east) 
-			to [out=0, in=180, looseness=0.8, bend left] node [] {hb} (pres);
+			to [out=0, in=180, looseness=0.8, bend left] node [] {done} (pres);
 	}
 	\draw[text_small, font=\ssmall] (pres) to [out=180, in=0, looseness=0.8, bend left] 
 		node [midway, above, xshift=20, yshift=-5] {\raft{}(assign)} (u0.south east);

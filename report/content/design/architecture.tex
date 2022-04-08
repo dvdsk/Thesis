@@ -28,7 +28,7 @@ An \ac{mds} tracks the capabilities for a each of its files. The \ac{mds} will n
 \end{itemize}
 \end{samepage}
 % 
-\subsection{Architecture}
+\subsection{Architecture} \label{sec:arch}
 \begin{figure}
 	\input{figs/diagrams/arch.tex}
 	\caption{An overview of the architecture. Note there are $n$ \acf{amds} groups, each group can have a different number of \acfp{cmds}. Not all servers in a cluster are always actively used as represented by the grey \acfp{umds}}
@@ -36,7 +36,7 @@ An \ac{mds} tracks the capabilities for a each of its files. The \ac{mds} will n
 
 \Name{} uses hierarchical leadership, there is one president elected by all \acp{mds}. The president in turn appoints multiple \acfp{amds} then assigns each a group of \acfp{umds}. An \ac{amds} contacts its group, and promotes each member from unassigned to caching. 
 
-The president coordinates the cluster: monitoring the population, assigning new \acp{amds} on failures, adjusting group given failures and load balances between all groups. Load balancing is done through subtree partitioning~\cite{ceph} (see:~\cref{sec:subtree}) with each subtree assigned to a group. To enable the president to make load balancing decisions each \ac{amds} periodically sends file innode popularity.
+The president coordinates the cluster: monitoring the population, assigning new \acp{amds} on failures, adjusting group given failures and load balances between all groups. Load balancing is done in two ways: increasing the size of a group and increasing the number of groups using dynamic subtree partitioning~\cite{ceph} (see:~\cref{sec:subtree}). To enable the president to make load balancing decisions each \ac{amds} periodically sends file innode popularity.
 
 Metadata changes are coordinated by an \ac{amds} it serializes metadata modifying requests and ensures the changes proliferate to the group's \acp{cmds}. Changes are only completed when they are written to half of the \acp{cmds}. Additionally the \ac{amds} keeps track of file innode popularity querying its \acp{cmds} periodically.
 
