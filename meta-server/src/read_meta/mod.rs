@@ -5,12 +5,9 @@ use futures_util::TryStreamExt;
 use tracing::error;
 use tracing::trace;
 use std::net::IpAddr;
-use std::net::Ipv4Addr;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::net::TcpListener;
-use tracing::info;
-use tracing::warn;
 
 use crate::consensus::State;
 use crate::directory::readserv::Directory;
@@ -72,12 +69,7 @@ async fn client_conn(mut stream: ReqStream, dir: &Directory, chart: &Chart, stat
     }
 }
 
-pub async fn meta_server(port: u16, dir: &Directory, chart: &Chart, state: &Arc<State>) {
-    let addr = (IpAddr::V4(Ipv4Addr::UNSPECIFIED), port);
-    let listener = TcpListener::bind(addr)
-        .await
-        .expect("can not listen for client meta requests");
-
+pub async fn meta_server(listener: &mut TcpListener, dir: &Directory, chart: &Chart, state: &Arc<State>) {
     loop {
         let dir = dir.clone();
         let chart = chart.clone();
@@ -129,10 +121,7 @@ async fn cmd_conn(mut stream: RsStream, source: SocketAddr, state: &State, dir: 
     }
 }
 
-pub async fn cmd_server(port: u16, state: Arc<State>, dir: &Directory) {
-    let addr = (IpAddr::V4(Ipv4Addr::UNSPECIFIED), port);
-    let listener = TcpListener::bind(addr).await.unwrap();
-
+pub async fn cmd_server(listener: TcpListener, state: Arc<State>, dir: &Directory) {
     loop {
         let state = state.clone();
         let dir = dir.clone();

@@ -12,14 +12,15 @@ rm *.last_run >& /dev/null || true
 touch $run_numb.last_run
 
 # deploy cluster
-numb_nodes=23
+nserver_nodes=23
 bin="meta-server"
-args="
-	--client-port 50975 \
-	--cluster-size $numb_nodes \
-	--control-port 50972 \
+args="\
+	--cluster-size $nserver_nodes \
 	--tracing-endpoint fs1.cm.cluster \
-	--run-numb $run_numb"
+	--run-numb $run_numb \
+	deploy \
+	--client-port 50975 \
+	--control-port 50972"
 deploy $numb_nodes $bin $args
 attach
 cleanup

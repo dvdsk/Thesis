@@ -67,6 +67,9 @@ bin/bench_ls: client_examples
 # Other
 #----------------------------------------------------------------------------
 
+local:
+	bash scripts/deploy_local.sh
+
 deploy: bin/meta-server
 	$(info test done)
 	bash scripts/deploy_cluster.sh

@@ -36,7 +36,7 @@ macro_rules! load_atomic {
 }
 
 impl State {
-    pub fn new(config: impl Into<Config>, change_idx: u64) -> Self {
+    pub fn new(config: Config, change_idx: u64) -> Self {
         Self {
             term: AtomicU64::new(0),
             change_idx: AtomicU64::new(change_idx),

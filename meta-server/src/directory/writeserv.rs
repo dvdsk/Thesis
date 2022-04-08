@@ -83,7 +83,7 @@ impl Directory {
         self.consistent_change(change, apply_to_db).await
     }
 
-    pub async fn open(&mut self, path: PathString, existance: Existence) -> Result<(), DbError> {
+    pub async fn open(&mut self, _path: PathString, _existance: Existence) -> Result<(), DbError> {
         todo!()
     }
 }

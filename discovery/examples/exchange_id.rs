@@ -1,36 +1,47 @@
-use mac_address::get_mac_address;
+use std::net::TcpListener;
 use std::env;
-use tracing::Level;
+
+use tracing_subscriber::EnvFilter;
+use tracing_subscriber::fmt;
+use tracing_subscriber::prelude::*;
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
-    tracing_subscriber::fmt()
-        .pretty()
-        .with_max_level(Level::TRACE)
+    let filter = EnvFilter::from_default_env();
+    // let console_layer = console_subscriber::spawn();
+    let fmt_layer = fmt::layer()
+        .with_target(false)
+        .pretty();
+
+    tracing_subscriber::registry()
+        // .with(console_layer)
+        .with(filter)
+        .with(fmt_layer)
         .init();
 
-    let cluster_size: u16 = env::args()
-        .skip(1)
+    let mut args = env::args().skip(1);
+    let cluster_size: u16 = args
         .next()
-        .expect("have to pass at least one arg")
+        .expect("have to pass at least two args")
         .parse()
-        .expect("pass id as u16");
+        .expect("pass cluster size as u16");
+    let id = args
+        .next()
+        .expect("pass the id as second argument")
+        .parse()
+        .expect("pass id as u64");
 
-    let id = id_from_mac();
-    let (sock, chart) = discovery::setup(id, 8080).await;
-    let discover = discovery::cluster(&chart, cluster_size);
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = listener.local_addr().unwrap().port();
+    assert_ne!(port, 0);
+
+    let (sock, chart) = discovery::setup(id, port).await;
+    let discover = discovery::cluster(chart.clone(), cluster_size);
+    let discover = tokio::spawn(discover);
     let maintain = discovery::maintain(sock, chart.clone());
+    let maintain = tokio::spawn(maintain);
 
-    futures::join!(discover, maintain);
-}
-
-fn id_from_mac() -> u64 {
-    let mac_bytes = get_mac_address()
-        .unwrap()
-        .expect("there should be at least one network decive")
-        .bytes();
-
-    let mut id = 0u64.to_ne_bytes();
-    id[0..6].copy_from_slice(&mac_bytes);
-    u64::from_ne_bytes(id)
+    let (e1, e2) = futures::join!(discover, maintain);
+    e1.unwrap();
+    e2.unwrap();
 }
