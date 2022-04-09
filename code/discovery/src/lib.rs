@@ -1,3 +1,21 @@
+//! Simple lightweight local service discovery for testing
+//!
+//! This crate provides a lightweight alternative to mDNS. It discovers other instances on the
+//! same machine or network. There is no need to set up a server no decide on a name.
+//!
+//! However is something else is causing 
+//!
+//! ## Usage
+//!
+//! Add a dependency on `udiscovery` in `Cargo.toml`:
+//!
+//! ```toml
+//! multicast-discovery = "0.1"
+//! ```!
+//!
+//! Now 
+
+use std::io;
 use std::net::Ipv4Addr;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -9,18 +27,43 @@ use tokio::time::sleep;
 use tracing::info;
 use serde::{Serialize, Deserialize};
 
+mod builder;
+pub use builder::ChartBuilder;
+
 pub use dashmap;
 type Id = u64;
 
+#[derive(thiserror::Error, Debug)]
+pub enum Error {
+    #[error("Error setting up bare socket")]
+    Construct(io::Error),
+    #[error("Error not set Reuse flag on the socket")]
+    SetReuse(io::Error),
+    #[error("Error not set Broadcast flag on the socket")]
+    SetBroadcast(io::Error),
+    #[error("Error not set Multicast flag on the socket")]
+    SetMulticast(io::Error),
+    #[error("Error not set NonBlocking flag on the socket")]
+    SetNonBlocking(io::Error),
+    #[error("Error binding to socket")]
+    Bind(io::Error),
+    #[error("Error joining multicast network")]
+    JoinMulticast(io::Error),
+    #[error("Error transforming to async socket")]
+    ToTokio(io::Error),
+}
+
 #[derive(Debug, Clone)]
 pub struct Chart {
+    header: u64,
     id: Id,
-    port: u16, // port the node is listening on for work
+    sock: Arc<UdpSocket>,
     map: Arc<dashmap::DashMap<Id, SocketAddr>>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug)]
 struct DiscoveryMsg {
+    header: u64,
     id: Id,
     port: u16,
 }
@@ -28,7 +71,10 @@ struct DiscoveryMsg {
 impl Chart {
     #[tracing::instrument]
     pub fn process_buf(&self, buf: &[u8], mut addr: SocketAddr) {
-        let DiscoveryMsg {port, id} = bincode::deserialize(buf).unwrap();
+        let DiscoveryMsg {header, port, id} = dbg!(bincode::deserialize(buf).unwrap());
+        if header != self.header {
+            return;
+        }
         if id == self.id {
             return;
         }
@@ -51,40 +97,47 @@ impl Chart {
         self.id
     }
 
+    pub fn port(&self) -> u16 {
+        self.sock.local_addr().unwrap().port()
+    }
+
     fn discovery_msg(&self) -> DiscoveryMsg {
         DiscoveryMsg {
+            header: self.header,
             id: self.id,
-            port: self.port,
+            port: self.port(),
         }
     }
 }
 
 #[tracing::instrument]
-async fn handle_incoming(sock: Arc<UdpSocket>, chart: Chart) {
+async fn handle_incoming(chart: Chart) {
     let mut buf = [0; 1024];
     loop {
-        let (len, addr) = sock.recv_from(&mut buf).await.unwrap();
+        info!("hi");
+        let (len, addr) = chart.sock.recv_from(&mut buf).await.unwrap();
+        info!("got msg from: {addr:?}");
         chart.process_buf(&buf[0..len], addr);
     }
 }
 
 #[tracing::instrument]
-async fn send_periodically(sock: Arc<UdpSocket>, period: Duration, msg: DiscoveryMsg) {
+async fn send_periodically(chart: Chart, period: Duration) {
     let mut rng = rand::rngs::SmallRng::from_entropy();
+    let msg = chart.discovery_msg();
 
     loop {
-        let random_sleep = rng.gen_range(Duration::from_secs(0)..period);
+        let random_sleep = rng.gen_range(Duration::from_secs(5)..period);
         sleep(random_sleep).await;
-        send(&sock, msg).await;
+        info!("sending");
+        send(&chart.sock, msg).await;
     }
 }
 
 #[tracing::instrument]
-pub async fn maintain(sock: UdpSocket, chart: Chart) {
-    let sock = Arc::new(sock);
-    let msg = chart.discovery_msg();
-    let f1 = tokio::spawn(handle_incoming(sock.clone(), chart));
-    let f2 = tokio::spawn(send_periodically(sock, Duration::from_secs(5), msg));
+pub async fn maintain(chart: Chart) {
+    let f1 = tokio::spawn(handle_incoming(chart.clone()));
+    let f2 = tokio::spawn(send_periodically(chart, Duration::from_secs(10)));
     let (_, _) = futures::join!(f1, f2);
     unreachable!("never returns")
 }
@@ -100,10 +153,10 @@ async fn send(sock: &Arc<UdpSocket>, msg: DiscoveryMsg) {
 }
 
 #[tracing::instrument]
-async fn listen_for_response(sock: &UdpSocket, chart: &Chart, cluster_majority: usize) {
+async fn listen_for_response(chart: &Chart, cluster_majority: usize) {
     let mut buf = [0; 1024];
     while chart.size() < cluster_majority {
-        let (len, addr) = sock.recv_from(&mut buf).await.unwrap();
+        let (len, addr) = chart.sock.recv_from(&mut buf).await.unwrap();
         chart.process_buf(&buf[0..len], addr);
     }
 }
@@ -129,31 +182,4 @@ pub async fn found_majority(chart: Chart, full_size: u16) {
     }
 
     info!("found majority of cluster, ({} nodes)", chart.size());
-}
-
-pub async fn setup(id: Id, port: u16) -> (UdpSocket, Chart) {
-    let interface = Ipv4Addr::from([0, 0, 0, 0]);
-    let multiaddr = Ipv4Addr::from([224, 0, 0, 251]);
-
-    use socket2::{Socket, Domain, Type, SockAddr};
-    let sock = Socket::new(Domain::IPV4, Type::DGRAM, None).unwrap();
-    sock.set_reuse_port(true).unwrap(); // allow binding to a port already in use
-    sock.set_broadcast(true).unwrap(); // enable udp broadcasting
-    sock.set_multicast_loop_v4(true).unwrap(); // send broadcast to self
-
-    let address = SocketAddr::from((interface, 8080));
-    let address = SockAddr::from(address);
-    sock.bind(&address).unwrap();
-    sock.join_multicast_v4(&multiaddr, &interface).unwrap();
-
-    let sock = std::net::UdpSocket::from(sock); 
-    sock.set_nonblocking(true).unwrap();
-    let sock = UdpSocket::from_std(sock).unwrap();
-
-    let chart = Chart {
-        port,
-        id,
-        map: Arc::new(dashmap::DashMap::new()),
-    };
-    (sock, chart)
 }

@@ -1,5 +1,7 @@
 use std::net::UdpSocket;
-use tracing::debug;
+use discovery::ChartBuilder;
+use multicast_discovery as discovery;
+use tracing::{debug, info};
 
 fn setup_tracing() {
     use tracing_subscriber::{filter, prelude::*};
@@ -41,8 +43,8 @@ async fn node(id: u64, cluster_size: u16) {
     let port = reserv_socket.local_addr().unwrap().port();
     assert_ne!(port, 0);
 
-    let (sock, chart) = discovery::setup(id, port).await;
-    let maintain = discovery::maintain(sock, chart.clone());
+    let chart = ChartBuilder::new().with_id(id).build().unwrap();
+    let maintain = discovery::maintain(chart.clone());
     let _ = tokio::spawn(maintain);
 
     discovery::found_everyone(chart.clone(), cluster_size).await;
