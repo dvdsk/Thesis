@@ -1,19 +1,36 @@
 //! Simple lightweight local service discovery for testing
 //!
 //! This crate provides a lightweight alternative to mDNS. It discovers other instances on the
-//! same machine or network. There is no need to set up a server no decide on a name.
-//!
-//! However is something else is causing 
+//! same machine or network. You provide an Id and Port you wish to be contacted on. Multicast-discovery
+//! then gives you a live updating chart of all the discovered Ids, Ports pairs and their adress.
 //!
 //! ## Usage
 //!
-//! Add a dependency on `udiscovery` in `Cargo.toml`:
+//! Add a dependency on `multicast-discovery` in `Cargo.toml`:
 //!
 //! ```toml
 //! multicast-discovery = "0.1"
-//! ```!
+//! ```
 //!
-//! Now 
+//! Now add the following snippet somewhere in your codebase. Discovery will stop when you drop the
+//! maintain future.
+//!
+//! ```rust
+//!use multicast_discovery as discovery;
+//!use discovery::ChartBuilder;
+//!
+//!#[tokio::main]
+//!async fn main() {
+//!   let chart = ChartBuilder::new()
+//!       .with_id(1)
+//!       .with_service_port(8042)
+//!       .build()
+//!       .unwrap();
+//!   let maintain = discovery::maintain(chart.clone());
+//!   let maintain = tokio::spawn(maintain);
+//! }
+//! ```
+//!
 
 use std::io;
 use std::net::Ipv4Addr;
@@ -22,15 +39,17 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use rand::{Rng, SeedableRng};
+use serde::{Deserialize, Serialize};
 use tokio::net::UdpSocket;
 use tokio::time::sleep;
+use tracing::debug;
 use tracing::info;
-use serde::{Serialize, Deserialize};
 
 mod builder;
 pub use builder::ChartBuilder;
 
-pub use dashmap;
+use dashmap;
+use tracing::trace;
 type Id = u64;
 
 #[derive(thiserror::Error, Debug)]
@@ -71,8 +90,8 @@ struct DiscoveryMsg {
 
 impl Chart {
     #[tracing::instrument]
-    pub fn process_buf(&self, buf: &[u8], mut addr: SocketAddr) {
-        let DiscoveryMsg {header, port, id} = dbg!(bincode::deserialize(buf).unwrap());
+    fn process_buf(&self, buf: &[u8], mut addr: SocketAddr) {
+        let DiscoveryMsg { header, port, id } = bincode::deserialize(buf).unwrap();
         if header != self.header {
             return;
         }
@@ -82,7 +101,10 @@ impl Chart {
         addr.set_port(port);
         let old_key = self.map.insert(id, addr);
         if old_key.is_none() {
-            info!("added node: id: {id}, address: {addr:?}, n discoverd: ({})", self.size());
+            debug!(
+                "added node: id: {id}, address: {addr:?}, n discoverd: ({})",
+                self.size()
+            );
         }
     }
     pub fn adresses(&self) -> Vec<SocketAddr> {
@@ -115,9 +137,8 @@ impl Chart {
 async fn handle_incoming(chart: Chart) {
     let mut buf = [0; 1024];
     loop {
-        info!("hi");
         let (len, addr) = chart.sock.recv_from(&mut buf).await.unwrap();
-        info!("got msg from: {addr:?}");
+        trace!("got msg from: {addr:?}");
         chart.process_buf(&buf[0..len], addr);
     }
 }
@@ -130,7 +151,7 @@ async fn send_periodically(chart: Chart, period: Duration) {
     loop {
         let random_sleep = rng.gen_range(Duration::from_secs(5)..period);
         sleep(random_sleep).await;
-        info!("sending");
+        trace!("sending discovery msg");
         send(&chart.sock, msg).await;
     }
 }
@@ -139,18 +160,15 @@ async fn send_periodically(chart: Chart, period: Duration) {
 pub async fn maintain(chart: Chart) {
     let f1 = tokio::spawn(handle_incoming(chart.clone()));
     let f2 = tokio::spawn(send_periodically(chart, Duration::from_secs(10)));
-    let (_, _) = futures::join!(f1, f2);
-    unreachable!("never returns")
+    let (_, _) = tokio::join!(f1, f2);
+    unreachable!("maintain never returns")
 }
 
 #[tracing::instrument]
 async fn send(sock: &Arc<UdpSocket>, msg: DiscoveryMsg) {
     let multiaddr = Ipv4Addr::from([224, 0, 0, 251]);
     let buf = bincode::serialize(&msg).unwrap();
-    let _len = sock
-        .send_to(&buf, (multiaddr, 8080))
-        .await
-        .unwrap();
+    let _len = sock.send_to(&buf, (multiaddr, 8080)).await.unwrap();
 }
 
 #[tracing::instrument]
@@ -169,8 +187,10 @@ pub async fn found_everyone(chart: Chart, full_size: u16) {
     while chart.size() < full_size.into() {
         sleep(Duration::from_millis(100)).await;
     }
-
-    info!("found every member of the cluster, ({} nodes)", chart.size());
+    info!(
+        "found every member of the cluster, ({} nodes)",
+        chart.size()
+    );
 }
 
 #[tracing::instrument]
@@ -181,6 +201,5 @@ pub async fn found_majority(chart: Chart, full_size: u16) {
     while chart.size() < cluster_majority {
         sleep(Duration::from_millis(100)).await;
     }
-
     info!("found majority of cluster, ({} nodes)", chart.size());
 }

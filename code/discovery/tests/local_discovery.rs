@@ -1,24 +1,20 @@
 use discovery::ChartBuilder;
 use multicast_discovery as discovery;
 use std::net::UdpSocket;
-use tracing::{debug, info};
+use tracing::info;
 
 fn setup_tracing() {
     use tracing_subscriber::{filter, prelude::*};
 
-    let filter_modules = filter::filter_fn(|metadata| {
-        if let Some(module) = metadata.module_path() {
-            !module.contains("tarp")
-        } else {
-            true
-        }
-    });
+    let filter = filter::EnvFilter::builder()
+        .parse("info,multicast_discovery=debug")
+        .unwrap();
+
     let fmt = tracing_subscriber::fmt::layer().pretty().with_test_writer();
 
     let _ignore_err = tracing_subscriber::registry()
+        .with(filter)
         .with(fmt)
-        .with(filter::LevelFilter::INFO)
-        .with(filter_modules)
         .try_init();
 }
 
@@ -50,5 +46,5 @@ async fn node(id: u64, cluster_size: u16) {
     let _ = tokio::spawn(maintain);
 
     discovery::found_everyone(chart.clone(), cluster_size).await;
-    debug!("discovery complete: {chart:?}");
+    info!("discovery complete: {chart:?}");
 }

@@ -2,6 +2,7 @@ use discovery::ChartBuilder;
 use multicast_discovery as discovery;
 use std::env;
 use std::net::TcpListener;
+use tracing::info;
 
 use tracing_subscriber::fmt;
 use tracing_subscriber::prelude::*;
@@ -9,12 +10,10 @@ use tracing_subscriber::EnvFilter;
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
-    let filter = EnvFilter::from_default_env();
-    // let console_layer = console_subscriber::spawn();
+    let filter = EnvFilter::from_default_env(); // use: RUST_LOG=info,multicast_discovery=debug
     let fmt_layer = fmt::layer().with_target(false).pretty();
 
     tracing_subscriber::registry()
-        // .with(console_layer)
         .with(filter)
         .with(fmt_layer)
         .init();
@@ -35,13 +34,15 @@ async fn main() {
     let port = listener.local_addr().unwrap().port();
     assert_ne!(port, 0);
 
-    let chart = ChartBuilder::new().with_id(id).build().unwrap();
-    let discover = discovery::found_majority(chart.clone(), cluster_size);
-    let discover = tokio::spawn(discover);
-    let maintain = discovery::maintain(chart.clone());
-    let maintain = tokio::spawn(maintain);
+    let chart = ChartBuilder::new()
+        .with_id(id)
+        .with_service_port(port)
+        .build()
+        .unwrap();
 
-    let (e1, e2) = futures::join!(discover, maintain);
-    e1.unwrap();
-    e2.unwrap();
+    let maintain = discovery::maintain(chart.clone());
+    let _ = tokio::spawn(maintain);
+
+    discovery::found_everyone(chart.clone(), cluster_size).await;
+    info!("discovery complete: {chart:?}");
 }
