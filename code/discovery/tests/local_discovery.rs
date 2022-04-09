@@ -1,6 +1,6 @@
-use std::net::UdpSocket;
 use discovery::ChartBuilder;
 use multicast_discovery as discovery;
+use std::net::UdpSocket;
 use tracing::{debug, info};
 
 fn setup_tracing() {
@@ -13,9 +13,7 @@ fn setup_tracing() {
             true
         }
     });
-    let fmt = tracing_subscriber::fmt::layer()
-        .pretty()
-        .with_test_writer();
+    let fmt = tracing_subscriber::fmt::layer().pretty().with_test_writer();
 
     let _ignore_err = tracing_subscriber::registry()
         .with(fmt)
@@ -29,9 +27,9 @@ async fn local_discovery() {
     setup_tracing();
 
     let cluster_size: u16 = 5;
-    let handles: Vec<_> = (0..cluster_size).map(|id| {
-        tokio::spawn(node(id.into(), cluster_size))
-    }).collect();
+    let handles: Vec<_> = (0..cluster_size)
+        .map(|id| tokio::spawn(node(id.into(), cluster_size)))
+        .collect();
 
     for h in handles {
         h.await.unwrap();
@@ -43,7 +41,11 @@ async fn node(id: u64, cluster_size: u16) {
     let port = reserv_socket.local_addr().unwrap().port();
     assert_ne!(port, 0);
 
-    let chart = ChartBuilder::new().with_id(id).build().unwrap();
+    let chart = ChartBuilder::new()
+        .with_id(id)
+        .with_service_port(port)
+        .build()
+        .unwrap();
     let maintain = discovery::maintain(chart.clone());
     let _ = tokio::spawn(maintain);
 

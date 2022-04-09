@@ -56,7 +56,8 @@ pub enum Error {
 #[derive(Debug, Clone)]
 pub struct Chart {
     header: u64,
-    id: Id,
+    service_id: Id,
+    service_port: u16,
     sock: Arc<UdpSocket>,
     map: Arc<dashmap::DashMap<Id, SocketAddr>>,
 }
@@ -75,7 +76,7 @@ impl Chart {
         if header != self.header {
             return;
         }
-        if id == self.id {
+        if id == self.service_id {
             return;
         }
         addr.set_port(port);
@@ -94,18 +95,18 @@ impl Chart {
     }
 
     pub fn our_id(&self) -> u64 {
-        self.id
+        self.service_id
     }
 
-    pub fn port(&self) -> u16 {
+    pub fn discovery_port(&self) -> u16 {
         self.sock.local_addr().unwrap().port()
     }
 
     fn discovery_msg(&self) -> DiscoveryMsg {
         DiscoveryMsg {
             header: self.header,
-            id: self.id,
-            port: self.port(),
+            id: self.service_id,
+            port: self.service_port,
         }
     }
 }

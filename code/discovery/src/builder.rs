@@ -23,45 +23,63 @@ impl Assigned for Yes {}
 impl NotAssigned for No {}
 
 const DEFAULT_HEADER: u64 = 66_87_164_55_203_64_126_67;
+const DEFAULT_PORT: u16 = 8080;
 
-pub struct ChartBuilder<IdSet: ToAssign> {
+#[derive(Default)]
+pub struct ChartBuilder<IdSet, PortSet> 
+where 
+    IdSet: ToAssign,
+    PortSet: ToAssign,
+{
     header: u64,
-    id: Option<Id>,
-    port: u16, // port the node is listening on for work
+    service_id: Option<Id>,
+    service_port: Option<u16>,
+    discovery_port: u16, // port the node is listening on for work
 
     id_set: PhantomData<IdSet>,
+    port_set: PhantomData<PortSet>,
 }
 
-impl ChartBuilder<No> {
-    pub fn new() -> ChartBuilder<No> {
-        ChartBuilder::<No> {
-            header: DEFAULT_HEADER,
-            id: None,
-            port: 8888,
-            id_set: PhantomData {},
-        }
-    }
-    pub fn from_port(port: u16) -> ChartBuilder<No> {
-        ChartBuilder {
-            header: DEFAULT_HEADER,
-            id: None,
-            port,
-            id_set: Default::default(),
-        }
+impl ChartBuilder<No, No> {
+    pub fn new() -> ChartBuilder<No, No> {
+        let mut builder = ChartBuilder::default();
+        builder.header = DEFAULT_HEADER;
+        builder.discovery_port = DEFAULT_PORT;
+        builder
     }
 }
 
-impl<IdSet: ToAssign> ChartBuilder<IdSet> {
-    pub fn with_id(self, id: Id) -> ChartBuilder<Yes> {
+impl<IdSet, PortSet> ChartBuilder<IdSet, PortSet> 
+where 
+    IdSet: ToAssign,
+    PortSet: ToAssign,
+{
+    pub fn with_id(self, id: Id) -> ChartBuilder<Yes, PortSet> {
         ChartBuilder {
             header: self.header,
-            id: Some(id),
-            port: self.port,
+            discovery_port: self.discovery_port,
+            service_id: Some(id),
+            service_port: self.service_port,
             id_set: PhantomData {},
+            port_set: PhantomData {},
         }
     }
-    pub fn with_header(mut self, header: u64) -> ChartBuilder<IdSet> {
+    pub fn with_service_port(self, service_port: u16) -> ChartBuilder<IdSet, Yes> {
+        ChartBuilder {
+            header: self.header,
+            discovery_port: self.discovery_port,
+            service_id: self.service_id,
+            service_port: Some(service_port),
+            id_set: PhantomData {},
+            port_set: PhantomData {},
+        }
+    }
+    pub fn with_header(mut self, header: u64) -> ChartBuilder<IdSet, PortSet> {
         self.header = header;
+        self
+    }
+    pub fn with_discovery_port(mut self, port: u16) -> ChartBuilder<IdSet, PortSet> {
+        self.discovery_port = port;
         self
     }
 }
@@ -91,12 +109,13 @@ fn open_socket(port: u16) -> Result<UdpSocket, Error> {
     Ok(sock)
 }
 
-impl ChartBuilder<Yes> {
+impl ChartBuilder<Yes, Yes> {
     pub fn build(self) -> Result<Chart, Error> {
-        let sock = open_socket(self.port)?;
+        let sock = open_socket(self.discovery_port)?;
         Ok(Chart {
             header: self.header,
-            id: self.id.unwrap(),
+            service_id: self.service_id.unwrap(),
+            service_port: self.service_port.unwrap(),
             sock: Arc::new(sock),
             map: Arc::new(dashmap::DashMap::new()),
         })
