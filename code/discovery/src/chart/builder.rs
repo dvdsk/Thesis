@@ -1,10 +1,11 @@
 use std::marker::PhantomData;
 use std::net::{Ipv4Addr, SocketAddr};
 use std::sync::Arc;
+use std::time::Duration;
 
 use crate::Error;
 
-use super::{Chart, Id};
+use super::{interval, Chart, Id};
 use tokio::net::UdpSocket;
 
 #[derive(Debug, Default)]
@@ -26,8 +27,8 @@ const DEFAULT_HEADER: u64 = 66_87_164_55_203_64_126_67;
 const DEFAULT_PORT: u16 = 8080;
 
 #[derive(Default)]
-pub struct ChartBuilder<IdSet, PortSet> 
-where 
+pub struct ChartBuilder<IdSet, PortSet>
+where
     IdSet: ToAssign,
     PortSet: ToAssign,
 {
@@ -35,7 +36,7 @@ where
     service_id: Option<Id>,
     service_port: Option<u16>,
     discovery_port: u16, // port the node is listening on for work
-
+    rampdown: interval::Params,
     id_set: PhantomData<IdSet>,
     port_set: PhantomData<PortSet>,
 }
@@ -49,8 +50,8 @@ impl ChartBuilder<No, No> {
     }
 }
 
-impl<IdSet, PortSet> ChartBuilder<IdSet, PortSet> 
-where 
+impl<IdSet, PortSet> ChartBuilder<IdSet, PortSet>
+where
     IdSet: ToAssign,
     PortSet: ToAssign,
 {
@@ -60,6 +61,7 @@ where
             discovery_port: self.discovery_port,
             service_id: Some(id),
             service_port: self.service_port,
+            rampdown: self.rampdown,
             id_set: PhantomData {},
             port_set: PhantomData {},
         }
@@ -70,6 +72,7 @@ where
             discovery_port: self.discovery_port,
             service_id: self.service_id,
             service_port: Some(service_port),
+            rampdown: self.rampdown,
             id_set: PhantomData {},
             port_set: PhantomData {},
         }
@@ -80,6 +83,16 @@ where
     }
     pub fn with_discovery_port(mut self, port: u16) -> ChartBuilder<IdSet, PortSet> {
         self.discovery_port = port;
+        self
+    }
+    pub fn with_rampdown(
+        mut self,
+        min: Duration,
+        max: Duration,
+        rampdown: Duration,
+    ) -> ChartBuilder<IdSet, PortSet> {
+        assert!(min < max);
+        self.rampdown = interval::Params { min, max, rampdown };
         self
     }
 }
@@ -118,6 +131,7 @@ impl ChartBuilder<Yes, Yes> {
             service_port: self.service_port.unwrap(),
             sock: Arc::new(sock),
             map: Arc::new(dashmap::DashMap::new()),
+            interval: self.rampdown.into(),
         })
     }
 }

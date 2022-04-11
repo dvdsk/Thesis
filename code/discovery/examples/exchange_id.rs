@@ -1,5 +1,4 @@
-use discovery::ChartBuilder;
-use multicast_discovery as discovery;
+use multicast_discovery::{ChartBuilder, discovery};
 use std::env;
 use std::net::TcpListener;
 use tracing::info;

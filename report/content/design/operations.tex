@@ -87,7 +87,7 @@ From this I draw two conclusions, any spare capacity for writing is at a cost of
 % TODO a load balancing algorithm
 %
 \subparagraph*{Read balancing}
-A group expeciencing low read load relative to their capacity are shrunk. A group is under low read load if it could lose a \ac{cmds} without average \ac{cmds} cpu utilization under 85\%. A group has multiple members because not only for performance. The members form a \praft{} cluster and ensure metadata is stored redundantly. This only works if a group has at least three members. To shrink a group the President issues a \raft{} message unassigning a group member. 
+A group expeciencing low read load relative to their capacity are shrunk. A group is under low read load if it could lose a \ac{cmds} without average \ac{cmds} cpu utilization under 85\%. A group has multiple members because not only for performance. The members form a \ac{praft} cluster and ensure metadata is stored redundantly. This only works if a group has at least three members. To shrink a group the President issues a \raft{} message unassigning a group member. 
 
 A group under high relative read load has average \ac{cmds} cpu utilization passing 95\%. The president then issues a \raft{} message assigning a \ac{umds} to the group if one is availible. %TODO diff % why
 %
