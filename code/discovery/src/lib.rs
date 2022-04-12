@@ -16,8 +16,7 @@
 //! maintain future.
 //!
 //! ```rust
-//!use multicast_discovery as discovery;
-//!use discovery::ChartBuilder;
+//!use multicast_discovery::{discovery, ChartBuilder};
 //!
 //!#[tokio::main]
 //!async fn main() {

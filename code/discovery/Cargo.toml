@@ -22,3 +22,4 @@ mac_address = "1.1.2"
 tracing-subscriber = {version = "0.3", features = ["fmt", "ansi", "env-filter"]}
 tokio = {version = "1", features=["time", "net", "macros", "rt-multi-thread", "tracing"]}
 console-subscriber = "0.1"
+more-asserts = "0.2"

@@ -3,11 +3,21 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::time::{sleep_until, Instant};
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct Params {
     pub rampdown: Duration,
     pub min: Duration,
     pub max: Duration,
+}
+
+impl Default for Params {
+    fn default() -> Self {
+        Params {
+            rampdown: Duration::from_secs(10),
+            min: Duration::from_millis(100),
+            max: Duration::from_secs(1),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -22,6 +32,7 @@ pub struct Interval {
 
 impl From<Params> for Interval {
     fn from(p: Params) -> Self {
+        dbg!(p.min, p.max);
         assert!(p.min < p.max);
         Interval {
             min: p.min,
@@ -40,11 +51,11 @@ impl Interval {
             return self.max;
         }
         let dy = self.max - self.min;
-        let dx = self.rampdown.as_secs_f32() / self.start.elapsed().as_secs_f32();
-        let amplitude = self.min + dy.mul_f32(dx);
-
+        let dx = self.rampdown;
+        let slope = dy.as_secs_f32() / dx.as_secs_f32();
+        let x = self.start.elapsed();
         let rand = self.rng.gen_range(0.9..1.1);
-        amplitude.mul_f32(rand)
+        self.min + x.mul_f32(slope).mul_f32(rand)
     }
     pub async fn sleep_till_next(&mut self) {
         sleep_until(self.next()).await;
@@ -71,6 +82,7 @@ impl Until for tokio::time::Instant {
 
 #[cfg(test)]
 mod tests {
+    use more_asserts::*;
     use tokio::time::sleep_until;
 
     // Note this useful idiom: importing names from outer (for mod tests) scope.
@@ -78,17 +90,19 @@ mod tests {
 
     #[tokio::test]
     async fn test_interval() {
-        let call_next = tokio::time::Instant::now();
+        let mut call_next = tokio::time::Instant::now();
         let mut interval: Interval = Params {
             min: Duration::from_secs(0),
-            max: Duration::from_secs(10),
+            max: Duration::from_secs(1),
             rampdown: Duration::from_secs(1),
-        }.into();
+        }
+        .into();
 
-        for _i in 0..10 {
-            let call_next = call_next + Duration::from_secs_f32(0.1);
+        for i in 1..=10 {
+            call_next = call_next + Duration::from_secs_f32(0.1);
             sleep_until(call_next).await;
-            assert_eq!(interval.now(), Duration::from_secs(0))
+            let correct = Duration::from_secs_f32(0.1 * (i as f32)).as_millis();
+            assert_lt!(u128::abs_diff(interval.now().as_millis(), correct), i * 11);
         }
     }
 }
