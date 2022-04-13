@@ -5,12 +5,15 @@ use tracing_opentelemetry::OpenTelemetryLayer;
 use tracing_subscriber::prelude::*;
 use tracing_subscriber::filter;
 
-use color_eyre::eyre::{WrapErr, Result};
-
 use std::net::IpAddr;
 use std::net::Ipv4Addr;
 use std::net::SocketAddr;
 use tokio::net::TcpSocket;
+
+pub mod prefix {
+    pub use color_eyre::eyre::{WrapErr, Result};
+}
+use prefix::*;
 
 fn opentelemetry<S>(
     instance: String,
