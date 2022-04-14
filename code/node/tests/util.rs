@@ -4,7 +4,7 @@ use opentelemetry::KeyValue;
 use tracing_opentelemetry::OpenTelemetryLayer;
 use tracing_subscriber::filter;
 use tracing_subscriber::prelude::*;
-use color_eyre::eyre::{Result, WrapErr};
+use color_eyre::eyre::Result;
 
 use std::net::IpAddr;
 use std::net::Ipv4Addr;
@@ -46,7 +46,8 @@ pub fn setup_tracing(instance: String, endpoint: &str, run: u16) {
     let telemetry = opentelemetry(instance, endpoint, run);
     let fmt = tracing_subscriber::fmt::layer()
         .pretty()
-        .with_line_number(true);
+        .with_line_number(true)
+        .with_test_writer();
 
     let _ignore_err = tracing_subscriber::registry()
         .with(filter)
@@ -57,16 +58,4 @@ pub fn setup_tracing(instance: String, endpoint: &str, run: u16) {
 
 pub fn setup_errors() {
     color_eyre::install().unwrap();
-}
-
-pub fn open_socket(port: u16) -> Result<(TcpSocket, u16)> {
-    let ip = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
-    let addr = SocketAddr::new(ip, port);
-    let socket = TcpSocket::new_v4().wrap_err("Failed to open socket")?;
-    socket
-        .bind(addr)
-        .wrap_err("Could not bind to adress: {addr}")?;
-    let port = socket.local_addr().unwrap().port();
-    tracing::info!("reserved TCP port: {port}");
-    Ok((socket, port))
 }

@@ -1,9 +1,15 @@
 use node::{Config, run};
-use node::util::prefix::*;
 use clap::Parser;
+use color_eyre::eyre::Result;
+
+mod util;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let args = Config::parse();
-    run(args).await
+    let conf = Config::parse();
+
+    util::setup_tracing(conf.id.to_string(), &conf.endpoint, conf.run);
+    util::setup_errors();
+
+    run(conf).await
 }
