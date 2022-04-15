@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use clap::Parser;
 use color_eyre::eyre::Result;
 use multicast_discovery::{discovery, ChartBuilder};
@@ -37,6 +39,10 @@ pub struct Config {
     /// number of nodes in the cluster, must be fixed
     #[clap(short, long)]
     pub cluster_size: u16,
+    /// database path, change when running multiple instances on
+    /// the same machine
+    #[clap(short, long, default_value = "database")]
+    pub database: PathBuf
 }
 
 pub async fn run(conf: Config) -> Result<()> {

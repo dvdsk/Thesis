@@ -23,3 +23,5 @@ sled = "0.34"
 
 [dev-dependencies]
 start-jeager = { path = "../start-jeager" }
+mktemp = "0.4"
+result-tools = { git = "https://github.com/dvdsk/result-tools.git" }

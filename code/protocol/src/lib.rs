@@ -91,8 +91,6 @@ mod tests {
         use Request::*;
 
         let test_cases = vec![
-            (16, Truncate("test".into())),
-            (24, Truncate("test/test/hi".into())),
             (20, OpenReadOnly("test".into(), Existence::Needed)),
             (25, OpenReadOnly("test/test".into(), Existence::Allowed)),
         ];

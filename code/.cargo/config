@@ -1,0 +1,5 @@
+[alias]
+tt = ["test", "local_cluster"]
+
+[build]
+rustflags=["--cfg", "tokio_unstable"]
