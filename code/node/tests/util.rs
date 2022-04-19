@@ -7,6 +7,8 @@ use tracing_opentelemetry::OpenTelemetryLayer;
 use tracing_subscriber::filter;
 use tracing_subscriber::prelude::*;
 
+pub use node::util::{run_number, runtime_dir};
+
 fn opentelemetry<S>(
     instance: String,
     endpoint: IpAddr,

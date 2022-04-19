@@ -2,13 +2,18 @@ use color_eyre::eyre::{Result, WrapErr};
 use opentelemetry::sdk::resource::Resource;
 use opentelemetry::sdk::trace;
 use opentelemetry::KeyValue;
+use result_tools::*;
 use tracing_opentelemetry::OpenTelemetryLayer;
 use tracing_subscriber::filter;
 use tracing_subscriber::prelude::*;
 
+use std::fs;
+use std::io;
 use std::net::IpAddr;
 use std::net::Ipv4Addr;
 use std::net::SocketAddr;
+use std::path::Path;
+use std::path::PathBuf;
 use tokio::net::TcpSocket;
 
 fn opentelemetry<S>(
@@ -69,4 +74,42 @@ pub fn open_socket(port: u16) -> Result<(TcpSocket, u16)> {
     let port = socket.local_addr().unwrap().port();
     tracing::info!("reserved TCP port: {port}");
     Ok((socket, port))
+}
+
+pub fn runtime_dir() -> PathBuf {
+    use std::io::ErrorKind::AlreadyExists;
+    let temp = std::env::temp_dir().join("thesis");
+    fs::create_dir(&temp)
+        .to_ok_if(|e| e.kind() == AlreadyExists)
+        .unwrap();
+    temp
+}
+
+pub fn run_number(dir: &Path) -> u16 {
+    let path = dir.join("run.txt");
+    let run = match fs::read_to_string(&path).map_err(|e| e.kind()) {
+        Err(io::ErrorKind::NotFound) => 0,
+        Err(e) => panic!("could not access run numb file: {e:?}"),
+        Ok(run) => run.parse().unwrap(),
+    };
+    fs::write(path, (run+1).to_string().as_bytes()).unwrap();
+    run
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    mod run_number {
+        use mktemp::Temp;
+
+        use super::*;
+        #[test]
+        fn increases() {
+            let dir = Temp::new_dir().unwrap();
+            for correct in 0..10 {
+                let run_numb = run_number(&dir);
+                assert_eq!(run_numb, correct);
+            }
+        }
+    }
 }
