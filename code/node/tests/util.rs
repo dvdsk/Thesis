@@ -1,19 +1,15 @@
+use std::net::IpAddr;
+
 use opentelemetry::sdk::resource::Resource;
 use opentelemetry::sdk::trace;
 use opentelemetry::KeyValue;
 use tracing_opentelemetry::OpenTelemetryLayer;
 use tracing_subscriber::filter;
 use tracing_subscriber::prelude::*;
-use color_eyre::eyre::Result;
-
-use std::net::IpAddr;
-use std::net::Ipv4Addr;
-use std::net::SocketAddr;
-use tokio::net::TcpSocket;
 
 fn opentelemetry<S>(
     instance: String,
-    endpoint: &str,
+    endpoint: IpAddr,
     run: u16,
 ) -> OpenTelemetryLayer<S, opentelemetry::sdk::trace::Tracer>
 where
@@ -38,7 +34,7 @@ where
     tracing_opentelemetry::layer().with_tracer(tracer)
 }
 
-pub fn setup_tracing(instance: String, endpoint: &str, run: u16) {
+pub fn setup_tracing(instance: String, endpoint: IpAddr, run: u16) {
     let filter = filter::EnvFilter::builder()
         .parse("info,multicast_discovery=debug")
         .unwrap();

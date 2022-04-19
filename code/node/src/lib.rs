@@ -1,3 +1,4 @@
+use std::net::IpAddr;
 use std::path::PathBuf;
 
 use clap::Parser;
@@ -24,12 +25,12 @@ pub enum Role {
 #[derive(Parser, Debug, Clone)]
 #[clap(author, version, about, long_about = None)]
 pub struct Config {
-    /// Name of the person to greet
+    /// Id of this node
     #[clap(short, long)]
     pub id: Id,
-    /// Number of times to greet
+    /// Instrumentation endpoint
     #[clap(short, long, default_value = "127.0.0.1")]
-    pub endpoint: String,
+    pub endpoint: IpAddr,
     /// Run
     #[clap(short, long)]
     pub run: u16,
@@ -56,12 +57,12 @@ pub async fn run(conf: Config) -> Result<()> {
     tokio::spawn(discovery::maintain(chart.clone()));
     discovery::found_majority(&chart, conf.cluster_size).await;
 
-    let db = sled::open("database").unwrap();
+    let db = sled::open(conf.database).unwrap();
     let mut pres_orders = president::Log::open(db, pres_socket)?;
     let mut role = Role::Idle;
     loop {
         role = match role {
-            Role::Idle => idle::work(&mut pres_orders, &mut node_socket),
+            Role::Idle => idle::work(&mut pres_orders, &mut node_socket).await,
             Role::Clerk => clerk::work(&mut pres_orders, &mut node_socket),
             Role::Minister => minister::work(&mut pres_orders, &mut node_socket),
             Role::President => president::work(&mut chart),

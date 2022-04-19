@@ -1,6 +1,7 @@
 use std::ffi::OsStr;
-use std::fs;
+use std::fs::{self, Permissions};
 use std::io::Read;
+use std::os::unix::prelude::PermissionsExt;
 use std::path::Path;
 
 use flate2::read::GzDecoder;
@@ -30,7 +31,9 @@ async fn download(dir: impl AsRef<Path>) {
         .unwrap()
         .read_to_end(&mut unpacked)
         .unwrap();
-    fs::write(dir.as_ref().join(NAME), unpacked).unwrap();
+    let path = dir.as_ref().join(NAME);
+    fs::write(&path, unpacked).unwrap();
+    fs::set_permissions(path, Permissions::from_mode(0o770)).unwrap();
 }
 
 fn already_running(name: &str) -> bool {
@@ -44,24 +47,22 @@ fn already_running(name: &str) -> bool {
         .any(|n| n == name)
 }
 
-pub async fn start_if_not_running(dir: &Path) {
+pub async fn start_if_not_running(dir: impl AsRef<Path>) {
     if already_running(NAME) {
         info!("jeager already running not starting new instance");
         return;
     }
 
-    let path = dir.join(NAME);
+    let path = dir.as_ref().join(NAME);
     if !path.is_file() {
         download(dir).await;
     }
 
     tokio::process::Command::new(path)
         .arg("--query.http-server.host-port")
-        .arg("16686")
+        .arg("127.0.0.1:16686")
         .kill_on_drop(false)
-        .spawn()
-        .unwrap()
-        .wait()
+        .output()
         .await
         .unwrap();
 }
@@ -80,8 +81,9 @@ mod tests {
         download(&dir).await;
         let file = dir.as_path().join(NAME);
         assert!(file.exists());
-        let size = file.metadata().unwrap().size();
-        assert_gt!(size, 40_000_000);
+        let meta = file.metadata().unwrap();
+        assert_gt!(meta.size(), 40_000_000);
+        assert_gt!(meta.permissions().mode(), 0o770);
     }
 
     #[tokio::test]
