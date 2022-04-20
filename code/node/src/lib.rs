@@ -1,10 +1,13 @@
 use std::net::IpAddr;
+use std::num::NonZeroU16;
 use std::path::PathBuf;
 
 use clap::Parser;
 use color_eyre::eyre::Result;
 use multicast_discovery::{discovery, ChartBuilder};
 pub use color_eyre::eyre::WrapErr;
+use tracing::{instrument, info};
+use serde::{Serialize, Deserialize};
 
 pub mod util;
 
@@ -14,6 +17,7 @@ mod minister;
 mod president;
 
 pub type Id = u64;
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Role {
     Idle,
     Clerk,
@@ -34,10 +38,18 @@ pub struct Config {
     /// Run
     #[clap(short, long)]
     pub run: u16,
-    /// Optional, if not specified the node picks a random free port
-    #[clap(short, long, default_value = "0")]
-    pub port: u16,
+    /// Optional, port on which to listen for presidential orders, 
+    /// by default pick a random free port
+
+    #[clap(short, long)]
+    pub pres_port: Option<NonZeroU16>,
+    /// Optional, port on which to listen for client request 
+    /// by default pick a free port
+    #[clap(short, long)]
+    pub node_port: Option<NonZeroU16>,
     /// number of nodes in the cluster, must be fixed
+    /// by default pick a free port
+
     #[clap(short, long)]
     pub cluster_size: u16,
     /// database path, change when running multiple instances on
@@ -46,9 +58,10 @@ pub struct Config {
     pub database: PathBuf
 }
 
+#[instrument(level="info")]
 pub async fn run(conf: Config) -> Result<()> {
-    let (pres_socket, pres_port) = util::open_socket(conf.port)?;
-    let (mut node_socket, node_port) = util::open_socket(conf.port)?;
+    let (pres_socket, pres_port) = util::open_socket(conf.pres_port).await?;
+    let (mut node_socket, node_port) = util::open_socket(conf.node_port).await?;
 
     let mut chart = ChartBuilder::new()
         .with_id(conf.id)
@@ -62,7 +75,7 @@ pub async fn run(conf: Config) -> Result<()> {
     let mut role = Role::Idle;
     loop {
         role = match role {
-            Role::Idle => idle::work(&mut pres_orders, &mut node_socket).await,
+            Role::Idle => idle::work(&mut pres_orders).await?,
             Role::Clerk => clerk::work(&mut pres_orders, &mut node_socket),
             Role::Minister => minister::work(&mut pres_orders, &mut node_socket),
             Role::President => president::work(&mut chart),

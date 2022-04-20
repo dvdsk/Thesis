@@ -7,9 +7,9 @@ edition = "2021"
 
 [dependencies]
 multicast-discovery = { git = "https://github.com/dvdsk/multicast-discovery.git" }
-tokio = { version = "1.0", features = ["macros", "net", "time", "rt-multi-thread"] }
 
-clap = { version = "3.1", features = ["derive"] }
+tokio = { version = "1.0", features = ["macros", "net", "time", "rt-multi-thread"] }
+futures = "0.3"
 
 tracing = "0.1.33"
 tracing-subscriber = { version = "0.3.11", features = ["env-filter"] }
@@ -17,11 +17,16 @@ tracing-opentelemetry = { version = "0.17.2" }
 opentelemetry-jaeger = { version = "0.16.0", features = ["rt-tokio"] }
 opentelemetry = { version = "0.17", features = ["rt-tokio"] }
 
+clap = { version = "3.1", features = ["derive"] }
 color-eyre = "0.6"
+thiserror = "1"
+result-tools = { git = "https://github.com/dvdsk/result-tools.git" }
 
 sled = "0.34"
+serde = { version = "1", features = ["derive"] }
+
+protocol = { path = "../protocol" }
 
 [dev-dependencies]
 start-jeager = { path = "../start-jeager" }
 mktemp = "0.4"
-result-tools = { git = "https://github.com/dvdsk/result-tools.git" }

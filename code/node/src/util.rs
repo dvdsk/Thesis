@@ -12,9 +12,10 @@ use std::io;
 use std::net::IpAddr;
 use std::net::Ipv4Addr;
 use std::net::SocketAddr;
+use std::num::NonZeroU16;
 use std::path::Path;
 use std::path::PathBuf;
-use tokio::net::TcpSocket;
+use tokio::net::TcpListener;
 
 fn opentelemetry<S>(
     instance: String,
@@ -64,16 +65,17 @@ pub fn setup_errors() {
     color_eyre::install().unwrap();
 }
 
-pub fn open_socket(port: u16) -> Result<(TcpSocket, u16)> {
+pub async fn open_socket(port: Option<NonZeroU16>) -> Result<(TcpListener, u16)> {
     let ip = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
-    let addr = SocketAddr::new(ip, port);
-    let socket = TcpSocket::new_v4().wrap_err("Failed to open socket")?;
-    socket
-        .bind(addr)
-        .wrap_err("Could not bind to adress: {addr}")?;
-    let port = socket.local_addr().unwrap().port();
-    tracing::info!("reserved TCP port: {port}");
-    Ok((socket, port))
+    let addr = SocketAddr::new(ip, port.map(NonZeroU16::get).unwrap_or(0));
+    let listener = TcpListener::bind(addr).await.wrap_err("Could not bind to address: {addr}")?;
+
+    let open_port = listener.local_addr().unwrap().port();
+    match port {
+        None => tracing::info!("OS assigned free TCP port: {open_port}"),
+        Some(p) => tracing::info!("opend TCP port: {p}"),
+    }
+    Ok((listener, open_port))
 }
 
 pub fn runtime_dir() -> PathBuf {
@@ -92,7 +94,7 @@ pub fn run_number(dir: &Path) -> u16 {
         Err(e) => panic!("could not access run numb file: {e:?}"),
         Ok(run) => run.parse().unwrap(),
     };
-    fs::write(path, (run+1).to_string().as_bytes()).unwrap();
+    fs::write(path, (run + 1).to_string().as_bytes()).unwrap();
     run
 }
 

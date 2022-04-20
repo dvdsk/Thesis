@@ -10,9 +10,8 @@ type Codec<I, O> = Bincode<I, O>;
 pub type MsgStream<I, O> = tokio_serde::Framed<FrameType, I, O, Codec<I, O>>;
 
 /// I: incoming item, O: outgoing
-pub fn wrap<I, O>(socket: TcpStream) -> MsgStream<I, O> {
-    let length_delimited = Framed::new(socket, LengthDelimitedCodec::new());
-
+pub fn wrap<I, O>(stream: TcpStream) -> MsgStream<I, O> {
+    let length_delimited = Framed::new(stream, LengthDelimitedCodec::new());
     let deserialized_stream =
         tokio_serde::Framed::new(length_delimited, Bincode::<I, O>::default());
 
@@ -24,13 +23,13 @@ mod test {
     use super::*;
     use crate::{Request, Response};
 
-    #[tokio::test]
-    async fn it_compiles() {
-        use futures::SinkExt;
+    // #[tokio::test]
+    // async fn it_compiles() {
+    //     use futures::SinkExt;
 
-        let tcp = TcpStream::connect("127.0.0.1:1234").await.unwrap();
-        let mut msgs: MsgStream<Response, Request> = wrap(tcp);
+    //     let tcp = TcpStream::connect("127.0.0.1:1234").await.unwrap();
+    //     let mut msgs: MsgStream<Response, Request> = wrap(tcp);
 
-        msgs.send(Request::Test).await.unwrap();
-    }
+    //     msgs.send(Request::Test).await.unwrap();
+    // }
 }

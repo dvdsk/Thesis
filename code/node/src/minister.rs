@@ -1,7 +1,7 @@
-use tokio::net::TcpSocket;
+use tokio::net::TcpListener;
 
 use crate::president::Log;
 
-pub(crate) fn work(pres_orders: &mut Log, socket: &mut TcpSocket) -> crate::Role {
+pub(crate) fn work(pres_orders: &mut Log, socket: &mut TcpListener) -> crate::Role {
     todo!()
 }

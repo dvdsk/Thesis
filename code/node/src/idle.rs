@@ -1,11 +1,15 @@
-use tokio::time::sleep;
-use std::time::Duration;
+use color_eyre::eyre::{eyre, WrapErr};
+use color_eyre::{Result, Section, SectionExt};
 
-use tokio::net::TcpSocket;
+use crate::president::{Log, Order};
+use crate::Role;
 
-use crate::president::Log;
-
-pub(crate) async fn work(pres_orders: &mut Log, socket: &mut TcpSocket) -> crate::Role {
-    sleep(Duration::from_secs(20)).await;
-    todo!()
+pub(crate) async fn work(pres_orders: &mut Log) -> Result<Role> {
+    match pres_orders.recv().await {
+        Order::Assigned(role) => Ok(role),
+        Order::Elected => Ok(Role::President),
+        m => {
+            Err(eyre!("recieved wrong msg")).with_section(move || format!("{m:?}").header("Msg:"))
+        }
+    }
 }

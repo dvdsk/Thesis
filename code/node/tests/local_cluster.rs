@@ -6,6 +6,7 @@ use mktemp::Temp;
 use node::Config;
 use node::util::runtime_dir;
 use tokio::task::JoinSet;
+use tracing::error;
 
 mod util;
 
@@ -18,14 +19,15 @@ async fn main() -> Result<()> {
         id: 0,
         endpoint: IpAddr::V4(Ipv4Addr::LOCALHOST),
         run: util::run_number(&runtime_dir()),
-        port: 0,
+        pres_port: None,
+        node_port: None,
         cluster_size: 3,
         database: PathBuf::from("changed in loop"),
     };
 
     util::setup_tracing("test".into(), config.endpoint, config.run);
     let temp_dir = Temp::new_dir().unwrap();
-    (0..config.cluster_size)
+    let res = (0..config.cluster_size)
         .map(|i| Config {
             id: i.into(),
             database: temp_dir.join(format!("{i}.db")),
@@ -37,8 +39,9 @@ async fn main() -> Result<()> {
             set
         })
         .join_one()
-        .await
-        .unwrap();
+        .await;
 
+    opentelemetry::global::shutdown_tracer_provider();
+    res.unwrap();
     Ok(())
 }
