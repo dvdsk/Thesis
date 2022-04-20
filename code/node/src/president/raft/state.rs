@@ -74,11 +74,11 @@ impl State {
         }
 
         if req.term < self.term() {
-            return AppendReply { term: self.term(), succes: false };
+            return AppendReply::InconsistentLog(self.term());
         }
 
         if !self.log_contains(req.prev_log_idx, req.prev_log_term) {
-            return AppendReply { term: self.term(), succes: false };
+            return AppendReply::InconsistentLog(self.term());
         }
 
         // This must execute in parallel without side effects
@@ -102,10 +102,7 @@ impl State {
             self.apply_log();
         }
 
-        AppendReply {
-            term: self.term(),
-            succes: true,
-        }
+        AppendReply::Ok
     }
 
     pub(crate) fn log_contains(&self, prev_log_idx: u32, prev_log_term: u32) -> bool {
@@ -187,10 +184,9 @@ pub struct AppendEntries {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AppendReply {
-    term: Term,
-    // false if log inconsistancy
-    succes: bool,
+pub enum AppendReply {
+    Ok,
+    InconsistentLog(Term),
 }
 impl RequestVote {
     fn log_up_to_date(&self, arg: &&State) -> bool {
