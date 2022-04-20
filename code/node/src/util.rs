@@ -4,7 +4,6 @@ use opentelemetry::sdk::trace;
 use opentelemetry::KeyValue;
 use result_tools::*;
 use serde::de::DeserializeOwned;
-use serde::Deserialize;
 use serde::Serialize;
 use tracing_opentelemetry::OpenTelemetryLayer;
 use tracing_subscriber::filter;

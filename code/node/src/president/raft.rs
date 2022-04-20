@@ -32,12 +32,12 @@ async fn conn((stream, _source): (TcpStream, SocketAddr), state: State) {
         let reply = match msg {
             None => continue,
             Some(RequestVote(req)) => state.vote_req(req).map(Reply::RequestVote),
-            Some(AppendEntries(req)) => state.append_req(req).map(Reply::AppendEntries),
+            Some(AppendEntries(req)) => Some(Reply::AppendEntries(state.append_req(req))),
         };
 
         if let Some(reply) = reply {
             if let Err(e) = stream.send(reply).await {
-                warn!("error replying to presidential request");
+                warn!("error replying to presidential request: {e:?}");
                 return;
             }
         }
