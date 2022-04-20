@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 
+use crate::util::TypedSled;
 use crate::Id;
 
 use super::Order;
@@ -26,15 +27,34 @@ impl State {
             return None;
         }
 
-        if let Some(candidate) = self.voted_for() {
-            if candidate != r
-        }
-        if self.voted_for.is_none() || self.voted_for == Some(req.candidate_id) {
-            if req.log_up_to_date(&self) {
+        if let Some(id) = self.voted_for() {
+            if id != req.candidate_id {
+                return None;
             }
         }
+
+        if req.log_up_to_date(&self) {
+            Some(VoteReply {
+                term: self.term(),
+                vote_granted: (),
+            })
+        } else {
+            None
+        }
     }
-    pub fn append_req(&self, req: AppendEntries) {}
+    pub fn append_req(&self, req: AppendEntries) -> Option<AppendReply> {}
+
+    fn term(&self) -> Term {
+        self.db.get_val("term").unwrap_or(0)
+    }
+
+    fn voted_for(&self) -> Option<Id> {
+        self.db.get_val("voted_for")
+    }
+
+    fn give_up_election(&self) {
+        todo!()
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -62,7 +82,13 @@ pub struct AppendEntries {
     leader_commit: LogIdx,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppendReply {
     term: Term,
     succes: bool,
+}
+impl RequestVote {
+    fn log_up_to_date(&self, arg: &&State) -> bool {
+        todo!()
+    }
 }

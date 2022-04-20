@@ -3,6 +3,9 @@ use opentelemetry::sdk::resource::Resource;
 use opentelemetry::sdk::trace;
 use opentelemetry::KeyValue;
 use result_tools::*;
+use serde::de::DeserializeOwned;
+use serde::Deserialize;
+use serde::Serialize;
 use tracing_opentelemetry::OpenTelemetryLayer;
 use tracing_subscriber::filter;
 use tracing_subscriber::prelude::*;
@@ -68,7 +71,9 @@ pub fn setup_errors() {
 pub async fn open_socket(port: Option<NonZeroU16>) -> Result<(TcpListener, u16)> {
     let ip = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
     let addr = SocketAddr::new(ip, port.map(NonZeroU16::get).unwrap_or(0));
-    let listener = TcpListener::bind(addr).await.wrap_err("Could not bind to address: {addr}")?;
+    let listener = TcpListener::bind(addr)
+        .await
+        .wrap_err("Could not bind to address: {addr}")?;
 
     let open_port = listener.local_addr().unwrap().port();
     match port {
@@ -96,6 +101,23 @@ pub fn run_number(dir: &Path) -> u16 {
     };
     fs::write(path, (run + 1).to_string().as_bytes()).unwrap();
     run
+}
+
+pub trait TypedSled {
+    fn get_val<T: DeserializeOwned>(&self, key: &str) -> Option<T>;
+    fn set_val<T: Serialize>(&self, key: &str, val: T);
+}
+
+impl TypedSled for sled::Tree {
+    fn get_val<T: DeserializeOwned>(&self, key: &str) -> Option<T> {
+        self.get(key)
+            .unwrap()
+            .map(|bytes| bincode::deserialize(&bytes).unwrap())
+    }
+    fn set_val<T: Serialize>(&self, key: &str, val: T) {
+        let bytes = bincode::serialize(&val).unwrap();
+        self.insert(key, bytes).unwrap().unwrap();
+    }
 }
 
 #[cfg(test)]

@@ -1,6 +1,6 @@
 use std::net::SocketAddr;
 
-use futures::TryStreamExt;
+use futures::{SinkExt, TryStreamExt};
 pub use log::{Log, Order};
 use protocol::connection;
 use serde::{Deserialize, Serialize};
@@ -27,12 +27,19 @@ enum Reply {
 
 async fn conn((stream, _source): (TcpStream, SocketAddr), state: State) {
     use Msg::*;
-    let mut stream: connection::MsgStream<Msg, Msg> = connection::wrap(stream);
+    let mut stream: connection::MsgStream<Msg, Reply> = connection::wrap(stream);
     while let Ok(msg) = stream.try_next().await {
-        match msg {
+        let reply = match msg {
             None => continue,
-            Some(RequestVote(req)) => state.vote_req(req),
-            Some(AppendEntries(req)) => state.append_req(req),
+            Some(RequestVote(req)) => state.vote_req(req).map(Reply::RequestVote),
+            Some(AppendEntries(req)) => state.append_req(req).map(Reply::AppendEntries),
+        };
+
+        if let Some(reply) = reply {
+            if let Err(e) = stream.send(reply).await {
+                warn!("error replying to presidential request");
+                return;
+            }
         }
     }
 }
@@ -55,7 +62,7 @@ async fn succession(state: State) {
         // select on:
         //      term incr -> continue
         //      got elected
-        // 
+        //
         // select on:
         //      term incr
         //      newer leader
