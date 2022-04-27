@@ -77,8 +77,8 @@ pub async fn open_socket(port: Option<NonZeroU16>) -> Result<(TcpListener, u16)>
 
     let open_port = listener.local_addr().unwrap().port();
     match port {
-        None => tracing::info!("OS assigned free TCP port: {open_port}"),
-        Some(p) => tracing::info!("opend TCP port: {p}"),
+        None => tracing::trace!("OS assigned free TCP port: {open_port}"),
+        Some(p) => tracing::trace!("opend TCP port: {p}"),
     }
     Ok((listener, open_port))
 }

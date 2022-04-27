@@ -6,6 +6,7 @@ use tokio::sync::mpsc::{self, Receiver};
 use tokio::task::{self, JoinHandle};
 
 use crate::Role;
+use crate::president::Chart;
 
 use super::state::State;
 use super::{handle_incoming, succession};
@@ -28,7 +29,7 @@ pub enum Order {
 }
 
 impl Log {
-    pub(crate) fn open(db: sled::Db, listener: TcpListener) -> Result<Self> {
+    pub(crate) fn open(chart: Chart, db: sled::Db, listener: TcpListener) -> Result<Self> {
         let db = db
             .open_tree("president log")
             .wrap_err("Could not open db tree: \"president log\"")?;
@@ -39,7 +40,7 @@ impl Log {
             state: state.clone(),
             orders,
             handle_incoming: task::spawn(handle_incoming(listener, state.clone())),
-            succession: task::spawn(succession(state)),
+            succession: task::spawn(succession(chart, state)),
         })
     }
 

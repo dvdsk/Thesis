@@ -14,6 +14,8 @@ mod state;
 mod succession;
 pub(super) use state::State;
 
+use super::Chart;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 enum Msg {
     RequestVote(state::RequestVote),
@@ -57,14 +59,14 @@ async fn handle_incoming(listener: TcpListener, state: State) {
     }
 }
 
-async fn succession(state: State) {
+async fn succession(chart: Chart, state: State) {
     loop {
         succession::president_died(state.heartbeat()).await;
         state.increment_term();
 
         let term_increased = state.watch_term();
         pin_mut!(term_increased);
-        let get_elected = succession::run_for_office();
+        let get_elected = succession::run_for_office(chart);
         tokio::select! {
             _n = (&mut term_increased) => continue,
             () = get_elected => state.order(Order::BecomePres).await,

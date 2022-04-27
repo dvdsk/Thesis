@@ -3,6 +3,7 @@ use std::fs::{self, Permissions};
 use std::io::Read;
 use std::os::unix::prelude::PermissionsExt;
 use std::path::Path;
+use std::process::Stdio;
 
 use flate2::read::GzDecoder;
 use tar::Archive;
@@ -18,8 +19,10 @@ async fn download(dir: impl AsRef<Path>) {
         }
     }
 
-    info!("downloading jeager");
+    let path = dir.as_ref().join(NAME);
+    info!("downloading jeager to: {path:?}, url: {URL}",);
     let bytes = reqwest::get(URL).await.unwrap().bytes().await.unwrap();
+
     info!("unpacking jeager");
     let mut unpacked = Vec::new();
     let tar = GzDecoder::new(&bytes[..]);
@@ -31,9 +34,9 @@ async fn download(dir: impl AsRef<Path>) {
         .unwrap()
         .read_to_end(&mut unpacked)
         .unwrap();
-    let path = dir.as_ref().join(NAME);
     fs::write(&path, unpacked).unwrap();
     fs::set_permissions(path, Permissions::from_mode(0o770)).unwrap();
+    info!("done setting up jeager");
 }
 
 fn already_running(name: &str) -> bool {
@@ -62,8 +65,10 @@ pub async fn start_if_not_running(dir: impl AsRef<Path>) {
         .arg("--query.http-server.host-port")
         .arg("127.0.0.1:16686")
         .kill_on_drop(false)
-        .output()
-        .await
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
         .unwrap();
 }
 

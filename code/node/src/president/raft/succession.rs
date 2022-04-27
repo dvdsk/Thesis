@@ -3,6 +3,8 @@ use tokio::sync::Notify;
 use tokio::time::{timeout_at, Instant};
 use tracing::{info, warn};
 
+use crate::president::Chart;
+
 const HB_TIMEOUT: Duration = Duration::from_millis(100);
 
 pub(super) async fn president_died(heartbeat: &Notify) {
@@ -30,6 +32,6 @@ pub(super) async fn president_died(heartbeat: &Notify) {
 }
 
 /// only returns when this node has been elected
-pub(super) async fn run_for_office() {
+pub(super) async fn run_for_office(chart: Chart) {
     todo!()
 }

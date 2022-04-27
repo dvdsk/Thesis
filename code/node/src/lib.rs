@@ -4,10 +4,10 @@ use std::path::PathBuf;
 
 use clap::Parser;
 use color_eyre::eyre::Result;
-use instance_chart::{discovery, ChartBuilder};
 pub use color_eyre::eyre::WrapErr;
-use tracing::{instrument, info};
-use serde::{Serialize, Deserialize};
+use instance_chart::{discovery, ChartBuilder};
+use serde::{Deserialize, Serialize};
+use tracing::{info, instrument};
 
 pub mod util;
 
@@ -38,48 +38,58 @@ pub struct Config {
     /// Run
     #[clap(short, long)]
     pub run: u16,
-    /// Optional, port on which to listen for presidential orders, 
-    /// by default pick a random free port
+    /// Enable running multiple instances a the same host
+    #[clap(short, long)]
+    pub local_instances: bool,
 
+    /// Optional, port on which to listen for presidential orders
+    /// by default pick a free port
     #[clap(short, long)]
     pub pres_port: Option<NonZeroU16>,
-    /// Optional, port on which to listen for client request 
+    /// Optional, port on which to listen for internal communication
     /// by default pick a free port
     #[clap(short, long)]
     pub node_port: Option<NonZeroU16>,
+    /// Optional, port on which to listen for client request
+    /// by default pick a free port
+    #[clap(short, long)]
+    pub req_port: Option<NonZeroU16>,
+
     /// number of nodes in the cluster, must be fixed
     /// by default pick a free port
-
     #[clap(short, long)]
     pub cluster_size: u16,
+
     /// database path, change when running multiple instances on
     /// the same machine
     #[clap(short, long, default_value = "database")]
-    pub database: PathBuf
+    pub database: PathBuf,
 }
 
-#[instrument(level="info")]
+#[instrument(level = "info")]
 pub async fn run(conf: Config) -> Result<()> {
     let (pres_listener, pres_port) = util::open_socket(conf.pres_port).await?;
     let (mut node_listener, node_port) = util::open_socket(conf.node_port).await?;
-    let (mut req_listener, req_port) = util::open_socket(conf.node_port).await?;
-
+    let (mut req_listener, req_port) = util::open_socket(conf.req_port).await?;
     let mut chart = ChartBuilder::new()
         .with_id(conf.id)
         .with_service_ports([pres_port, node_port, req_port])
+        .local_discovery(conf.local_instances)
         .finish()?;
     tokio::spawn(discovery::maintain(chart.clone()));
     discovery::found_majority(&chart, conf.cluster_size).await;
 
     let db = sled::open(conf.database).unwrap();
-    let mut pres_orders = president::Log::open(db, pres_listener)?;
+    let mut pres_orders = president::Log::open(chart.clone(), db, pres_listener)?;
     let mut role = Role::Idle;
     loop {
         role = match role {
             Role::Idle => idle::work(&mut pres_orders).await?,
             Role::Clerk => clerk::work(&mut pres_orders, &mut node_listener),
             Role::Minister => minister::work(&mut pres_orders, &mut node_listener),
-            Role::President => president::work(&mut pres_orders, &mut chart, &mut req_listener).await,
+            Role::President => {
+                president::work(&mut pres_orders, &mut chart, &mut req_listener).await
+            }
         }
     }
 }
