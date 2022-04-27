@@ -8,21 +8,23 @@ use tokio::task::{self, JoinHandle};
 use crate::Role;
 
 use super::state::State;
-use super::{handle_msg, succession};
+use super::{handle_incoming, succession};
 
 // abstraction over raft that allows us to wait on
 // new committed log entries.
 pub struct Log {
     // commited? entries will appear here
-    orders: Receiver<Order>,
-    handle_msg: JoinHandle<()>,
+    pub orders: Receiver<Order>,
+    pub state: State,
+    handle_incoming: JoinHandle<()>,
     succession: JoinHandle<()>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Order {
     Assigned(Role),
-    Elected,
+    BecomePres,
+    ResignPres,
 }
 
 impl Log {
@@ -34,8 +36,9 @@ impl Log {
         let state = State::new(tx, db);
 
         Ok(Self {
+            state: state.clone(),
             orders,
-            handle_msg: task::spawn(handle_msg(listener, state.clone())),
+            handle_incoming: task::spawn(handle_incoming(listener, state.clone())),
             succession: task::spawn(succession(state)),
         })
     }

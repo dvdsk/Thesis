@@ -6,7 +6,10 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-multicast-discovery = { git = "https://github.com/dvdsk/multicast-discovery.git" }
+instance-chart = "0.1"
+
+rand = "0.8"
+num-traits = "0.2"
 
 tokio = { version = "1.0", features = ["macros", "net", "time", "rt-multi-thread"] }
 futures = "0.3"

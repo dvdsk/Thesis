@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use clap::Parser;
 use color_eyre::eyre::Result;
-use multicast_discovery::{discovery, ChartBuilder};
+use instance_chart::{discovery, ChartBuilder};
 pub use color_eyre::eyre::WrapErr;
 use tracing::{instrument, info};
 use serde::{Serialize, Deserialize};
@@ -60,25 +60,26 @@ pub struct Config {
 
 #[instrument(level="info")]
 pub async fn run(conf: Config) -> Result<()> {
-    let (pres_socket, pres_port) = util::open_socket(conf.pres_port).await?;
-    let (mut node_socket, node_port) = util::open_socket(conf.node_port).await?;
+    let (pres_listener, pres_port) = util::open_socket(conf.pres_port).await?;
+    let (mut node_listener, node_port) = util::open_socket(conf.node_port).await?;
+    let (mut req_listener, req_port) = util::open_socket(conf.node_port).await?;
 
     let mut chart = ChartBuilder::new()
         .with_id(conf.id)
-        .with_service_ports([pres_port, node_port])
+        .with_service_ports([pres_port, node_port, req_port])
         .finish()?;
     tokio::spawn(discovery::maintain(chart.clone()));
     discovery::found_majority(&chart, conf.cluster_size).await;
 
     let db = sled::open(conf.database).unwrap();
-    let mut pres_orders = president::Log::open(db, pres_socket)?;
+    let mut pres_orders = president::Log::open(db, pres_listener)?;
     let mut role = Role::Idle;
     loop {
         role = match role {
             Role::Idle => idle::work(&mut pres_orders).await?,
-            Role::Clerk => clerk::work(&mut pres_orders, &mut node_socket),
-            Role::Minister => minister::work(&mut pres_orders, &mut node_socket),
-            Role::President => president::work(&mut chart),
+            Role::Clerk => clerk::work(&mut pres_orders, &mut node_listener),
+            Role::Minister => minister::work(&mut pres_orders, &mut node_listener),
+            Role::President => president::work(&mut pres_orders, &mut chart, &mut req_listener).await,
         }
     }
 }

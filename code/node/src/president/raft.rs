@@ -1,17 +1,18 @@
 use std::net::SocketAddr;
 
-use futures::{SinkExt, TryStreamExt};
+use futures::{SinkExt, TryStreamExt, pin_mut};
 pub use log::{Log, Order};
 use protocol::connection;
 use serde::{Deserialize, Serialize};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::mpsc;
-use tokio::task;
+use tokio::task::{self, JoinSet};
 use tracing::warn;
 
 mod log;
 mod state;
-use state::State;
+mod succession;
+pub(super) use state::State;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 enum Msg {
@@ -25,7 +26,7 @@ enum Reply {
     AppendEntries(state::AppendReply),
 }
 
-async fn conn((stream, _source): (TcpStream, SocketAddr), state: State) {
+async fn handle_conn((stream, _source): (TcpStream, SocketAddr), state: State) {
     use Msg::*;
     let mut stream: connection::MsgStream<Msg, Reply> = connection::wrap(stream);
     while let Ok(msg) = stream.try_next().await {
@@ -44,27 +45,32 @@ async fn conn((stream, _source): (TcpStream, SocketAddr), state: State) {
     }
 }
 
-async fn handle_msg(listener: TcpListener, state: State) {
+async fn handle_incoming(listener: TcpListener, state: State) {
+    let mut tasks = JoinSet::new();
     loop {
         let res = listener.accept().await;
         if let Err(e) = res {
             warn!("error accepting presidential connection: {e}");
             continue;
         }
-
-        task::spawn(conn(res.unwrap(), state.clone()));
+        tasks.spawn(handle_conn(res.unwrap(), state.clone()));
     }
 }
 
 async fn succession(state: State) {
     loop {
-        // await hb timeout
-        // select on:
-        //      term incr -> continue
-        //      got elected
-        //
-        // select on:
-        //      term incr
-        //      newer leader
+        succession::president_died(state.heartbeat()).await;
+        state.increment_term();
+
+        let term_increased = state.watch_term();
+        pin_mut!(term_increased);
+        let get_elected = succession::run_for_office();
+        tokio::select! {
+            _n = (&mut term_increased) => continue,
+            () = get_elected => state.order(Order::BecomePres).await,
+        }
+
+        term_increased.await;
+        state.order(Order::ResignPres).await
     }
 }
