@@ -7,12 +7,14 @@ use tokio::sync::{mpsc, Notify};
 use crate::util::TypedSled;
 use crate::Id;
 
+use self::db::LOG;
+
 use super::Order;
 type Term = u32;
 type LogIdx = u32;
 
 #[derive(Debug)]
-struct Vars { 
+struct Vars {
     last_applied: AtomicU32,
     commit_index: AtomicU32,
     heartbeat: Notify,
@@ -29,8 +31,12 @@ impl Default for Vars {
 }
 
 mod db {
-    pub const TERM: [u8; 1] = [1u8];
-    pub const VOTED_FOR: [u8; 1] = [2u8];
+    pub const TERM: [u8; 1] = [0u8];
+    pub const VOTED_FOR: [u8; 1] = [1u8];
+    /// keys are 5 bytes: [this prefix, u32 as_ne_bytes],
+    /// entries are 4 bytes term as_ne_bytes + byte serialized order,
+    #[allow(dead_code)]
+    pub const LOG: [u8; 1] = [2u8];
 }
 
 #[derive(Debug, Clone)]
@@ -115,7 +121,7 @@ impl State {
         let mut sub = self.db.watch_prefix(db::TERM);
         while let Some(event) = (&mut sub).await {
             match event {
-                sled::Event::Insert{key, value} if &key == &db::TERM => {
+                sled::Event::Insert { key, value } if &key == &db::TERM => {
                     let term = bincode::deserialize(&value).unwrap();
                     return term;
                 }
@@ -147,6 +153,29 @@ impl State {
     pub(super) fn apply_log(&self, idx: u32) {
         todo!();
         //self.order()
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct LogMeta {
+    pub term: u32,
+    pub idx: u32,
+}
+
+impl State {
+    /// for an empty log return (0,0)
+    pub(crate) fn last_log_meta(&self) -> LogMeta {
+        let max_key = [u8::MAX];
+        let (key, value) = self.db.get_lt(max_key).expect("internal db issue").unwrap_or_default();
+
+        let key_prefix = [key[0]];
+        match key_prefix {
+            LOG => LogMeta {
+                idx: u32::from_ne_bytes(key[1..=5].try_into().unwrap()),
+                term: u32::from_ne_bytes(value[0..=4].try_into().unwrap()),
+            },
+            _ => Default::default(),
+        }
     }
 }
 
@@ -192,10 +221,10 @@ impl State {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RequestVote {
-    term: Term,
-    candidate_id: Id,
-    last_log_idx: u32,
-    last_log_term: Term,
+    pub term: Term,
+    pub candidate_id: Id,
+    pub last_log_idx: u32,
+    pub last_log_term: Term,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

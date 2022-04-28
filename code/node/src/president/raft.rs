@@ -1,12 +1,14 @@
 use std::net::SocketAddr;
+use std::time::Duration;
 
-use futures::{SinkExt, TryStreamExt, pin_mut};
+use futures::{pin_mut, SinkExt, TryStreamExt};
 pub use log::{Log, Order};
 use protocol::connection;
 use serde::{Deserialize, Serialize};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::mpsc;
 use tokio::task::{self, JoinSet};
+use tokio::time::sleep;
 use tracing::warn;
 
 mod log;
@@ -59,20 +61,30 @@ async fn handle_incoming(listener: TcpListener, state: State) {
     }
 }
 
-async fn succession(chart: Chart, state: State) {
+async fn succession(chart: Chart, cluster_size: u16, state: State) {
     loop {
         succession::president_died(state.heartbeat()).await;
-        state.increment_term();
+        let term = state.increment_term();
 
+        let meta = state.last_log_meta();
+        let campaign = state::RequestVote {
+            term,
+            candidate_id: chart.our_id(),
+            last_log_term: meta.term,
+            last_log_idx: meta.idx,
+        };
+        let get_elected =
+            succession::run_for_office(&chart, cluster_size, campaign);
+        let election_timeout = sleep(Duration::from_millis(100));
         let term_increased = state.watch_term();
         pin_mut!(term_increased);
-        let get_elected = succession::run_for_office(chart);
         tokio::select! {
             _n = (&mut term_increased) => continue,
+            () = election_timeout => continue,
             () = get_elected => state.order(Order::BecomePres).await,
         }
 
-        term_increased.await;
+        term_increased.await; // if we get here we are the president
         state.order(Order::ResignPres).await
     }
 }

@@ -36,7 +36,7 @@ pub struct Config {
     #[clap(short, long, default_value = "127.0.0.1")]
     pub endpoint: IpAddr,
     /// Run
-    #[clap(short, long)]
+    #[clap(short('u'), long)]
     pub run: u16,
     /// Enable running multiple instances a the same host
     #[clap(short, long)]
@@ -80,7 +80,9 @@ pub async fn run(conf: Config) -> Result<()> {
     discovery::found_majority(&chart, conf.cluster_size).await;
 
     let db = sled::open(conf.database).unwrap();
-    let mut pres_orders = president::Log::open(chart.clone(), db, pres_listener)?;
+    let mut pres_orders =
+        president::Log::open(chart.clone(), conf.cluster_size, db, pres_listener)?;
+
     let mut role = Role::Idle;
     loop {
         role = match role {

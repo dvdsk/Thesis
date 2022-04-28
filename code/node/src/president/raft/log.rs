@@ -5,8 +5,8 @@ use tokio::net::TcpListener;
 use tokio::sync::mpsc::{self, Receiver};
 use tokio::task::{self, JoinHandle};
 
-use crate::Role;
 use crate::president::Chart;
+use crate::Role;
 
 use super::state::State;
 use super::{handle_incoming, succession};
@@ -14,8 +14,7 @@ use super::{handle_incoming, succession};
 // abstraction over raft that allows us to wait on
 // new committed log entries.
 pub struct Log {
-    // commited? entries will appear here
-    pub orders: Receiver<Order>,
+    pub orders: Receiver<Order>, // commited entries can be recoverd from here
     pub state: State,
     handle_incoming: JoinHandle<()>,
     succession: JoinHandle<()>,
@@ -29,7 +28,12 @@ pub enum Order {
 }
 
 impl Log {
-    pub(crate) fn open(chart: Chart, db: sled::Db, listener: TcpListener) -> Result<Self> {
+    pub(crate) fn open(
+        chart: Chart,
+        cluster_size: u16,
+        db: sled::Db,
+        listener: TcpListener,
+    ) -> Result<Self> {
         let db = db
             .open_tree("president log")
             .wrap_err("Could not open db tree: \"president log\"")?;
@@ -40,7 +44,7 @@ impl Log {
             state: state.clone(),
             orders,
             handle_incoming: task::spawn(handle_incoming(listener, state.clone())),
-            succession: task::spawn(succession(chart, state)),
+            succession: task::spawn(succession(chart, cluster_size, state)),
         })
     }
 
