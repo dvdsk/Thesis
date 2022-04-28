@@ -10,7 +10,7 @@ use tokio::task::JoinSet;
 mod util;
 
 #[tokio::test]
-async fn main() -> Result<()> {
+async fn local_cluster() -> Result<()> {
     util::setup_errors();
     start_jeager::start_if_not_running(runtime_dir()).await;
 

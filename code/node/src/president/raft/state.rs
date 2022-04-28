@@ -31,12 +31,32 @@ impl Default for Vars {
 }
 
 mod db {
-    pub const TERM: [u8; 1] = [0u8];
-    pub const VOTED_FOR: [u8; 1] = [1u8];
-    /// keys are 5 bytes: [this prefix, u32 as_ne_bytes],
-    /// entries are 4 bytes term as_ne_bytes + byte serialized order,
+    #[repr(u8)]
+    pub enum Prefix {
+        /// reserved to allow unwrap_or_default to reduce no key found Option
+        /// to an unused key_prefix.
+        #[allow(dead_code)]
+        Invalid = 0,
+        /// contains last seen term and voted_for
+        ElectionData = 1,
+        /// keys are 5 bytes: [this prefix, u32 as_ne_bytes],
+        /// entries are 4 bytes term as_ne_bytes + byte serialized order,
+        Log = 2,
+    }
+
+    impl From<&u8> for Prefix {
+        fn from(prefix: &u8) -> Self {
+            use Prefix::*;
+            match *prefix {
+                x if x == ElectionData as u8 => ElectionData,
+                x if x == Log as u8 => Log,
+                _ => Invalid,
+            }
+        }
+    }
+    pub const ELECTION_DATA: [u8; 1] = [Prefix::ElectionData as u8];
     #[allow(dead_code)]
-    pub const LOG: [u8; 1] = [2u8];
+    pub const LOG: [u8; 1] = [Prefix::Log as u8];
 }
 
 #[derive(Debug, Clone)]
@@ -55,15 +75,20 @@ impl State {
         }
     }
     pub fn vote_req(&self, req: RequestVote) -> Option<VoteReply> {
-        if req.term > self.term() {
+        let ElectionData {
+            term,
+            mut voted_for,
+        } = self.election_data();
+        if req.term > term {
             self.set_term(req.term);
+            voted_for = None;
         }
 
-        if req.term < self.term() {
+        if req.term < term {
             return None;
         }
 
-        if let Some(id) = self.voted_for() {
+        if let Some(id) = voted_for {
             if id != req.candidate_id {
                 return None;
             }
@@ -71,7 +96,7 @@ impl State {
 
         if req.log_up_to_date(&self) {
             Some(VoteReply {
-                term: self.term(),
+                term,
                 vote_granted: (),
             })
         } else {
@@ -80,16 +105,17 @@ impl State {
     }
     /// handle append request, this can be called in parallel.
     pub fn append_req(&self, req: AppendEntries) -> AppendReply {
-        if req.term > self.term() {
+        let ElectionData { term, .. } = self.election_data();
+        if req.term > term {
             self.set_term(req.term);
         }
 
-        if req.term < self.term() {
-            return AppendReply::InconsistentLog(self.term());
+        if req.term < term {
+            return AppendReply::InconsistentLog(term);
         }
 
         if !self.log_contains(req.prev_log_idx, req.prev_log_term) {
-            return AppendReply::InconsistentLog(self.term());
+            return AppendReply::InconsistentLog(term);
         }
 
         // This must execute in parallel without side effects
@@ -118,12 +144,12 @@ impl State {
     }
 
     pub(crate) async fn watch_term(&self) -> Term {
-        let mut sub = self.db.watch_prefix(db::TERM);
+        let mut sub = self.db.watch_prefix(db::ELECTION_DATA);
         while let Some(event) = (&mut sub).await {
             match event {
-                sled::Event::Insert { key, value } if &key == &db::TERM => {
-                    let term = bincode::deserialize(&value).unwrap();
-                    return term;
+                sled::Event::Insert { key, value } if &key == &db::ELECTION_DATA => {
+                    let data: ElectionData = bincode::deserialize(&value).unwrap();
+                    return data.term;
                 }
                 _ => panic!("term key should never be removed"),
             }
@@ -165,17 +191,56 @@ pub struct LogMeta {
 impl State {
     /// for an empty log return (0,0)
     pub(crate) fn last_log_meta(&self) -> LogMeta {
-        let max_key = [u8::MAX];
-        let (key, value) = self.db.get_lt(max_key).expect("internal db issue").unwrap_or_default();
+        use db::Prefix;
 
-        let key_prefix = [key[0]];
-        match key_prefix {
-            LOG => LogMeta {
+        let max_key = [u8::MAX];
+        let (key, value) = self
+            .db
+            .get_lt(max_key)
+            .expect("internal db issue")
+            .unwrap_or_default();
+
+        match key.get(0).map(Prefix::from).unwrap_or(Prefix::Invalid) {
+            Prefix::Log => LogMeta {
                 idx: u32::from_ne_bytes(key[1..=5].try_into().unwrap()),
                 term: u32::from_ne_bytes(value[0..=4].try_into().unwrap()),
             },
             _ => Default::default(),
         }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ElectionData {
+    /// the current term
+    term: Term,
+    voted_for: Option<Id>,
+}
+
+impl State {
+    fn election_data(&self) -> ElectionData {
+        self.db.get_val(db::ELECTION_DATA).unwrap_or_default()
+    }
+
+    fn set_term(&self, term: u32) {
+        let data = ElectionData {
+            term,
+            voted_for: None,
+        };
+        self.db.set_val(db::ELECTION_DATA, data);
+    }
+
+    /// increase term by one and return the new term
+    pub(crate) fn increment_term(&self) -> u32 {
+        self.db
+            .update(db::ELECTION_DATA, |ElectionData { term, .. }| {
+                ElectionData {
+                    term: term + 1,
+                    voted_for: None,
+                }
+            })
+            .map(|data| data.term)
+            .unwrap_or_default()
     }
 }
 
@@ -191,23 +256,6 @@ impl State {
 
     fn increment_last_applied(&self) -> u32 {
         self.vars.last_applied.fetch_add(1, Ordering::SeqCst)
-    }
-
-    fn term(&self) -> Term {
-        self.db.get_val(db::TERM).unwrap_or(0)
-    }
-
-    fn set_term(&self, term: u32) {
-        self.db.set_val(db::TERM, term);
-    }
-
-    /// increase term by one and return the new term
-    pub(crate) fn increment_term(&self) -> u32 {
-        self.db.increment(db::TERM)
-    }
-
-    fn voted_for(&self) -> Option<Id> {
-        self.db.get_val(db::VOTED_FOR)
     }
 
     pub(crate) fn last_applied(&self) -> u32 {
@@ -250,7 +298,9 @@ pub enum AppendReply {
     InconsistentLog(Term),
 }
 impl RequestVote {
-    fn log_up_to_date(&self, arg: &&State) -> bool {
-        todo!()
+    /// check if the log of the requester is at least as
+    /// up to date as ours
+    fn log_up_to_date(&self, arg: &State) -> bool {
+        self.last_log_idx >= arg.last_log_meta().idx
     }
 }

@@ -11,6 +11,9 @@ pub trait TypedSled {
     where
         T: Add + DeserializeOwned + Serialize + One + Zero + Unsigned,
         <T as Add>::Output: Serialize;
+    fn update<T>(&self, key: impl AsRef<[u8]>, func: fn(T) -> T) -> Option<T>
+    where
+        T: DeserializeOwned + Serialize;
 }
 
 impl TypedSled for sled::Tree {
@@ -34,6 +37,21 @@ impl TypedSled for sled::Tree {
             .unwrap()
             .expect("increment inserts zero if no value is set");
         bincode::deserialize(&bytes).unwrap()
+    }
+    fn update<T>(&self, key: impl AsRef<[u8]>, func: fn(T) -> T) -> Option<T>
+    where
+        T: DeserializeOwned + Serialize,
+    {
+        let update = |old: Option<&[u8]>| {
+            old.map(bincode::deserialize)
+                .map(Result::unwrap)
+                .map(func)
+                .as_ref()
+                .map(bincode::serialize)
+                .map(Result::unwrap)
+        };
+        let bytes = self.update_and_fetch(key, update).unwrap()?;
+        Some(bincode::deserialize(&bytes).unwrap())
     }
 }
 
