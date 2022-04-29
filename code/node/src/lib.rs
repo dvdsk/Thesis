@@ -17,12 +17,13 @@ mod minister;
 mod president;
 
 pub type Id = u64;
+pub type Term = u32;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Role {
     Idle,
     Clerk,
     Minister,
-    President,
+    President{term: Term},
 }
 
 /// Simple program to greet a person
@@ -89,8 +90,8 @@ pub async fn run(conf: Config) -> Result<()> {
             Role::Idle => idle::work(&mut pres_orders).await?,
             Role::Clerk => clerk::work(&mut pres_orders, &mut node_listener),
             Role::Minister => minister::work(&mut pres_orders, &mut node_listener),
-            Role::President => {
-                president::work(&mut pres_orders, &mut chart, &mut req_listener).await
+            Role::President{ term } => {
+                president::work(&mut pres_orders, &mut chart, &mut req_listener, term).await
             }
         }
     }

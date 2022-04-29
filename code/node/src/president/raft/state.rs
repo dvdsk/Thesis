@@ -2,7 +2,6 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
-use sled::CompareAndSwapError;
 use tokio::sync::{mpsc, Notify};
 use tracing::{debug, instrument, trace, warn};
 
@@ -12,7 +11,7 @@ use crate::Id;
 use self::db::LOG;
 
 use super::Order;
-type Term = u32;
+pub type Term = u32;
 type LogIdx = u32;
 
 #[derive(Debug)]
@@ -71,12 +70,9 @@ pub struct State {
 impl State {
     pub fn new(tx: mpsc::Sender<Order>, db: sled::Tree) -> Self {
         let data = bincode::serialize(&ElectionData::default()).unwrap();
-        let _ig_existing_key_val_err = db.compare_and_swap(
-            db::ELECTION_DATA,
-            None as Option<&[u8]>,
-            Some(data),
-        )
-        .unwrap();
+        let _ig_existing_key_val_err = db
+            .compare_and_swap(db::ELECTION_DATA, None as Option<&[u8]>, Some(data))
+            .unwrap();
 
         Self {
             tx,
@@ -257,22 +253,14 @@ impl State {
             term,
             voted_for: Some(candidate_id),
         };
-        let res = self
-            .db
+        self.db
             .compare_and_swap(
                 db::ELECTION_DATA,
                 Some(bincode::serialize(&old).unwrap()),
                 Some(bincode::serialize(&new).unwrap()),
             )
-            .expect("database encounterd error");
-        // .is_ok()
-        match res {
-            Ok(..) => true,
-            Err(e) => {
-                warn!("not setting vote: {e:?}");
-                false
-            }
-        }
+            .expect("database encounterd error")
+            .is_ok()
     }
 
     /// increase term by one and return the new term
@@ -295,7 +283,7 @@ impl State {
         self.vars.commit_index.fetch_max(new, Ordering::SeqCst);
     }
 
-    fn commit_index(&self) -> u32 {
+    pub fn commit_index(&self) -> u32 {
         self.vars.commit_index.load(Ordering::SeqCst)
     }
 
@@ -329,12 +317,12 @@ pub struct VoteReply {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppendEntries {
-    term: Term,
-    leader_id: Id,
-    prev_log_idx: LogIdx,
-    prev_log_term: Term,
-    entries: Vec<Order>,
-    leader_commit: LogIdx,
+    pub term: Term,
+    pub leader_id: Id,
+    pub prev_log_idx: LogIdx,
+    pub prev_log_term: Term,
+    pub entries: Vec<Order>,
+    pub leader_commit: LogIdx,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

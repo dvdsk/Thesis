@@ -7,8 +7,9 @@ type Chart = mChart<3, u16>;
 
 mod messages;
 mod raft;
-mod subjects;
-pub use raft::{Log, Order};
+pub use raft::subjects;
+pub use raft::{Log, Order, AppendEntries, AppendReply};
+use crate::Term;
 
 #[derive(Debug, Clone)]
 pub struct LogWriter {
@@ -20,6 +21,7 @@ pub(super) async fn work(
     log: &mut Log,
     chart: &mut Chart,
     listener: &mut TcpListener,
+    term: Term,
 ) -> crate::Role {
     info!("started work as president: {}", chart.our_id());
     let Log { orders, state, .. } = log;
@@ -30,7 +32,7 @@ pub(super) async fn work(
     };
 
     tokio::select! {
-        () = subjects::instruct(chart, broadcast.clone(), state.clone()) => unreachable!(),
+        () = subjects::instruct(chart, broadcast.clone(), state.clone(), term) => unreachable!(),
         () = messages::handle_incoming(listener, log_writer) => unreachable!(),
         usurper = orders.recv() => match usurper {
             Some(Order::ResignPres) => crate::Role::Idle,

@@ -6,7 +6,7 @@ use tokio::sync::mpsc::{self, Receiver};
 use tokio::task::{self, JoinHandle};
 
 use crate::president::Chart;
-use crate::Role;
+use crate::{Role, Term};
 
 use super::state::State;
 use super::{handle_incoming, succession};
@@ -23,7 +23,7 @@ pub struct Log {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Order {
     Assigned(Role),
-    BecomePres,
+    BecomePres { term: Term },
     ResignPres,
 }
 

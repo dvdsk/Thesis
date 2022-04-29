@@ -7,7 +7,7 @@ use crate::Role;
 pub(crate) async fn work(pres_orders: &mut Log) -> Result<Role> {
     match pres_orders.recv().await {
         Order::Assigned(role) => Ok(role),
-        Order::BecomePres => Ok(Role::President),
+        Order::BecomePres { term } => Ok(Role::President { term }),
         m => {
             Err(eyre!("recieved wrong msg")).with_section(move || format!("{m:?}").header("Msg:"))
         }

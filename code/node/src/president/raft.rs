@@ -13,7 +13,8 @@ use tracing::{debug, warn};
 mod log;
 mod state;
 mod succession;
-pub(super) use state::State;
+pub mod subjects;
+pub use state::{State, AppendReply, AppendEntries};
 
 use super::Chart;
 
@@ -60,8 +61,9 @@ async fn handle_incoming(listener: TcpListener, state: State) {
     }
 }
 
-const HB_TIMEOUT: Duration = Duration::from_millis(200);
-const ELECTION_TIMEOUT: Duration = Duration::from_millis(200);
+pub(super) const HB_TIMEOUT: Duration = Duration::from_millis(200);
+pub(super) const HB_PERIOD: Duration = Duration::from_millis(150);
+pub(super) const ELECTION_TIMEOUT: Duration = Duration::from_millis(200);
 
 async fn succession(chart: Chart, cluster_size: u16, state: State) {
     loop {
@@ -88,7 +90,7 @@ async fn succession(chart: Chart, cluster_size: u16, state: State) {
                 debug!("abort election, timeout reached");
                 continue
             }
-            () = get_elected => state.order(Order::BecomePres).await,
+            () = get_elected => state.order(Order::BecomePres{term}).await,
         }
 
         term_increased.await; // if we get here we are the president
