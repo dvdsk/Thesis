@@ -7,13 +7,12 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::Notify;
 use tokio::task::JoinSet;
 use tokio::time::{timeout_at, Instant};
-use tracing::{info, warn};
+use tracing::{info, warn, instrument, debug};
 
-use crate::president::Chart;
+use super::Chart;
+use super::HB_TIMEOUT;
 
 use super::{state, Msg, Reply};
-
-const HB_TIMEOUT: Duration = Duration::from_millis(100);
 
 pub(super) async fn president_died(heartbeat: &Notify) {
     use rand::{Rng, SeedableRng};
@@ -23,12 +22,12 @@ pub(super) async fn president_died(heartbeat: &Notify) {
         let random_dur = rng.gen_range(Duration::from_secs(0)..HB_TIMEOUT);
         let hb_deadline = Instant::now() + HB_TIMEOUT + random_dur;
         match timeout_at(hb_deadline, heartbeat.notified()).await {
-            Err(elapsed) => {
-                warn!("heartbeat timed out, elapsed without hb: {:?}", elapsed);
+            Err(_) => {
+                warn!("heartbeat timed out");
                 return;
             }
             Ok(_) => {
-                info!(
+                debug!(
                     "hb timeout in {} ms",
                     hb_deadline
                         .saturating_duration_since(Instant::now())
@@ -39,6 +38,7 @@ pub(super) async fn president_died(heartbeat: &Notify) {
     }
 }
 
+#[instrument(ret)]
 async fn request_vote(addr: SocketAddr, vote_req: state::RequestVote) -> Result<()> {
     let stream = TcpStream::connect(addr).await?;
     let mut stream: connection::MsgStream<Reply, Msg> = connection::wrap(stream);
@@ -64,9 +64,9 @@ pub(super) async fn run_for_office(chart: &Chart, cluster_size: u16, campaign: s
             set
         });
 
+    info!("awaiting vote requests");
     let majority = (f32::from(cluster_size) * 0.5).ceil() as usize;
-    let mut votes = 0;
-    info!(votes, majority);
+    let mut votes = 1; // vote for ourself
     while let Some(res) = requests
         .join_one()
         .await
@@ -76,7 +76,7 @@ pub(super) async fn run_for_office(chart: &Chart, cluster_size: u16, campaign: s
             Ok(_) => votes += 1,
             Err(_) => continue,
         }
-        if dbg!(votes) >= dbg!(majority) {
+        if votes >= majority {
             return;
         }
     }

@@ -6,10 +6,9 @@ pub use log::{Log, Order};
 use protocol::connection;
 use serde::{Deserialize, Serialize};
 use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::mpsc;
-use tokio::task::{self, JoinSet};
+use tokio::task::JoinSet;
 use tokio::time::sleep;
-use tracing::warn;
+use tracing::{debug, warn};
 
 mod log;
 mod state;
@@ -61,6 +60,9 @@ async fn handle_incoming(listener: TcpListener, state: State) {
     }
 }
 
+const HB_TIMEOUT: Duration = Duration::from_millis(200);
+const ELECTION_TIMEOUT: Duration = Duration::from_millis(200);
+
 async fn succession(chart: Chart, cluster_size: u16, state: State) {
     loop {
         succession::president_died(state.heartbeat()).await;
@@ -73,14 +75,19 @@ async fn succession(chart: Chart, cluster_size: u16, state: State) {
             last_log_term: meta.term,
             last_log_idx: meta.idx,
         };
-        let get_elected =
-            succession::run_for_office(&chart, cluster_size, campaign);
-        let election_timeout = sleep(Duration::from_millis(100));
+        let get_elected = succession::run_for_office(&chart, cluster_size, campaign);
+        let election_timeout = sleep(ELECTION_TIMEOUT);
         let term_increased = state.watch_term();
         pin_mut!(term_increased);
         tokio::select! {
-            _n = (&mut term_increased) => continue,
-            () = election_timeout => continue,
+            _n = (&mut term_increased) => {
+                debug!("abort election, recieved higher term");
+                continue
+            }
+            () = election_timeout => {
+                debug!("abort election, timeout reached");
+                continue
+            }
             () = get_elected => state.order(Order::BecomePres).await,
         }
 

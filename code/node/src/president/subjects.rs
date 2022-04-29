@@ -35,6 +35,8 @@ async fn manage_subject(address: SocketAddr, rx: broadcast::Receiver<()>, last_l
         }
         sleep(Duration::from_millis(100)).await;
     };
+
+    todo!("send heartbeat");
 }
 
 /// look for new subjects in the chart and register them

@@ -2,7 +2,9 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
+use sled::CompareAndSwapError;
 use tokio::sync::{mpsc, Notify};
+use tracing::{debug, instrument, trace, warn};
 
 use crate::util::TypedSled;
 use crate::Id;
@@ -68,40 +70,53 @@ pub struct State {
 
 impl State {
     pub fn new(tx: mpsc::Sender<Order>, db: sled::Tree) -> Self {
+        let data = bincode::serialize(&ElectionData::default()).unwrap();
+        let _ig_existing_key_val_err = db.compare_and_swap(
+            db::ELECTION_DATA,
+            None as Option<&[u8]>,
+            Some(data),
+        )
+        .unwrap();
+
         Self {
             tx,
             db,
             vars: Default::default(),
         }
     }
+    #[instrument(ret, skip(self))]
     pub fn vote_req(&self, req: RequestVote) -> Option<VoteReply> {
         let ElectionData {
-            term,
-            mut voted_for,
+            mut term,
+            voted_for,
         } = self.election_data();
         if req.term > term {
+            term = req.term;
             self.set_term(req.term);
-            voted_for = None;
         }
 
         if req.term < term {
+            trace!("term to low");
             return None;
         }
 
         if let Some(id) = voted_for {
             if id != req.candidate_id {
+                trace!("already voted");
                 return None;
             }
         }
 
         if req.log_up_to_date(&self) {
-            Some(VoteReply {
-                term,
-                vote_granted: (),
-            })
-        } else {
-            None
+            if self.set_voted_for(term, req.candidate_id) {
+                return Some(VoteReply {
+                    term,
+                    vote_granted: (),
+                });
+            }
         }
+
+        None
     }
     /// handle append request, this can be called in parallel.
     pub fn append_req(&self, req: AppendEntries) -> AppendReply {
@@ -222,12 +237,42 @@ impl State {
         self.db.get_val(db::ELECTION_DATA).unwrap_or_default()
     }
 
+    /// updates term and resets voted_for
     fn set_term(&self, term: u32) {
         let data = ElectionData {
             term,
             voted_for: None,
         };
         self.db.set_val(db::ELECTION_DATA, data);
+    }
+
+    /// sets voted_for if the term did not change and it was not
+    #[instrument(ret, skip(self))]
+    fn set_voted_for(&self, term: u32, candidate_id: u64) -> bool {
+        let old = ElectionData {
+            term,
+            voted_for: None,
+        };
+        let new = ElectionData {
+            term,
+            voted_for: Some(candidate_id),
+        };
+        let res = self
+            .db
+            .compare_and_swap(
+                db::ELECTION_DATA,
+                Some(bincode::serialize(&old).unwrap()),
+                Some(bincode::serialize(&new).unwrap()),
+            )
+            .expect("database encounterd error");
+        // .is_ok()
+        match res {
+            Ok(..) => true,
+            Err(e) => {
+                warn!("not setting vote: {e:?}");
+                false
+            }
+        }
     }
 
     /// increase term by one and return the new term
@@ -300,6 +345,7 @@ pub enum AppendReply {
 impl RequestVote {
     /// check if the log of the requester is at least as
     /// up to date as ours
+    #[instrument(ret, skip(arg, self))]
     fn log_up_to_date(&self, arg: &State) -> bool {
         self.last_log_idx >= arg.last_log_meta().idx
     }
