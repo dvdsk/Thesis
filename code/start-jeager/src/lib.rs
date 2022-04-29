@@ -4,6 +4,7 @@ use std::io::Read;
 use std::os::unix::prelude::PermissionsExt;
 use std::path::Path;
 use std::process::Stdio;
+use std::sync::mpsc;
 
 use flate2::read::GzDecoder;
 use tar::Archive;
@@ -61,10 +62,9 @@ pub async fn start_if_not_running(dir: impl AsRef<Path>) {
         download(dir).await;
     }
 
-    tokio::process::Command::new(path)
+    let _ = std::process::Command::new(path)
         .arg("--query.http-server.host-port")
         .arg("127.0.0.1:16686")
-        .kill_on_drop(false)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
