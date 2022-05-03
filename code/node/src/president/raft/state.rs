@@ -68,17 +68,15 @@ pub struct State {
 
 impl State {
     pub fn new(tx: mpsc::Sender<Order>, db: sled::Tree, id: instance_chart::Id) -> Self {
-        let data = bincode::serialize(&ElectionData::default()).unwrap();
-        let _ig_existing_key_val_err = db
-            .compare_and_swap(db::ELECTION_DATA, None as Option<&[u8]>, Some(data))
-            .unwrap();
-
-        Self {
+        let state = Self {
             id,
             tx,
             db,
             vars: Default::default(),
-        }
+        };
+        state.init_election_data();
+        state.insert_into_log(0, &Order::None);
+        state
     }
     #[instrument(skip(self), fields(id = self.id), ret)]
     pub fn vote_req(&self, req: RequestVote) -> Option<VoteReply> {
@@ -121,11 +119,11 @@ impl State {
         }
 
         if req.term < term {
-            return AppendReply::InconsistentLog(term);
+            return AppendReply::ExPresident(term);
         }
 
         if !self.log_contains(req.prev_log_idx, req.prev_log_term) {
-            return AppendReply::InconsistentLog(term);
+            return AppendReply::InconsistentLog;
         }
 
         // This must execute in parallel without side effects
@@ -168,6 +166,21 @@ impl State {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LogEntry {
+    term: Term,
+    entry: Order,
+}
+
+impl Default for LogEntry {
+    fn default() -> Self {
+        Self {
+            term: 0,
+            entry: Order::None,
+        }
+    }
+}
+
 impl State {
     pub(super) async fn order(&self, ord: Order) {
         self.tx.send(ord).await.unwrap();
@@ -182,8 +195,10 @@ impl State {
         todo!()
     }
 
-    fn insert_into_log(&self, _index: u32, _entry: &Order) {
-        todo!()
+    fn insert_into_log(&self, index: u32, entry: &Order) {
+        let mut key = [db::Prefix::Log as u8, 0,0,0,0];
+        key[1..5].clone_from_slice(&index.to_ne_bytes());
+        self.db.set_val(key, entry);
     }
 
     pub(super) fn apply_log(&self, _idx: u32) {
@@ -212,8 +227,8 @@ impl State {
 
         match key.get(0).map(Prefix::from).unwrap_or(Prefix::Invalid) {
             Prefix::Log => LogMeta {
-                idx: u32::from_ne_bytes(key[1..=5].try_into().unwrap()),
-                term: u32::from_ne_bytes(value[0..=4].try_into().unwrap()),
+                idx: u32::from_ne_bytes(key[1..5].try_into().unwrap()),
+                term: u32::from_ne_bytes(value[0..4].try_into().unwrap()),
             },
             _ => Default::default(),
         }
@@ -228,6 +243,12 @@ pub struct ElectionData {
 }
 
 impl State {
+    fn init_election_data(&self) {
+        let data = bincode::serialize(&ElectionData::default()).unwrap();
+        let _ig_existing_key_val_err = self.db 
+            .compare_and_swap(db::ELECTION_DATA, None as Option<&[u8]>, Some(data))
+            .unwrap();
+    }
     fn election_data(&self) -> ElectionData {
         self.db.get_val(db::ELECTION_DATA).unwrap_or_default()
     }
@@ -327,7 +348,8 @@ pub struct AppendEntries {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum AppendReply {
     Ok,
-    InconsistentLog(Term),
+    ExPresident(Term),
+    InconsistentLog,
 }
 impl RequestVote {
     /// check if the log of the requester is at least as

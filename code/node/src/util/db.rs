@@ -24,7 +24,7 @@ impl TypedSled for sled::Tree {
     }
     fn set_val<T: Serialize>(&self, key: impl AsRef<[u8]>, val: T) {
         let bytes = bincode::serialize(&val).unwrap();
-        self.insert(key, bytes).unwrap().unwrap();
+        let _ig_old_key = self.insert(key, bytes).unwrap();
     }
     /// increment the value in the db or insert zero if none has been set
     fn increment<T>(&self, key: impl AsRef<[u8]>) -> T

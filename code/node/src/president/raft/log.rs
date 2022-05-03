@@ -23,6 +23,8 @@ pub struct Log {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Order {
+    /// used as placeholder for the first entry in the log
+    None,
     Assigned(Role),
     BecomePres { term: Term },
     ResignPres,
