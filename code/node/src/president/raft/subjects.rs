@@ -73,14 +73,14 @@ async fn manage_subject(
 
 /// look for new subjects in the chart and register them
 #[instrument(skip_all, fields(id = state.id))]
-pub async fn instruct(chart: &mut Chart, orders: broadcast::Sender<()>, state: State, _term: Term) {
+pub async fn instruct(chart: &mut Chart, orders: broadcast::Sender<()>, state: State, term: Term) {
     // todo slice of len cluster size for match_idxes
-    let LogMeta { idx, term } = state.last_log_meta();
+    let LogMeta { idx: prev_idx, term: prev_term } = state.last_log_meta();
     let base_msg = AppendEntries {
         term,
         leader_id: chart.our_id(),
-        prev_log_idx: idx,
-        prev_log_term: term,
+        prev_log_idx: prev_idx,
+        prev_log_term: prev_term,
         entries: Vec::new(),
         leader_commit: state.commit_index(),
     };
