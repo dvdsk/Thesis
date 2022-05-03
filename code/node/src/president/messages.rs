@@ -19,10 +19,11 @@ enum Reply {
     GoAway, // president does not forward
 }
 
+#[allow(dead_code)]
 async fn client_req() {
 }
 
-async fn handle_conn(stream: TcpStream, log: LogWriter) {
+async fn handle_conn(stream: TcpStream, _log: LogWriter) {
     use Msg::*;
     use Reply::*;
     let mut stream: connection::MsgStream<Msg, Reply> = connection::wrap(stream);

@@ -6,6 +6,7 @@ use mktemp::Temp;
 use node::Config;
 use node::util::runtime_dir;
 use tokio::task::JoinSet;
+use tracing::Instrument;
 
 mod util;
 
@@ -34,7 +35,8 @@ async fn local_cluster() -> Result<()> {
             database: temp_dir.join(format!("{i}.db")),
             ..config.clone()
         })
-        .map(|config| node::run(config))
+        .map(node::run)
+        .map(|fut| fut.instrument(tracing::info_span!("test")))
         .fold(JoinSet::new(), |mut set, fut| {
             set.spawn(fut);
             set

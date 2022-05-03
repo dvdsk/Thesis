@@ -1,5 +1,4 @@
 use std::collections::HashSet;
-use std::mem;
 use std::net::SocketAddr;
 use std::sync::atomic::AtomicU32;
 use std::sync::Arc;
@@ -15,7 +14,8 @@ use tokio::time::{sleep, timeout_at, Instant};
 use tracing::warn;
 
 use super::state::LogMeta;
-use super::{AppendEntries, AppendReply, State, HB_PERIOD};
+use super::{AppendEntries, State, HB_PERIOD};
+use super::{Msg, Reply};
 
 async fn manage_subject(
     address: SocketAddr,
@@ -27,7 +27,7 @@ async fn manage_subject(
     use std::io::ErrorKind;
 
     loop {
-        let mut stream: connection::MsgStream<AppendReply, AppendEntries> = loop {
+        let mut stream: connection::MsgStream<Reply, Msg> = loop {
             match TcpStream::connect(address).await {
                 Ok(stream) => {
                     // stream.set_nodelay(true).unwrap();
@@ -46,19 +46,19 @@ async fn manage_subject(
 
         let next_msg = AppendEntries { ..base_msg.clone() };
         // send empty msg aka heartbeat
-        if let Err(e) = stream.send(next_msg.clone()).await {
+        if let Err(e) = stream.send(Msg::AppendEntries(next_msg.clone())).await {
             warn!("could not send to host, error: {e:?}");
-            break;
+            continue;
         }
         let next_hb = Instant::now() + HB_PERIOD;
 
         loop {
             match timeout_at(next_hb, broadcast.recv()).await {
-                Ok(Ok(order)) => todo!("send order"),
-                Ok(Err(e)) => todo!("handle backorder"),
+                Ok(Ok(_order)) => todo!("send order"),
+                Ok(Err(_e)) => todo!("handle backorder"),
                 Err(..) => {
                     let to_send = next_msg.clone();
-                    match stream.send(to_send).await {
+                    match stream.send(Msg::AppendEntries(to_send)).await {
                         Ok(..) => continue,
                         Err(e) => {
                             warn!("could not send to host, error: {e:?}");
@@ -72,7 +72,7 @@ async fn manage_subject(
 }
 
 /// look for new subjects in the chart and register them
-pub async fn instruct(chart: &mut Chart, orders: broadcast::Sender<()>, state: State, term: Term) {
+pub async fn instruct(chart: &mut Chart, orders: broadcast::Sender<()>, state: State, _term: Term) {
     // todo slice of len cluster size for match_idxes
     let LogMeta { idx, term } = state.last_log_meta();
     let base_msg = AppendEntries {

@@ -7,7 +7,7 @@ use color_eyre::eyre::Result;
 pub use color_eyre::eyre::WrapErr;
 use instance_chart::{discovery, ChartBuilder};
 use serde::{Deserialize, Serialize};
-use tracing::{info, instrument};
+use tracing::instrument;
 
 pub mod util;
 

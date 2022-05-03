@@ -1,4 +1,4 @@
-use color_eyre::eyre::{eyre, WrapErr};
+use color_eyre::eyre::eyre;
 use color_eyre::{Result, Section, SectionExt};
 
 use crate::president::{Log, Order};

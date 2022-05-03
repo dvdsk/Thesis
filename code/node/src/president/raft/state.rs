@@ -3,12 +3,10 @@ use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 use tokio::sync::{mpsc, Notify};
-use tracing::{debug, instrument, trace, warn};
+use tracing::{instrument, trace};
 
 use crate::util::TypedSled;
 use crate::Id;
-
-use self::db::LOG;
 
 use super::Order;
 pub type Term = u32;
@@ -62,25 +60,27 @@ mod db {
 
 #[derive(Debug, Clone)]
 pub struct State {
+    id: instance_chart::Id,
     tx: mpsc::Sender<Order>,
     db: sled::Tree,
     vars: Arc<Vars>,
 }
 
 impl State {
-    pub fn new(tx: mpsc::Sender<Order>, db: sled::Tree) -> Self {
+    pub fn new(tx: mpsc::Sender<Order>, db: sled::Tree, id: instance_chart::Id) -> Self {
         let data = bincode::serialize(&ElectionData::default()).unwrap();
         let _ig_existing_key_val_err = db
             .compare_and_swap(db::ELECTION_DATA, None as Option<&[u8]>, Some(data))
             .unwrap();
 
         Self {
+            id,
             tx,
             db,
             vars: Default::default(),
         }
     }
-    #[instrument(ret, skip(self))]
+    #[instrument(skip(self), fields(id = self.id), ret)]
     pub fn vote_req(&self, req: RequestVote) -> Option<VoteReply> {
         let ElectionData {
             mut term,
@@ -103,18 +103,17 @@ impl State {
             }
         }
 
-        if req.log_up_to_date(&self) {
-            if self.set_voted_for(term, req.candidate_id) {
-                return Some(VoteReply {
-                    term,
-                    vote_granted: (),
-                });
-            }
+        if req.log_up_to_date(self) && self.set_voted_for(term, req.candidate_id) {
+            return Some(VoteReply {
+                term,
+                vote_granted: (),
+            });
         }
 
         None
     }
     /// handle append request, this can be called in parallel.
+    #[instrument(skip(self), fields(id = self.id), ret)]
     pub fn append_req(&self, req: AppendEntries) -> AppendReply {
         let ElectionData { term, .. } = self.election_data();
         if req.term > term {
@@ -158,7 +157,7 @@ impl State {
         let mut sub = self.db.watch_prefix(db::ELECTION_DATA);
         while let Some(event) = (&mut sub).await {
             match event {
-                sled::Event::Insert { key, value } if &key == &db::ELECTION_DATA => {
+                sled::Event::Insert { key, value } if key == db::ELECTION_DATA => {
                     let data: ElectionData = bincode::deserialize(&value).unwrap();
                     return data.term;
                 }
@@ -174,20 +173,20 @@ impl State {
         self.tx.send(ord).await.unwrap();
     }
 
-    pub(super) fn log_contains(&self, prev_log_idx: u32, prev_log_term: u32) -> bool {
+    pub(super) fn log_contains(&self, _prev_log_idx: u32, _prev_log_term: u32) -> bool {
         todo!()
     }
 
     // check side effects if called interleaved
-    fn prepare_log(&self, index: u32, term: u32) {
+    fn prepare_log(&self, _index: u32, _term: u32) {
         todo!()
     }
 
-    fn insert_into_log(&self, index: u32, entry: &Order) {
+    fn insert_into_log(&self, _index: u32, _entry: &Order) {
         todo!()
     }
 
-    pub(super) fn apply_log(&self, idx: u32) {
+    pub(super) fn apply_log(&self, _idx: u32) {
         todo!();
         //self.order()
     }
@@ -243,7 +242,7 @@ impl State {
     }
 
     /// sets voted_for if the term did not change and it was not
-    #[instrument(ret, skip(self))]
+    #[instrument(ret, skip(self), level = "debug")]
     fn set_voted_for(&self, term: u32, candidate_id: u64) -> bool {
         let old = ElectionData {
             term,
@@ -333,7 +332,7 @@ pub enum AppendReply {
 impl RequestVote {
     /// check if the log of the requester is at least as
     /// up to date as ours
-    #[instrument(ret, skip(arg, self))]
+    #[instrument(ret, skip(arg, self), level = "debug")]
     fn log_up_to_date(&self, arg: &State) -> bool {
         self.last_log_idx >= arg.last_log_meta().idx
     }

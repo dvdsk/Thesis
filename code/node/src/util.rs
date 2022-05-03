@@ -49,7 +49,7 @@ where
 
 pub fn setup_tracing(instance: String, endpoint: IpAddr, run: u16) {
     let filter = filter::EnvFilter::builder()
-        .parse("info,multicast_discovery=debug")
+        .parse("info,instance_chart=warn")
         .unwrap();
 
     let telemetry = opentelemetry(instance, endpoint, run);
@@ -68,6 +68,7 @@ pub fn setup_errors() {
     color_eyre::install().unwrap();
 }
 
+#[allow(dead_code)]
 pub async fn open_socket(port: Option<NonZeroU16>) -> Result<(TcpListener, u16)> {
     let ip = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
     let addr = SocketAddr::new(ip, port.map(NonZeroU16::get).unwrap_or(0));
@@ -83,6 +84,7 @@ pub async fn open_socket(port: Option<NonZeroU16>) -> Result<(TcpListener, u16)>
     Ok((listener, open_port))
 }
 
+#[allow(dead_code)]
 pub fn runtime_dir() -> PathBuf {
     use std::io::ErrorKind::AlreadyExists;
     let temp = std::env::temp_dir().join("thesis");
@@ -92,6 +94,7 @@ pub fn runtime_dir() -> PathBuf {
     temp
 }
 
+#[allow(dead_code)]
 pub fn run_number(dir: &Path) -> u16 {
     let path = dir.join("run.txt");
     let run = match fs::read_to_string(&path).map_err(|e| e.kind()) {
@@ -109,6 +112,7 @@ use core::pin::Pin;
 use core::task::{Context, Poll};
 
 /// Spawn a new tokio Task and cancel it on drop.
+#[allow(dead_code)]
 pub fn spawn<T>(future: T) -> Wrapper<T::Output>
 where
     T: Future + Send + 'static,

@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use tokio::net::TcpListener;
 use tokio::sync::mpsc::{self, Receiver};
 use tokio::task::{self, JoinHandle};
+use tracing::instrument;
 
 use crate::president::Chart;
 use crate::{Role, Term};
@@ -16,8 +17,8 @@ use super::{handle_incoming, succession};
 pub struct Log {
     pub orders: Receiver<Order>, // commited entries can be recoverd from here
     pub state: State,
-    handle_incoming: JoinHandle<()>,
-    succession: JoinHandle<()>,
+    _handle_incoming: JoinHandle<()>,
+    _succession: JoinHandle<()>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -28,6 +29,7 @@ pub enum Order {
 }
 
 impl Log {
+    #[instrument(skip_all)]
     pub(crate) fn open(
         chart: Chart,
         cluster_size: u16,
@@ -38,13 +40,13 @@ impl Log {
             .open_tree("president log")
             .wrap_err("Could not open db tree: \"president log\"")?;
         let (tx, orders) = mpsc::channel(100);
-        let state = State::new(tx, db);
+        let state = State::new(tx, db, chart.our_id());
 
         Ok(Self {
             state: state.clone(),
             orders,
-            handle_incoming: task::spawn(handle_incoming(listener, state.clone())),
-            succession: task::spawn(succession(chart, cluster_size, state)),
+            _handle_incoming: task::spawn(handle_incoming(listener, state.clone())),
+            _succession: task::spawn(succession(chart, cluster_size, state)),
         })
     }
 

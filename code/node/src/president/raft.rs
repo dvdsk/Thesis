@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::task::JoinSet;
 use tokio::time::sleep;
-use tracing::{debug, warn};
+use tracing::{debug, warn, instrument};
 
 mod log;
 mod state;
@@ -30,6 +30,7 @@ enum Reply {
     AppendEntries(state::AppendReply),
 }
 
+#[instrument(skip(state, stream))]
 async fn handle_conn((stream, _source): (TcpStream, SocketAddr), state: State) {
     use Msg::*;
     let mut stream: connection::MsgStream<Msg, Reply> = connection::wrap(stream);
@@ -49,6 +50,7 @@ async fn handle_conn((stream, _source): (TcpStream, SocketAddr), state: State) {
     }
 }
 
+#[instrument(skip_all, fields(id))]
 async fn handle_incoming(listener: TcpListener, state: State) {
     let mut tasks = JoinSet::new();
     loop {
@@ -65,6 +67,7 @@ pub(super) const HB_TIMEOUT: Duration = Duration::from_millis(200);
 pub(super) const HB_PERIOD: Duration = Duration::from_millis(150);
 pub(super) const ELECTION_TIMEOUT: Duration = Duration::from_millis(200);
 
+#[instrument(skip_all, fields(id = chart.our_id()))]
 async fn succession(chart: Chart, cluster_size: u16, state: State) {
     loop {
         succession::president_died(state.heartbeat()).await;
