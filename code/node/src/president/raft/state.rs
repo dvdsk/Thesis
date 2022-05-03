@@ -60,7 +60,7 @@ mod db {
 
 #[derive(Debug, Clone)]
 pub struct State {
-    id: instance_chart::Id,
+    pub id: instance_chart::Id,
     tx: mpsc::Sender<Order>,
     db: sled::Tree,
     vars: Arc<Vars>,

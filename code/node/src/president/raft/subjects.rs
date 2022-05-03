@@ -11,7 +11,7 @@ use tokio::net::TcpStream;
 use tokio::sync::broadcast;
 use tokio::task::JoinSet;
 use tokio::time::{sleep, timeout_at, Instant};
-use tracing::warn;
+use tracing::{warn, instrument};
 
 use super::state::LogMeta;
 use super::{AppendEntries, State, HB_PERIOD};
@@ -72,6 +72,7 @@ async fn manage_subject(
 }
 
 /// look for new subjects in the chart and register them
+#[instrument(skip_all, fields(id = state.id))]
 pub async fn instruct(chart: &mut Chart, orders: broadcast::Sender<()>, state: State, _term: Term) {
     // todo slice of len cluster size for match_idxes
     let LogMeta { idx, term } = state.last_log_meta();

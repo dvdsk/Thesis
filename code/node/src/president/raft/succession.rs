@@ -7,7 +7,7 @@ use tokio::net::TcpStream;
 use tokio::sync::Notify;
 use tokio::task::JoinSet;
 use tokio::time::{timeout_at, Instant};
-use tracing::{info, warn, instrument, debug, Instrument};
+use tracing::{warn, instrument, debug};
 
 use super::Chart;
 use super::HB_TIMEOUT;

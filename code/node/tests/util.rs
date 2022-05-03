@@ -6,6 +6,7 @@ use opentelemetry::KeyValue;
 use tracing_opentelemetry::OpenTelemetryLayer;
 use tracing_subscriber::filter;
 use tracing_subscriber::prelude::*;
+use tracing_error::ErrorLayer;
 
 pub use node::util::{run_number, runtime_dir};
 
@@ -48,6 +49,7 @@ pub fn setup_tracing(instance: String, endpoint: IpAddr, run: u16) {
         .with_test_writer();
 
     let _ignore_err = tracing_subscriber::registry()
+        .with(ErrorLayer::default())
         .with(filter)
         .with(telemetry)
         .with(fmt)

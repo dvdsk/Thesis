@@ -6,6 +6,7 @@ use result_tools::*;
 use tracing_opentelemetry::OpenTelemetryLayer;
 use tracing_subscriber::filter;
 use tracing_subscriber::prelude::*;
+use tracing_error::ErrorLayer;
 
 use std::fs;
 use std::io;
@@ -58,6 +59,7 @@ pub fn setup_tracing(instance: String, endpoint: IpAddr, run: u16) {
         .with_line_number(true);
 
     let _ignore_err = tracing_subscriber::registry()
+        .with(ErrorLayer::default())
         .with(filter)
         .with(telemetry)
         .with(fmt)
