@@ -50,9 +50,9 @@ async fn manage_subject(
             warn!("could not send to host, error: {e:?}");
             continue;
         }
-        let next_hb = Instant::now() + HB_PERIOD;
 
         loop {
+            let next_hb = Instant::now() + HB_PERIOD;
             match timeout_at(next_hb, broadcast.recv()).await {
                 Ok(Ok(_order)) => todo!("send order"),
                 Ok(Err(_e)) => todo!("handle backorder"),

@@ -4,7 +4,6 @@ use std::io::Read;
 use std::os::unix::prelude::PermissionsExt;
 use std::path::Path;
 use std::process::Stdio;
-use std::sync::mpsc;
 
 use flate2::read::GzDecoder;
 use tar::Archive;
