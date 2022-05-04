@@ -16,17 +16,19 @@ mod succession;
 pub mod subjects;
 pub use state::{State, AppendReply, AppendEntries};
 
+use self::state::vote;
+
 use super::Chart;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 enum Msg {
-    RequestVote(state::RequestVote),
+    RequestVote(vote::RequestVote),
     AppendEntries(state::AppendEntries),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 enum Reply {
-    RequestVote(state::VoteReply),
+    RequestVote(vote::VoteReply),
     AppendEntries(state::AppendReply),
 }
 
@@ -74,7 +76,7 @@ async fn succession(chart: Chart, cluster_size: u16, state: State) {
         let term = state.increment_term();
 
         let meta = state.last_log_meta();
-        let campaign = state::RequestVote {
+        let campaign = vote::RequestVote {
             term,
             candidate_id: chart.our_id(),
             last_log_term: meta.term,

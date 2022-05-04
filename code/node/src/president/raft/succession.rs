@@ -12,7 +12,8 @@ use tracing::{warn, instrument, debug};
 use super::Chart;
 use super::HB_TIMEOUT;
 
-use super::{state, Msg, Reply};
+use super::state::vote;
+use super::{Msg, Reply};
 
 #[instrument(skip(heartbeat))]
 pub(super) async fn president_died(heartbeat: &Notify) {
@@ -40,7 +41,7 @@ pub(super) async fn president_died(heartbeat: &Notify) {
 }
 
 #[instrument(level="debug", ret)]
-async fn request_vote(addr: SocketAddr, vote_req: state::RequestVote, id: instance_chart::Id) -> Result<()> {
+async fn request_vote(addr: SocketAddr, vote_req: vote::RequestVote, id: instance_chart::Id) -> Result<()> {
     let stream = TcpStream::connect(addr).await?;
     let mut stream: connection::MsgStream<Reply, Msg> = connection::wrap(stream);
     stream.send(Msg::RequestVote(vote_req)).await?;
@@ -55,7 +56,7 @@ async fn request_vote(addr: SocketAddr, vote_req: state::RequestVote, id: instan
 /// only returns when this node has been elected
 /// election timeout is implemented by selecting on this
 /// with a timeout
-pub(super) async fn run_for_office(chart: &Chart, cluster_size: u16, campaign: state::RequestVote) {
+pub(super) async fn run_for_office(chart: &Chart, cluster_size: u16, campaign: vote::RequestVote) {
     let mut requests: JoinSet<_> = chart
         .nth_addr_vec::<0>()
         .into_iter()
