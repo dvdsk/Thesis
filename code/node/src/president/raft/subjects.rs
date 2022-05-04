@@ -14,7 +14,8 @@ use tokio::time::{sleep, timeout_at, Instant};
 use tracing::{warn, instrument};
 
 use super::state::LogMeta;
-use super::{AppendEntries, State, HB_PERIOD};
+use super::state::append::Request;
+use super::{State, HB_PERIOD};
 use super::{Msg, Reply};
 
 async fn manage_subject(
@@ -22,7 +23,7 @@ async fn manage_subject(
     mut broadcast: broadcast::Receiver<()>,
     _next_idx: u32,
     _match_idx: Arc<AtomicU32>,
-    base_msg: AppendEntries,
+    base_msg: Request,
 ) {
     use std::io::ErrorKind;
 
@@ -44,7 +45,7 @@ async fn manage_subject(
             sleep(super::HB_TIMEOUT).await;
         };
 
-        let next_msg = AppendEntries { ..base_msg.clone() };
+        let next_msg = Request { ..base_msg.clone() };
         // send empty msg aka heartbeat
         if let Err(e) = stream.send(Msg::AppendEntries(next_msg.clone())).await {
             warn!("could not send to host, error: {e:?}");
@@ -76,7 +77,7 @@ async fn manage_subject(
 pub async fn instruct(chart: &mut Chart, orders: broadcast::Sender<()>, state: State, term: Term) {
     // todo slice of len cluster size for match_idxes
     let LogMeta { idx: prev_idx, term: prev_term } = state.last_log_meta();
-    let base_msg = AppendEntries {
+    let base_msg = Request {
         term,
         leader_id: chart.our_id(),
         prev_log_idx: prev_idx,

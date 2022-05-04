@@ -8,7 +8,7 @@ type Chart = mChart<3, u16>;
 mod messages;
 mod raft;
 pub use raft::subjects;
-pub use raft::{Log, Order, AppendEntries, AppendReply};
+pub use raft::{Log, Order};
 use crate::Term;
 
 #[derive(Debug, Clone)]

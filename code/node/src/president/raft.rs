@@ -14,22 +14,22 @@ mod log;
 mod state;
 mod succession;
 pub mod subjects;
-pub use state::{State, AppendReply, AppendEntries};
+pub use state::State;
 
-use self::state::vote;
+use self::state::{vote, append};
 
 use super::Chart;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 enum Msg {
     RequestVote(vote::RequestVote),
-    AppendEntries(state::AppendEntries),
+    AppendEntries(append::Request),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 enum Reply {
     RequestVote(vote::VoteReply),
-    AppendEntries(state::AppendReply),
+    AppendEntries(append::Reply),
 }
 
 #[instrument(skip(state, stream))]
