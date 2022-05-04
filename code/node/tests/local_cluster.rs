@@ -8,7 +8,7 @@ use node::util::runtime_dir;
 use tokio::task::JoinSet;
 use tracing::Instrument;
 
-mod util;
+use node::util;
 
 #[tokio::test]
 async fn local_cluster() -> Result<()> {

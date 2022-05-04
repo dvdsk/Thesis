@@ -1,14 +1,13 @@
-use std::net::IpAddr;
-
 use opentelemetry::sdk::resource::Resource;
 use opentelemetry::sdk::trace;
 use opentelemetry::KeyValue;
+
 use tracing_opentelemetry::OpenTelemetryLayer;
 use tracing_subscriber::filter;
 use tracing_subscriber::prelude::*;
 use tracing_error::ErrorLayer;
 
-pub use node::util::{run_number, runtime_dir};
+use std::net::IpAddr;
 
 fn opentelemetry<S>(
     instance: String,
@@ -29,7 +28,7 @@ where
 
     let tracer = opentelemetry_jaeger::new_pipeline()
         .with_trace_config(config)
-        .with_agent_endpoint(format!("{}:6831", endpoint))
+        .with_agent_endpoint((endpoint, 6831))
         .with_service_name("raft-fs")
         .install_batch(opentelemetry::runtime::Tokio)
         .unwrap();
@@ -39,7 +38,26 @@ where
 
 pub fn setup_tracing(instance: String, endpoint: IpAddr, run: u16) {
     let filter = filter::EnvFilter::builder()
-        .parse("info,instance_chart=warn,sled=warn")
+        .parse("info,instance_chart=warn")
+        .unwrap();
+
+    let telemetry = opentelemetry(instance, endpoint, run);
+    let fmt = tracing_subscriber::fmt::layer()
+        .pretty()
+        .with_line_number(true);
+
+    let _ignore_err = tracing_subscriber::registry()
+        .with(ErrorLayer::default())
+        .with(filter)
+        .with(telemetry)
+        .with(fmt)
+        .try_init();
+}
+
+#[allow(dead_code)] // used in integration testing
+pub fn setup_integration_tracing(instance: String, endpoint: IpAddr, run: u16) {
+    let filter = filter::EnvFilter::builder()
+        .parse("info,instance_chart=warn")
         .unwrap();
 
     let telemetry = opentelemetry(instance, endpoint, run);
@@ -52,6 +70,24 @@ pub fn setup_tracing(instance: String, endpoint: IpAddr, run: u16) {
         .with(ErrorLayer::default())
         .with(filter)
         .with(telemetry)
+        .with(fmt)
+        .try_init();
+}
+
+#[allow(dead_code)]
+pub fn setup_test_tracing() {
+    let filter = filter::EnvFilter::builder()
+        .parse("info,instance_chart=warn")
+        .unwrap();
+
+    let fmt = tracing_subscriber::fmt::layer()
+        .pretty()
+        .with_line_number(true)
+        .with_test_writer();
+
+    let _ignore_err = tracing_subscriber::registry()
+        .with(ErrorLayer::default())
+        .with(filter)
         .with(fmt)
         .try_init();
 }

@@ -1,12 +1,5 @@
 use color_eyre::eyre::{Result, WrapErr};
-use opentelemetry::sdk::resource::Resource;
-use opentelemetry::sdk::trace;
-use opentelemetry::KeyValue;
 use result_tools::*;
-use tracing_opentelemetry::OpenTelemetryLayer;
-use tracing_subscriber::filter;
-use tracing_subscriber::prelude::*;
-use tracing_error::ErrorLayer;
 
 use std::fs;
 use std::io;
@@ -19,56 +12,12 @@ use std::path::PathBuf;
 use tokio::net::TcpListener;
 
 mod db;
+mod logging;
 pub use db::TypedSled;
-
-fn opentelemetry<S>(
-    instance: String,
-    endpoint: IpAddr,
-    run: u16,
-) -> OpenTelemetryLayer<S, opentelemetry::sdk::trace::Tracer>
-where
-    S: tracing::subscriber::Subscriber + for<'span> tracing_subscriber::registry::LookupSpan<'span>,
-{
-    opentelemetry::global::set_text_map_propagator(opentelemetry_jaeger::Propagator::new());
-
-    let run_numb = run.to_string();
-    let resouces = vec![
-        KeyValue::new("instance", instance),
-        KeyValue::new("run", run_numb),
-    ];
-    let config = trace::Config::default().with_resource(Resource::new(resouces));
-
-    let tracer = opentelemetry_jaeger::new_pipeline()
-        .with_trace_config(config)
-        .with_agent_endpoint((endpoint, 6831))
-        .with_service_name("raft-fs")
-        .install_batch(opentelemetry::runtime::Tokio)
-        .unwrap();
-
-    tracing_opentelemetry::layer().with_tracer(tracer)
-}
-
-pub fn setup_tracing(instance: String, endpoint: IpAddr, run: u16) {
-    let filter = filter::EnvFilter::builder()
-        .parse("info,instance_chart=warn")
-        .unwrap();
-
-    let telemetry = opentelemetry(instance, endpoint, run);
-    let fmt = tracing_subscriber::fmt::layer()
-        .pretty()
-        .with_line_number(true);
-
-    let _ignore_err = tracing_subscriber::registry()
-        .with(ErrorLayer::default())
-        .with(filter)
-        .with(telemetry)
-        .with(fmt)
-        .try_init();
-}
-
-pub fn setup_errors() {
-    color_eyre::install().unwrap();
-}
+pub use logging::setup_tracing;
+pub use logging::setup_errors;
+#[allow(unused_imports)] // used by unit tests
+pub(crate) use logging::setup_test_tracing;
 
 #[allow(dead_code)]
 pub async fn open_socket(port: Option<NonZeroU16>) -> Result<(TcpListener, u16)> {
@@ -108,10 +57,10 @@ pub fn run_number(dir: &Path) -> u16 {
     run
 }
 
-use tokio::task;
 use core::future::Future;
 use core::pin::Pin;
 use core::task::{Context, Poll};
+use tokio::task;
 
 /// Spawn a new tokio Task and cancel it on drop.
 #[allow(dead_code)]
@@ -126,7 +75,7 @@ where
 /// Cancels the wrapped tokio Task on Drop.
 pub struct Wrapper<T>(task::JoinHandle<T>);
 
-impl<T> Future for Wrapper<T>{
+impl<T> Future for Wrapper<T> {
     type Output = Result<T, task::JoinError>;
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         unsafe { Pin::new_unchecked(&mut self.0) }.poll(cx)

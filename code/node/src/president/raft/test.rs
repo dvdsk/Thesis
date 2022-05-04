@@ -1,19 +1,24 @@
+use color_eyre::Result;
 use std::collections::HashMap;
-
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::mpsc;
 
 use crate::util;
 
 use super::*;
-use color_eyre::Result;
+use crate::president::Chart;
 use instance_chart::{discovery, ChartBuilder};
 
 struct TestNode {
     tasks: JoinSet<()>,
     pub orders: mpsc::Receiver<Order>,
-    pub found_majority: oneshot::Receiver<()>,
+    pub found_majority: mpsc::Receiver<()>,
     _db: sled::Db, // ensure tree is still availible
     id: u64,
+}
+
+async fn discoverd_majority(signal: mpsc::Sender<()>, chart: Chart, cluster_size: u16) {
+    discovery::found_majority(&chart, cluster_size).await;
+    signal.send(()).await.unwrap();
 }
 
 impl TestNode {
@@ -31,10 +36,10 @@ impl TestNode {
         let state = State::new(tx, tree, id);
 
         let mut tasks = JoinSet::new();
-        let (signal, found_majority) = oneshot::channel();
+        let (signal, found_majority) = mpsc::channel(1);
+
+        tasks.spawn(discoverd_majority(signal, chart.clone(), cluster_size));
         tasks.spawn(discovery::maintain(chart.clone()));
-        discovery::found_majority(&chart, cluster_size).await;
-        signal.send(()).unwrap();
 
         tasks.spawn(handle_incoming(listener, state.clone()));
         tasks.spawn(succession(chart, cluster_size, state));
@@ -64,6 +69,8 @@ impl TestNode {
 
 #[tokio::test]
 async fn test_voting() -> Result<()> {
+    util::setup_test_tracing();
+
     const N: u64 = 4;
     let mut nodes = HashMap::new();
     for id in 0..N {
@@ -72,9 +79,10 @@ async fn test_voting() -> Result<()> {
     }
 
     for _ in 0..1 {
+        dbg!("waiting for discovery");
         // wait till discovery done
         for node in &mut nodes.values_mut() {
-            node.found_majority.try_recv().unwrap();
+            node.found_majority.recv().await.unwrap();
         }
 
         // find president and ensure no other presidents exist
@@ -104,9 +112,9 @@ async fn test_voting() -> Result<()> {
             .map(|(_, node)| node.id)
             .count();
         assert_eq!(n_presidents, 0);
-        
+
         // add a node
-        let id = N+1;
+        let id = N + 1;
         let node = TestNode::new(id, N as u16).await.unwrap();
         nodes.insert(id, node);
 
