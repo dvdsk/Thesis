@@ -14,6 +14,9 @@ mod log;
 mod state;
 mod succession;
 pub mod subjects;
+#[cfg(test)]
+mod test;
+
 pub use state::State;
 
 use self::state::{vote, append};
