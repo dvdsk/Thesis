@@ -1,4 +1,5 @@
 use color_eyre::Result;
+use tokio::time::timeout;
 use std::collections::HashMap;
 use tokio::sync::mpsc;
 
@@ -6,14 +7,12 @@ use crate::util;
 
 use super::*;
 use crate::president::Chart;
-use instance_chart::{discovery, ChartBuilder};
+use instance_chart::{discovery, ChartBuilder, Id};
 
 struct TestNode {
     tasks: JoinSet<()>,
-    pub orders: mpsc::Receiver<Order>,
     pub found_majority: mpsc::Receiver<()>,
     _db: sled::Db, // ensure tree is still availible
-    id: u64,
 }
 
 async fn discoverd_majority(signal: mpsc::Sender<()>, chart: Chart, cluster_size: u16) {
@@ -22,7 +21,7 @@ async fn discoverd_majority(signal: mpsc::Sender<()>, chart: Chart, cluster_size
 }
 
 impl TestNode {
-    async fn new(id: u64, cluster_size: u16) -> Result<Self> {
+    async fn new(id: u64, cluster_size: u16) -> Result<(Self, mpsc::Receiver<Order>)> {
         let (listener, port) = util::open_socket(None).await?;
         let chart = ChartBuilder::new()
             .with_id(id)
@@ -44,28 +43,45 @@ impl TestNode {
         tasks.spawn(handle_incoming(listener, state.clone()));
         tasks.spawn(succession(chart, cluster_size, state));
 
-        Ok(Self {
-            tasks,
+        Ok((
+            Self {
+                tasks,
+                found_majority,
+                _db: db,
+            },
             orders,
-            found_majority,
-            _db: db,
-            id,
-        })
-    }
-
-    fn is_president(&mut self) -> bool {
-        let mut res = false;
-        loop {
-            match self.orders.try_recv() {
-                Ok(Order::BecomePres { .. }) => res = true,
-                Ok(Order::ResignPres { .. }) => res = false,
-                Ok(_) => continue,
-                Err(mpsc::error::TryRecvError::Empty) => return res,
-                Err(e) => panic!("{e:?}"),
-            }
-        }
+        ))
     }
 }
+
+async fn wait_for_pres(orders: &mut Vec<(Id, mpsc::Receiver<Order>)>) -> Id {
+    use futures::{stream, StreamExt};
+
+    let streams: Vec<_> = orders
+        .iter_mut()
+        .map(|(id, rx)| {
+            let id = *id;
+            let s = stream::unfold(rx, move |rx| async move {
+                let yielded = rx.recv().await.map(|o| (o, id));
+                let state = rx;
+                Some((yielded, state))
+            });
+            Box::pin(s)
+        })
+        .collect();
+
+    let mut order_stream = stream::select_all(streams);
+
+    while let Some((order, id)) = order_stream.next().await.flatten() {
+        match order {
+            Order::BecomePres { .. } => return id,
+            _ => continue,
+        }
+    }
+    unreachable!()
+}
+
+const TIMEOUT: Duration = Duration::from_millis(500);
 
 #[tokio::test]
 async fn test_voting() -> Result<()> {
@@ -73,8 +89,10 @@ async fn test_voting() -> Result<()> {
 
     const N: u64 = 4;
     let mut nodes = HashMap::new();
+    let mut orders = Vec::new();
     for id in 0..N {
-        let node = TestNode::new(id, N as u16).await.unwrap();
+        let (node, queue) = TestNode::new(id, N as u16).await.unwrap();
+        orders.push((id, queue));
         nodes.insert(id, node);
     }
 
@@ -85,18 +103,14 @@ async fn test_voting() -> Result<()> {
             node.found_majority.recv().await.unwrap();
         }
 
-        // find president and ensure no other presidents exist
-        let mut search = nodes
-            .values_mut()
-            .map(|n| (n.is_president(), n))
-            .filter(|(res, _)| *res)
-            .map(|(_, node)| node.id);
-        let president = search.nth(0).expect("there should be a president");
-        assert!(
-            search.next().is_none(),
-            "there should only be one president"
-        );
+        // find president
+        let president = wait_for_pres(&mut orders);
+        let president = match timeout(TIMEOUT, president).await {
+            Err(_) => panic!("timed out waiting for president to be elected"),
+            Ok(p) => p,
+        };
 
+         
         // kill president
         nodes.remove(&president).unwrap().tasks.abort_all();
 
@@ -104,28 +118,18 @@ async fn test_voting() -> Result<()> {
         let unlucky = *nodes.keys().next().unwrap();
         nodes.remove(&unlucky).unwrap().tasks.abort_all();
 
-        // check there is no president (impossible cluster to small)
-        let n_presidents = nodes
-            .values_mut()
-            .map(|n| (n.is_president(), n))
-            .filter(|(res, _)| *res)
-            .map(|(_, node)| node.id)
-            .count();
-        assert_eq!(n_presidents, 0);
+        // check there is no president
+        let res = timeout(TIMEOUT, wait_for_pres(&mut orders)).await;
+        assert!(res.is_err(), "cluster to small to have a president");
 
         // add a node
         let id = N + 1;
-        let node = TestNode::new(id, N as u16).await.unwrap();
+        let (node, queue) = TestNode::new(id, N as u16).await.unwrap();
         nodes.insert(id, node);
+        orders.push((id, queue));
 
-        // check there is one president
-        let n_presidents = nodes
-            .values_mut()
-            .map(|n| (n.is_president(), n))
-            .filter(|(res, _)| *res)
-            .map(|(_, node)| node.id)
-            .count();
-        assert_eq!(n_presidents, 1);
+        let res = timeout(TIMEOUT, wait_for_pres(&mut orders)).await;
+        assert!(res.is_ok(), "timed out waiting for president to be elected");
     }
     Ok(())
 }
