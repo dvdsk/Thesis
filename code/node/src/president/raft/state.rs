@@ -56,6 +56,11 @@ mod db {
     pub const ELECTION_DATA: [u8; 1] = [Prefix::ElectionData as u8];
     #[allow(dead_code)]
     pub const LOG: [u8; 1] = [Prefix::Log as u8];
+    pub fn log_key(idx: u32) -> [u8; 5] {
+        let mut key = [Prefix::Log as u8, 0,0,0,0];
+        key[1..5].clone_from_slice(&idx.to_ne_bytes());
+        key
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -75,7 +80,7 @@ impl State {
             vars: Default::default(),
         };
         state.init_election_data();
-        state.insert_into_log(0, &Order::None);
+        state.insert_into_log(0, &LogEntry::default());
         state
     }
     #[instrument(skip(self), fields(id = self.id), ret)]
@@ -128,14 +133,16 @@ impl State {
 
         // This must execute in parallel without side effects
         // see called functions for motivation
-        for (i, entry) in req.entries.iter().enumerate() {
+        let n_entries = req.entries.len() as u32;
+        for (i, order) in req.entries.into_iter().enumerate() {
             let index = req.prev_log_idx + i as u32 + 1;
             self.prepare_log(index, req.term);
-            self.insert_into_log(index, entry)
+            let entry = LogEntry {term, order};
+            self.insert_into_log(index, &entry)
         }
 
         if req.leader_commit > self.commit_index() {
-            let last_new_idx = req.prev_log_idx + req.entries.len() as u32;
+            let last_new_idx = req.prev_log_idx + n_entries;
             let new = u32::min(req.leader_commit, last_new_idx);
             self.set_commit_index(new);
         }
@@ -169,14 +176,14 @@ impl State {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LogEntry {
     term: Term,
-    entry: Order,
+    order: Order,
 }
 
 impl Default for LogEntry {
     fn default() -> Self {
         Self {
             term: 0,
-            entry: Order::None,
+            order: Order::None,
         }
     }
 }
@@ -186,8 +193,11 @@ impl State {
         self.tx.send(ord).await.unwrap();
     }
 
-    pub(super) fn log_contains(&self, _prev_log_idx: u32, _prev_log_term: u32) -> bool {
-        todo!()
+    pub(super) fn log_contains(&self, prev_log_idx: u32, prev_log_term: u32) -> bool {
+        match self.db.get_val(db::log_key(prev_log_idx)) {
+            Some(LogEntry{ term, ..}) if term == prev_log_term => true,
+            _ => false,
+        }
     }
 
     // check side effects if called interleaved
@@ -195,7 +205,7 @@ impl State {
         todo!()
     }
 
-    fn insert_into_log(&self, index: u32, entry: &Order) {
+    fn insert_into_log(&self, index: u32, entry: &LogEntry) {
         let mut key = [db::Prefix::Log as u8, 0,0,0,0];
         key[1..5].clone_from_slice(&index.to_ne_bytes());
         self.db.set_val(key, entry);

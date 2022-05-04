@@ -7,7 +7,7 @@ use color_eyre::eyre::Result;
 pub use color_eyre::eyre::WrapErr;
 use instance_chart::{discovery, ChartBuilder};
 use serde::{Deserialize, Serialize};
-use tracing::instrument;
+use tracing::{info, instrument};
 
 pub mod util;
 
@@ -23,7 +23,7 @@ pub enum Role {
     Idle,
     Clerk,
     Minister,
-    President{term: Term},
+    President { term: Term },
 }
 
 /// Simple program to greet a person
@@ -80,6 +80,7 @@ pub async fn run(conf: Config) -> Result<()> {
     tokio::spawn(discovery::maintain(chart.clone()));
     discovery::found_majority(&chart, conf.cluster_size).await;
 
+    info!("opening on disk db at: {:?}", conf.database);
     let db = sled::open(conf.database).unwrap();
     let mut pres_orders =
         president::Log::open(chart.clone(), conf.cluster_size, db, pres_listener)?;
@@ -90,7 +91,7 @@ pub async fn run(conf: Config) -> Result<()> {
             Role::Idle => idle::work(&mut pres_orders).await?,
             Role::Clerk => clerk::work(&mut pres_orders, &mut node_listener),
             Role::Minister => minister::work(&mut pres_orders, &mut node_listener),
-            Role::President{ term } => {
+            Role::President { term } => {
                 president::work(&mut pres_orders, &mut chart, &mut req_listener, term).await
             }
         }
