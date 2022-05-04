@@ -127,6 +127,9 @@ impl State {
             return AppendReply::ExPresident(term);
         }
 
+        // got rpc from current leader
+        self.vars.heartbeat.notify_one();
+
         if !self.log_contains(req.prev_log_idx, req.prev_log_term) {
             return AppendReply::InconsistentLog;
         }
