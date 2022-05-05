@@ -18,6 +18,7 @@ use super::state::append::Request;
 use super::{State, HB_PERIOD};
 use super::{Msg, Reply};
 
+#[instrument(skip_all, fields(id = base_msg.leader_id))]
 async fn manage_subject(
     address: SocketAddr,
     mut broadcast: broadcast::Receiver<()>,

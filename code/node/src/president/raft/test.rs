@@ -1,9 +1,11 @@
 use color_eyre::Result;
-use tokio::time::timeout;
 use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
+use tokio::time::timeout;
+use tracing::info;
 
-use crate::util;
+use crate::{util, Term};
 
 use super::*;
 use crate::president::Chart;
@@ -20,6 +22,53 @@ async fn discoverd_majority(signal: mpsc::Sender<()>, chart: Chart, cluster_size
     signal.send(()).await.unwrap();
 }
 
+async fn wait_till_pres(orders: &mut mpsc::Receiver<Order>, tx: &mut mpsc::Sender<Order>) -> Term {
+    loop {
+        match orders.recv().await {
+            Some(order) => {
+                tx.send(order.clone()).await.unwrap();
+                if let Order::BecomePres { term } = order {
+                    break term;
+                }
+            }
+            None => panic!("testnode dropped mpsc"),
+        }
+    }
+}
+
+async fn heartbeat_while_pres(
+    mut chart: Chart,
+    state: State,
+    mut orders: mpsc::Receiver<Order>,
+    mut tx: mpsc::Sender<Order>,
+    curr_pres: Arc<Mutex<Option<Id>>>,
+) {
+    let (placeholder, _) = tokio::sync::broadcast::channel(16);
+    loop {
+        let term = wait_till_pres(&mut orders, &mut tx).await;
+        {
+            // scope ensures lock is dropped before .await point
+            curr_pres.lock().unwrap().replace(chart.our_id());
+        }
+
+        info!("became president, id: {}", chart.our_id());
+
+        tokio::select! {
+            () = subjects::instruct(&mut chart, placeholder.clone(), state.clone(), term) => unreachable!(),
+            usurper = orders.recv() => match usurper {
+                Some(Order::ResignPres) => (),
+                Some(_other) => unreachable!("The president should never recieve
+                                             an order expect resign, recieved: {_other:?}"),
+                None => panic!("channel was dropped,
+                               this means another thread panicked. Joining the panic"),
+            },
+        }
+        unreachable!(
+            "Transport should no be able to fail therefore presidents never lose their post"
+        )
+    }
+}
+
 impl TestNode {
     async fn new(id: u64, cluster_size: u16) -> Result<(Self, mpsc::Receiver<Order>)> {
         let (listener, port) = util::open_socket(None).await?;
@@ -31,17 +80,26 @@ impl TestNode {
 
         let db = sled::Config::new().temporary(true).open().unwrap();
         let tree = db.open_tree("pres").unwrap();
-        let (tx, orders) = mpsc::channel(16);
-        let state = State::new(tx, tree, id);
+        let (order_tx, order_rx) = mpsc::channel(16);
+        let (debug_tx, debug_rx) = mpsc::channel(16);
+        let state = State::new(order_tx, tree, id);
+
+        let (signal, found_majority) = mpsc::channel(1);
+        let curr_pres = Arc::new(Mutex::new(None));
 
         let mut tasks = JoinSet::new();
-        let (signal, found_majority) = mpsc::channel(1);
-
         tasks.spawn(discoverd_majority(signal, chart.clone(), cluster_size));
         tasks.spawn(discovery::maintain(chart.clone()));
 
         tasks.spawn(handle_incoming(listener, state.clone()));
-        tasks.spawn(succession(chart, cluster_size, state));
+        tasks.spawn(succession(chart.clone(), cluster_size, state.clone()));
+        tasks.spawn(heartbeat_while_pres(
+            chart.clone(),
+            state,
+            order_rx,
+            debug_tx,
+            curr_pres
+        ));
 
         Ok((
             Self {
@@ -49,7 +107,7 @@ impl TestNode {
                 found_majority,
                 _db: db,
             },
-            orders,
+            debug_rx,
         ))
     }
 }
@@ -62,9 +120,13 @@ async fn wait_for_pres(orders: &mut Vec<(Id, mpsc::Receiver<Order>)>) -> Id {
         .map(|(id, rx)| {
             let id = *id;
             let s = stream::unfold(rx, move |rx| async move {
-                let yielded = rx.recv().await.map(|o| (o, id));
-                let state = rx;
-                Some((yielded, state))
+                match rx.recv().await {
+                    Some(order) => Some(((order, id), rx)),
+                    None => {
+                        info!("closing stream for {id}");
+                        None
+                    }
+                }
             });
             Box::pin(s)
         })
@@ -72,7 +134,7 @@ async fn wait_for_pres(orders: &mut Vec<(Id, mpsc::Receiver<Order>)>) -> Id {
 
     let mut order_stream = stream::select_all(streams);
 
-    while let Some((order, id)) = order_stream.next().await.flatten() {
+    while let Some((order, id)) = order_stream.next().await {
         match order {
             Order::BecomePres { .. } => return id,
             _ => continue,
@@ -110,13 +172,16 @@ async fn test_voting() -> Result<()> {
             Ok(p) => p,
         };
 
-         
         // kill president
         nodes.remove(&president).unwrap().tasks.abort_all();
+        info!("killed president, id: {president}");
+        sleep(TIMEOUT).await;
 
         // kill another node
         let unlucky = *nodes.keys().next().unwrap();
         nodes.remove(&unlucky).unwrap().tasks.abort_all();
+        info!("killed random node, id: {unlucky}");
+        sleep(TIMEOUT).await;
 
         // check there is no president
         let res = timeout(TIMEOUT, wait_for_pres(&mut orders)).await;
