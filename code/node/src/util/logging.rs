@@ -75,9 +75,10 @@ pub fn setup_integration_tracing(instance: String, endpoint: IpAddr, run: u16) {
 }
 
 #[allow(dead_code)]
-pub fn setup_test_tracing() {
+pub fn setup_test_tracing(additional_filter: &str) {
+    let base_filter = "info,instance_chart=warn";
     let filter = filter::EnvFilter::builder()
-        .parse("info,instance_chart=warn")
+        .parse(dbg!(format!("{base_filter},{additional_filter}")))
         .unwrap();
 
     let fmt = tracing_subscriber::fmt::layer()
