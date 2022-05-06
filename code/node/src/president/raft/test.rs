@@ -1,7 +1,7 @@
 use color_eyre::Result;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, Notify};
 use tokio::time::timeout;
 use tracing::info;
 
@@ -10,12 +10,6 @@ use crate::{util, Term};
 use super::*;
 use crate::president::Chart;
 use instance_chart::{discovery, ChartBuilder, Id};
-
-struct TestNode {
-    tasks: JoinSet<()>,
-    pub found_majority: mpsc::Receiver<()>,
-    _db: sled::Db, // ensure tree is still availible
-}
 
 async fn discoverd_majority(signal: mpsc::Sender<()>, chart: Chart, cluster_size: u16) {
     discovery::found_majority(&chart, cluster_size).await;
@@ -41,17 +35,14 @@ async fn heartbeat_while_pres(
     state: State,
     mut orders: mpsc::Receiver<Order>,
     mut tx: mpsc::Sender<Order>,
-    curr_pres: Arc<Mutex<Option<Id>>>,
+    mut curr_pres: CurrPres,
 ) {
     let (placeholder, _) = tokio::sync::broadcast::channel(16);
     loop {
         let term = wait_till_pres(&mut orders, &mut tx).await;
-        {
-            // scope ensures lock is dropped before .await point
-            curr_pres.lock().unwrap().replace(chart.our_id());
-        }
+        let _drop_guard = curr_pres.set(chart.our_id());
 
-        info!("became president, id: {}", chart.our_id());
+        info!("id: {} became president, term: {term}", chart.our_id());
 
         tokio::select! {
             () = subjects::instruct(&mut chart, placeholder.clone(), state.clone(), term) => unreachable!(),
@@ -69,8 +60,85 @@ async fn heartbeat_while_pres(
     }
 }
 
+#[derive(Debug, Clone)]
+struct CurrPres {
+    state: Arc<Mutex<std::result::Result<Option<Id>, ()>>>,
+    notify: Arc<Notify>,
+}
+
+impl Default for CurrPres {
+    fn default() -> Self {
+        Self {
+            state: Arc::new(Mutex::new(Ok(None))),
+            notify: Default::default(),
+        }
+    }
+}
+
+struct PresGuard<'a> {
+    curr_pres: &'a mut CurrPres,
+    id: Id,
+}
+
+impl<'a> Drop for PresGuard<'a> {
+    fn drop(&mut self) {
+        self.curr_pres.unset(dbg!(self.id));
+    }
+}
+
+impl CurrPres {
+    pub async fn wait_for(&mut self) -> Id {
+        self.notify.notified().await;
+        self.get().unwrap()
+    }
+
+    pub fn get(&mut self) -> Option<Id> {
+        self.state
+            .lock()
+            .unwrap()
+            .clone()
+            .expect("can only be one president")
+    }
+
+    pub fn unset(&mut self, id: Id) {
+        let state = &mut self.state.lock().unwrap();
+        let pres = state.as_mut().expect("can only be one president");
+
+        match pres {
+            Some(curr_id) if *curr_id == id => *pres = None,
+            _ => (),
+        }
+    }
+
+    pub fn set(&mut self, id: Id) -> PresGuard {
+        let old = {
+            let state = &mut self.state.lock().unwrap();
+            state
+                .as_mut()
+                .expect("can only be one president")
+                .replace(id)
+        };
+        assert_eq!(old, None, "can only be one president");
+        self.notify.notify_one();
+        PresGuard {
+            curr_pres: self,
+            id,
+        }
+    }
+}
+
+struct TestNode {
+    _tasks: JoinSet<()>,
+    pub found_majority: mpsc::Receiver<()>,
+    _db: sled::Db, // ensure tree is still availible
+}
+
 impl TestNode {
-    async fn new(id: u64, cluster_size: u16) -> Result<(Self, mpsc::Receiver<Order>)> {
+    async fn new(
+        id: u64,
+        cluster_size: u16,
+        curr_pres: CurrPres,
+    ) -> Result<(Self, mpsc::Receiver<Order>)> {
         let (listener, port) = util::open_socket(None).await?;
         let chart = ChartBuilder::new()
             .with_id(id)
@@ -85,7 +153,6 @@ impl TestNode {
         let state = State::new(order_tx, tree, id);
 
         let (signal, found_majority) = mpsc::channel(1);
-        let curr_pres = Arc::new(Mutex::new(None));
 
         let mut tasks = JoinSet::new();
         tasks.spawn(discoverd_majority(signal, chart.clone(), cluster_size));
@@ -98,12 +165,12 @@ impl TestNode {
             state,
             order_rx,
             debug_tx,
-            curr_pres
+            curr_pres,
         ));
 
         Ok((
             Self {
-                tasks,
+                _tasks: tasks,
                 found_majority,
                 _db: db,
             },
@@ -112,89 +179,67 @@ impl TestNode {
     }
 }
 
-async fn wait_for_pres(orders: &mut Vec<(Id, mpsc::Receiver<Order>)>) -> Id {
-    use futures::{stream, StreamExt};
-
-    let streams: Vec<_> = orders
-        .iter_mut()
-        .map(|(id, rx)| {
-            let id = *id;
-            let s = stream::unfold(rx, move |rx| async move {
-                match rx.recv().await {
-                    Some(order) => Some(((order, id), rx)),
-                    None => {
-                        info!("closing stream for {id}");
-                        None
-                    }
-                }
-            });
-            Box::pin(s)
-        })
-        .collect();
-
-    let mut order_stream = stream::select_all(streams);
-
-    while let Some((order, id)) = order_stream.next().await {
-        match order {
-            Order::BecomePres { .. } => return id,
-            _ => continue,
-        }
-    }
-    unreachable!()
-}
-
 const TIMEOUT: Duration = Duration::from_millis(500);
 
 #[tokio::test]
 async fn test_voting() -> Result<()> {
-    util::setup_test_tracing();
-
+    util::setup_test_tracing("node::president::raft::state::vote=trace");
     const N: u64 = 4;
-    let mut nodes = HashMap::new();
-    let mut orders = Vec::new();
-    for id in 0..N {
-        let (node, queue) = TestNode::new(id, N as u16).await.unwrap();
-        orders.push((id, queue));
-        nodes.insert(id, node);
-    }
 
     for _ in 0..1 {
-        dbg!("waiting for discovery");
+        let mut curr_pres = CurrPres::default();
+
+        let mut nodes = HashMap::new();
+        let mut orders = Vec::new();
+        for id in 0..N {
+            let (node, queue) = TestNode::new(id, N as u16, curr_pres.clone())
+                .await
+                .unwrap();
+            orders.push((id, queue));
+            nodes.insert(id, node);
+        }
+
         // wait till discovery done
         for node in &mut nodes.values_mut() {
             node.found_majority.recv().await.unwrap();
         }
 
         // find president
-        let president = wait_for_pres(&mut orders);
-        let president = match timeout(TIMEOUT, president).await {
+        let president = match timeout(TIMEOUT, curr_pres.wait_for()).await {
+            Ok(pres) => pres,
             Err(_) => panic!("timed out waiting for president to be elected"),
-            Ok(p) => p,
         };
 
-        // kill president
-        nodes.remove(&president).unwrap().tasks.abort_all();
+        // kill president, on drop tasks abort
+        nodes.remove(&president).unwrap();
         info!("killed president, id: {president}");
         sleep(TIMEOUT).await;
 
         // kill another node
         let unlucky = *nodes.keys().next().unwrap();
-        nodes.remove(&unlucky).unwrap().tasks.abort_all();
+        nodes.remove(&unlucky).unwrap();
         info!("killed random node, id: {unlucky}");
         sleep(TIMEOUT).await;
 
         // check there is no president
-        let res = timeout(TIMEOUT, wait_for_pres(&mut orders)).await;
-        assert!(res.is_err(), "cluster to small to have a president");
+        assert_eq!(
+            curr_pres.get(),
+            None,
+            "cluster to small to have a president"
+        );
 
         // add a node
         let id = N + 1;
-        let (node, queue) = TestNode::new(id, N as u16).await.unwrap();
+        let (node, queue) = TestNode::new(id, N as u16, curr_pres.clone())
+            .await
+            .unwrap();
         nodes.insert(id, node);
         orders.push((id, queue));
 
-        let res = timeout(TIMEOUT, wait_for_pres(&mut orders)).await;
-        assert!(res.is_ok(), "timed out waiting for president to be elected");
+        match timeout(TIMEOUT, curr_pres.wait_for()).await {
+            Err(_) => panic!("timed out waiting for president to be elected"),
+            Ok(..) => (),
+        };
     }
     Ok(())
 }
