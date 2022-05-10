@@ -115,7 +115,7 @@ impl ElectionOffice {
     }
 
     /// sets voted_for if the term did not change and it was not
-    #[instrument(ret, skip(self), level = "debug")]
+    #[instrument(ret, skip(self), level = "trace")]
     fn set_voted_for(&self, term: u32, candidate_id: u64) -> bool {
         let old = ElectionData {
             term,
@@ -160,7 +160,7 @@ pub struct RequestVote {
 impl RequestVote {
     /// check if the log of the requester is at least as
     /// up to date as ours
-    #[instrument(ret, skip(arg, self), level = "debug")]
+    #[instrument(ret, skip(arg, self), level = "trace")]
     fn log_up_to_date(&self, arg: &State) -> bool {
         self.last_log_idx >= arg.last_log_meta().idx
     }

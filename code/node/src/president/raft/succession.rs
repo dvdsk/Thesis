@@ -6,7 +6,7 @@ use std::time::Duration;
 use tokio::net::TcpStream;
 use tokio::task::JoinSet;
 use tokio::time::{timeout_at, Instant};
-use tracing::{debug, instrument, warn};
+use tracing::{debug, instrument, trace, warn};
 
 use super::HB_TIMEOUT;
 use super::{Chart, State};
@@ -27,11 +27,11 @@ pub(super) async fn president_died(state: &State) {
             Err(_) => {
                 let election_office = state.election_office.lock().unwrap();
                 let data = election_office.data();
-                warn!("heartbeat timed out, term was: {}", data.term());
+                warn!("heartbeat timed out, term is now: {}", data.term());
                 return;
             }
             Ok(_) => {
-                debug!(
+                trace!(
                     "hb timeout in {} ms",
                     hb_deadline
                         .saturating_duration_since(Instant::now())
@@ -59,10 +59,20 @@ async fn request_vote(
     }
 }
 
+pub enum ElectionResult {
+    Won,
+    Lost,
+}
+
 /// only returns when this node has been elected
 /// election timeout is implemented by selecting on this
 /// with a timeout
-pub(super) async fn run_for_office(chart: &Chart, cluster_size: u16, campaign: vote::RequestVote) {
+#[instrument(skip_all, fields(id = chart.our_id()))]
+pub(super) async fn run_for_office(
+    chart: &Chart,
+    cluster_size: u16,
+    campaign: vote::RequestVote,
+) -> ElectionResult {
     let mut requests: JoinSet<_> = chart
         .nth_addr_vec::<0>()
         .into_iter()
@@ -73,19 +83,28 @@ pub(super) async fn run_for_office(chart: &Chart, cluster_size: u16, campaign: v
         });
 
     debug!("waiting for vote to complete");
-    let majority = (f32::from(cluster_size) * 0.5).ceil() as usize;
+    let majority = (f32::from(cluster_size) * 0.5 + 0.001).ceil() as usize;
     let mut votes = 1; // vote for ourself
-    while let Some(res) = requests
-        .join_one()
-        .await
-        .expect("request vote task panicked")
-    {
-        match res {
-            Ok(_) => votes += 1,
-            Err(_) => continue,
+
+    for to_count in (0..cluster_size).rev() {
+        match requests
+            .join_one()
+            .await
+            .expect("request vote task panicked")
+        {
+            Some(Ok(_)) => votes += 1,
+            Some(Err(_)) => (),
+            None => break, // no more req_vote tasks left
         }
-        if votes >= majority {
-            return;
+
+        if to_count + votes < majority as u16 {
+            break;
+        }
+
+        if votes >= majority as u16 {
+            debug!("Got majority ({majority}) with {votes} votes");
+            return ElectionResult::Won;
         }
     }
+    ElectionResult::Lost
 }

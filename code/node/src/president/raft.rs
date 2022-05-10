@@ -15,9 +15,11 @@ mod state;
 pub mod subjects;
 mod succession;
 #[cfg(test)]
-mod test;
+mod tests;
 
 pub use state::State;
+
+use succession::ElectionResult;
 
 use self::state::{append, vote};
 
@@ -99,10 +101,14 @@ async fn succession(chart: Chart, cluster_size: u16, state: State) {
                 debug!("abort election, timeout reached");
                 continue
             }
-            () = get_elected => state.order(Order::BecomePres{term: our_term}).await,
+            res = get_elected => match res {
+                ElectionResult::Lost => continue,
+                ElectionResult::Won => state.order(Order::BecomePres{term: our_term}).await,
+            }
         }
 
-        term_increased.await; // if we get here we are the president
+        term_increased.await; // if we get here we are the 
+        debug!("President saw higher term, resigning");
         state.order(Order::ResignPres).await
     }
 }

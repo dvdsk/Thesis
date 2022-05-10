@@ -2,7 +2,7 @@ use std::sync::atomic::AtomicU32;
 use std::sync::{Arc, Mutex};
 
 use tokio::sync::{mpsc, Notify};
-use tracing::debug;
+use tracing::{debug, instrument};
 
 use self::vote::ElectionOffice;
 
@@ -87,13 +87,14 @@ impl State {
         state
     }
 
+    #[instrument(skip_all)]
     pub(crate) async fn watch_term(&self) {
         let mut sub = self.db.watch_prefix(db::ELECTION_DATA);
         while let Some(event) = (&mut sub).await {
             match event {
                 sled::Event::Insert { key, value } if key == db::ELECTION_DATA => {
                     let data: vote::ElectionData = bincode::deserialize(&value).unwrap();
-                    debug!("new term: {}", data.term());
+                    debug!("term increased, new term is: {}", data.term());
                     return
                 }
                 _ => panic!("term key should never be removed"),
