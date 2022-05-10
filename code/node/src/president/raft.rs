@@ -8,18 +8,18 @@ use serde::{Deserialize, Serialize};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::task::JoinSet;
 use tokio::time::sleep;
-use tracing::{debug, warn, instrument};
+use tracing::{debug, instrument, warn};
 
 mod log;
 mod state;
-mod succession;
 pub mod subjects;
+mod succession;
 #[cfg(test)]
 mod test;
 
 pub use state::State;
 
-use self::state::{vote, append};
+use self::state::{append, vote};
 
 use super::Chart;
 
@@ -38,6 +38,7 @@ enum Reply {
 #[instrument(skip(state, stream))]
 async fn handle_conn((stream, _source): (TcpStream, SocketAddr), state: State) {
     use Msg::*;
+
     let mut stream: connection::MsgStream<Msg, Reply> = connection::wrap(stream);
     while let Ok(msg) = stream.try_next().await {
         let reply = match msg {
@@ -75,12 +76,12 @@ pub(super) const ELECTION_TIMEOUT: Duration = Duration::from_millis(200);
 #[instrument(skip_all, fields(id = chart.our_id()))]
 async fn succession(chart: Chart, cluster_size: u16, state: State) {
     loop {
-        succession::president_died(state.heartbeat()).await;
-        let term = state.increment_term();
+        succession::president_died(&state).await;
+        let our_term = state.increment_term();
 
         let meta = state.last_log_meta();
         let campaign = vote::RequestVote {
-            term,
+            term: our_term,
             candidate_id: chart.our_id(),
             last_log_term: meta.term,
             last_log_idx: meta.idx,
@@ -98,7 +99,7 @@ async fn succession(chart: Chart, cluster_size: u16, state: State) {
                 debug!("abort election, timeout reached");
                 continue
             }
-            () = get_elected => state.order(Order::BecomePres{term}).await,
+            () = get_elected => state.order(Order::BecomePres{term: our_term}).await,
         }
 
         term_increased.await; // if we get here we are the president

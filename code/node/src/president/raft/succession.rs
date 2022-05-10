@@ -4,28 +4,30 @@ use protocol::connection;
 use std::net::SocketAddr;
 use std::time::Duration;
 use tokio::net::TcpStream;
-use tokio::sync::Notify;
 use tokio::task::JoinSet;
 use tokio::time::{timeout_at, Instant};
-use tracing::{warn, instrument, debug};
+use tracing::{debug, instrument, warn};
 
-use super::Chart;
 use super::HB_TIMEOUT;
+use super::{Chart, State};
 
 use super::state::vote;
 use super::{Msg, Reply};
 
-#[instrument(skip(heartbeat))]
-pub(super) async fn president_died(heartbeat: &Notify) {
+#[instrument(skip(state))]
+pub(super) async fn president_died(state: &State) {
     use rand::{Rng, SeedableRng};
     let mut rng = rand::rngs::SmallRng::from_entropy();
+    let heartbeat = state.heartbeat();
 
     loop {
         let random_dur = rng.gen_range(Duration::from_secs(0)..HB_TIMEOUT);
         let hb_deadline = Instant::now() + HB_TIMEOUT + random_dur;
         match timeout_at(hb_deadline, heartbeat.notified()).await {
             Err(_) => {
-                warn!("heartbeat timed out");
+                let election_office = state.election_office.lock().unwrap();
+                let data = election_office.data();
+                warn!("heartbeat timed out, term was: {}", data.term());
                 return;
             }
             Ok(_) => {
@@ -40,8 +42,12 @@ pub(super) async fn president_died(heartbeat: &Notify) {
     }
 }
 
-#[instrument(level="debug", ret)]
-async fn request_vote(addr: SocketAddr, vote_req: vote::RequestVote, id: instance_chart::Id) -> Result<()> {
+#[instrument(level = "debug", ret)]
+async fn request_vote(
+    addr: SocketAddr,
+    vote_req: vote::RequestVote,
+    id: instance_chart::Id,
+) -> Result<()> {
     let stream = TcpStream::connect(addr).await?;
     let mut stream: connection::MsgStream<Reply, Msg> = connection::wrap(stream);
     stream.send(Msg::RequestVote(vote_req)).await?;

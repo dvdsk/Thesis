@@ -82,7 +82,7 @@ struct PresGuard<'a> {
 
 impl<'a> Drop for PresGuard<'a> {
     fn drop(&mut self) {
-        self.curr_pres.unset(dbg!(self.id));
+        self.curr_pres.unset(self.id);
     }
 }
 
