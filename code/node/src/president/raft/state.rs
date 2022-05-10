@@ -1,10 +1,12 @@
 use std::sync::atomic::AtomicU32;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use tokio::sync::{mpsc, Notify};
+use tracing::debug;
+
+use self::vote::ElectionOffice;
 
 use super::Order;
-pub type Term = u32;
 type LogIdx = u32;
 
 pub mod append;
@@ -64,6 +66,7 @@ mod db {
 #[derive(Debug, Clone)]
 pub struct State {
     pub id: instance_chart::Id,
+    pub election_office: Arc<Mutex<ElectionOffice>>,
     tx: mpsc::Sender<Order>,
     db: sled::Tree,
     vars: Arc<Vars>,
@@ -71,29 +74,36 @@ pub struct State {
 
 impl State {
     pub fn new(tx: mpsc::Sender<Order>, db: sled::Tree, id: instance_chart::Id) -> Self {
+        let election_office = ElectionOffice::from_tree(&db);
+        election_office.init_election_data();
         let state = Self {
             id,
+            election_office: Arc::new(Mutex::new(election_office)),
             tx,
             db,
             vars: Default::default(),
         };
-        state.init_election_data();
         state.insert_into_log(0, &append::LogEntry::default());
         state
     }
 
-    pub(crate) async fn watch_term(&self) -> Term {
+    pub(crate) async fn watch_term(&self) {
         let mut sub = self.db.watch_prefix(db::ELECTION_DATA);
         while let Some(event) = (&mut sub).await {
             match event {
                 sled::Event::Insert { key, value } if key == db::ELECTION_DATA => {
                     let data: vote::ElectionData = bincode::deserialize(&value).unwrap();
-                    return data.term;
+                    debug!("new term: {}", data.term());
+                    return
                 }
                 _ => panic!("term key should never be removed"),
             }
         }
         unreachable!("db subscriber should never be dropped")
+    }
+
+    pub(super) fn increment_term(&self) -> u32 {
+        self.election_office.lock().unwrap().increment_term()
     }
 
     pub fn heartbeat(&self) -> &Notify {

@@ -90,7 +90,7 @@ async fn succession(chart: Chart, cluster_size: u16, state: State) {
         let term_increased = state.watch_term();
         pin_mut!(term_increased);
         tokio::select! {
-            _n = (&mut term_increased) => {
+            () = (&mut term_increased) => {
                 debug!("abort election, recieved higher term");
                 continue
             }

@@ -2,22 +2,24 @@ use serde::{Deserialize, Serialize};
 use std::sync::atomic::Ordering;
 use tracing::instrument;
 
-use super::vote;
 use super::{db, LogIdx, Order, State};
 use crate::util::TypedSled;
 use crate::{Id, Term};
 
-
 impl State {
     #[instrument(skip(self), fields(id = self.id), ret)]
     pub fn append_req(&self, req: Request) -> Reply {
-        let vote::ElectionData { term, .. } = self.election_data();
-        if req.term > term {
-            self.set_term(req.term);
+        let mut election_office = self.election_office.lock().unwrap();
+        let election_data = election_office.data();
+        let mut term = election_data.term();
+
+        if req.term > *term {
+            election_office.set_term(req.term); // needs lock
+            term = &req.term;
         }
 
-        if req.term < term {
-            return Reply::ExPresident(term);
+        if req.term < *term {
+            return Reply::ExPresident(*term);
         }
 
         // got rpc from current leader
@@ -33,7 +35,7 @@ impl State {
         for (i, order) in req.entries.into_iter().enumerate() {
             let index = req.prev_log_idx + i as u32 + 1;
             self.prepare_log(index, req.term);
-            let entry = LogEntry { term, order };
+            let entry = LogEntry { term: *term, order };
             self.insert_into_log(index, &entry)
         }
 
