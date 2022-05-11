@@ -35,4 +35,5 @@ protocol = { path = "../protocol" }
 
 [dev-dependencies]
 start-jeager = { path = "../start-jeager" }
+socket2 = "0.4"
 mktemp = "0.4"

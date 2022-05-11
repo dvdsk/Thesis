@@ -1,4 +1,3 @@
-
 use std::sync::{Arc, Mutex};
 use tokio::sync::{mpsc, Notify};
 
@@ -13,7 +12,10 @@ pub async fn discoverd_majority(signal: mpsc::Sender<()>, chart: Chart, cluster_
     signal.send(()).await.unwrap();
 }
 
-pub async fn wait_till_pres(orders: &mut mpsc::Receiver<Order>, tx: &mut mpsc::Sender<Order>) -> Term {
+pub async fn wait_till_pres(
+    orders: &mut mpsc::Receiver<Order>,
+    tx: &mut mpsc::Sender<Order>,
+) -> Term {
     loop {
         match orders.recv().await {
             Some(order) => {
@@ -27,23 +29,22 @@ pub async fn wait_till_pres(orders: &mut mpsc::Receiver<Order>, tx: &mut mpsc::S
     }
 }
 
-
 #[derive(Debug, Clone)]
 pub struct CurrPres {
-    state: Arc<Mutex<std::result::Result<Option<Id>, ()>>>,
+    state: Arc<Mutex<Option<Id>>>,
     notify: Arc<Notify>,
 }
 
 impl Default for CurrPres {
     fn default() -> Self {
         Self {
-            state: Arc::new(Mutex::new(Ok(None))),
+            state: Arc::new(Mutex::new(None)),
             notify: Default::default(),
         }
     }
 }
 
-struct PresGuard<'a> {
+pub struct PresGuard<'a> {
     curr_pres: &'a mut CurrPres,
     id: Id,
 }
@@ -59,38 +60,31 @@ impl CurrPres {
         loop {
             self.notify.notified().await;
             match self.get() {
-                None => continue,  // president resigned before this notify 
+                None => continue, // president resigned before this notify
                 Some(id) => return id,
             }
         }
     }
 
     pub fn get(&mut self) -> Option<Id> {
-        self.state
-            .lock()
-            .unwrap()
-            .clone()
-            .expect("can only be one president")
+        self.state.lock().unwrap().clone()
     }
 
     pub fn unset(&mut self, id: Id) {
-        let state = &mut self.state.lock().unwrap();
-        let pres = state.as_mut().expect("can only be one president");
+        {
+            let mut state = self.state.lock().unwrap();
 
-        match pres {
-            Some(curr_id) if *curr_id == id => *pres = None,
-            _ => (),
+            match *state {
+                Some(curr_id) if curr_id == id => *state = None,
+                _ => (),
+            }
         }
+        dbg!(&self.state);
     }
 
     pub fn set(&mut self, id: Id) -> PresGuard {
-        let old = {
-            let state = &mut self.state.lock().unwrap();
-            state
-                .as_mut()
-                .expect("can only be one president")
-                .replace(id)
-        };
+        let old = { self.state.lock().unwrap().replace(id) };
+        dbg!(&self.state);
         assert_eq!(old, None, "can only be one president");
         self.notify.notify_one();
         PresGuard {

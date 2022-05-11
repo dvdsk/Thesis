@@ -5,6 +5,7 @@ use tracing::info;
 use crate::util;
 
 use super::super::*;
+use super::util as test_util;
 use super::util::{wait_till_pres, CurrPres};
 
 use crate::president::Chart;
@@ -40,7 +41,7 @@ async fn heartbeat_while_pres(
 pub struct TestNode {
     _tasks: JoinSet<()>,
     pub found_majority: mpsc::Receiver<()>,
-    _db: sled::Db, // ensure tree is still availible
+    tree: sled::Tree, // ensure tree is still availible
 }
 
 impl TestNode {
@@ -48,11 +49,13 @@ impl TestNode {
         id: u64,
         cluster_size: u16,
         curr_pres: CurrPres,
+        disc_port: u16,
     ) -> Result<(Self, mpsc::Receiver<Order>)> {
         let (listener, port) = util::open_socket(None).await?;
         let chart = ChartBuilder::new()
             .with_id(id)
             .with_service_ports([port, 0, 0])
+            .with_discovery_port(disc_port)
             .local_discovery(true)
             .finish()?;
 
@@ -60,12 +63,12 @@ impl TestNode {
         let tree = db.open_tree("pres").unwrap();
         let (order_tx, order_rx) = mpsc::channel(16);
         let (debug_tx, debug_rx) = mpsc::channel(16);
-        let state = State::new(order_tx, tree, id);
+        let state = State::new(order_tx, tree.clone(), id);
 
         let (signal, found_majority) = mpsc::channel(1);
 
         let mut tasks = JoinSet::new();
-        tasks.spawn(discoverd_majority(signal, chart.clone(), cluster_size));
+        tasks.spawn(test_util::discoverd_majority(signal, chart.clone(), cluster_size));
         tasks.spawn(discovery::maintain(chart.clone()));
 
         tasks.spawn(handle_incoming(listener, state.clone()));
@@ -82,7 +85,7 @@ impl TestNode {
             Self {
                 _tasks: tasks,
                 found_majority,
-                _db: db,
+                tree,
             },
             debug_rx,
         ))

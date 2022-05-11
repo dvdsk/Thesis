@@ -19,6 +19,25 @@ pub use logging::setup_errors;
 #[allow(unused_imports)] // used by unit tests
 pub(crate) use logging::setup_test_tracing;
 
+#[cfg(test)] 
+#[allow(dead_code)]
+pub fn free_udp_port() -> Result<(std::net::UdpSocket, u16)> {
+    use socket2::{Domain, SockAddr, Socket, Type};
+
+    let socket = Socket::new(Domain::IPV4, Type::DGRAM, None)?;
+    socket.set_reuse_port(true)?;
+
+    let ip = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
+    let addr = SocketAddr::new(ip, 0);
+    let addr = SockAddr::from(addr);
+    socket.bind(&addr).unwrap();
+
+    let open_port = socket.local_addr().unwrap().as_socket().unwrap().port();
+    let socket = std::net::UdpSocket::from(socket);
+    dbg!(open_port);
+    Ok((socket, open_port))
+}
+
 #[allow(dead_code)]
 pub async fn open_socket(port: Option<NonZeroU16>) -> Result<(TcpListener, u16)> {
     let ip = IpAddr::V4(Ipv4Addr::UNSPECIFIED);

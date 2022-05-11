@@ -10,6 +10,7 @@ use tracing::Instrument;
 
 use node::util;
 
+#[ignore]
 #[tokio::test]
 async fn local_cluster() -> Result<()> {
     util::setup_errors();
