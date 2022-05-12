@@ -83,6 +83,8 @@ impl State {
             db,
             vars: Default::default(),
         };
+        // append_msg committed index starts at zero, insert a zeroth 
+        // log entry that can safely be committed
         state.insert_into_log(0, &append::LogEntry::default());
         state
     }

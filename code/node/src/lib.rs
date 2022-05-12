@@ -18,7 +18,7 @@ mod president;
 
 pub type Id = u64;
 pub type Term = u32;
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum Role {
     Idle,
     Clerk,

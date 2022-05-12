@@ -21,13 +21,15 @@ pub struct Log {
     _succession: JoinHandle<()>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum Order {
     /// used as placeholder for the first entry in the log
     None,
     Assigned(Role),
     BecomePres { term: Term },
     ResignPres,
+    #[cfg(test)]
+    Test(u8),
 }
 
 impl Log {

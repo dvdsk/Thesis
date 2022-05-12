@@ -46,7 +46,10 @@ async fn handle_conn((stream, _source): (TcpStream, SocketAddr), state: State) {
         let reply = match msg {
             None => continue,
             Some(RequestVote(req)) => state.vote_req(req).map(Reply::RequestVote),
-            Some(AppendEntries(req)) => Some(Reply::AppendEntries(state.append_req(req))),
+            Some(AppendEntries(req)) => {
+                let append_reply = state.append_req(req).await;
+                Some(Reply::AppendEntries(append_reply))
+            }
         };
 
         if let Some(reply) = reply {
@@ -67,7 +70,8 @@ async fn handle_incoming(listener: TcpListener, state: State) {
             warn!("error accepting presidential connection: {e}");
             continue;
         }
-        tasks.spawn(handle_conn(res.unwrap(), state.clone()));
+        let fut = handle_conn(res.unwrap(), state.clone());
+        tasks.spawn(fut);
     }
 }
 
@@ -107,7 +111,7 @@ async fn succession(chart: Chart, cluster_size: u16, state: State) {
             }
         }
 
-        term_increased.await; // if we get here we are the 
+        term_increased.await; // if we get here we are the
         debug!("President saw higher term, resigning");
         state.order(Order::ResignPres).await
     }
