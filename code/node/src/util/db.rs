@@ -2,11 +2,13 @@ use num_traits::{One, Unsigned, Zero};
 
 use serde::de::DeserializeOwned;
 use serde::Serialize;
+use std::fmt::Debug;
 use std::ops::Add;
+use tracing::trace;
 
 pub trait TypedSled {
-    fn get_val<T: DeserializeOwned>(&self, key: impl AsRef<[u8]>) -> Option<T>;
-    fn set_val<T: Serialize>(&self, key: impl AsRef<[u8]>, val: T);
+    fn get_val<T: DeserializeOwned + Debug>(&self, key: impl AsRef<[u8]>) -> Option<T>;
+    fn set_val<T: Serialize + Debug>(&self, key: impl AsRef<[u8]>, val: T);
     fn increment<T>(&self, key: impl AsRef<[u8]>) -> T
     where
         T: Add + DeserializeOwned + Serialize + One + Zero + Unsigned,
@@ -17,13 +19,18 @@ pub trait TypedSled {
 }
 
 impl TypedSled for sled::Tree {
-    fn get_val<T: DeserializeOwned>(&self, key: impl AsRef<[u8]>) -> Option<T> {
-        self.get(key)
-            .unwrap()
-            .map(|bytes| bincode::deserialize(&bytes).expect("something went wrong deserializing"))
+    /// returns None if there was no value for the given key
+    fn get_val<T: DeserializeOwned + Debug>(&self, key: impl AsRef<[u8]>) -> Option<T> {
+        let bytes = self.get(key).unwrap();
+        let val = bytes
+            .as_ref()
+            .map(|bytes| bincode::deserialize(bytes).expect("something went wrong deserializing"));
+        trace!("deserializing: {val:?} from {bytes:?}");
+        val
     }
-    fn set_val<T: Serialize>(&self, key: impl AsRef<[u8]>, val: T) {
+    fn set_val<T: Serialize + Debug>(&self, key: impl AsRef<[u8]>, val: T) {
         let bytes = bincode::serialize(&val).unwrap();
+        trace!("serializing: {val:?} as {bytes:?}");
         let _ig_old_key = self.insert(key, bytes).unwrap();
     }
     /// increment the value in the db or insert zero if none has been set
