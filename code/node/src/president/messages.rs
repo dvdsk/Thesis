@@ -3,19 +3,19 @@ use protocol::connection;
 use serde::{Deserialize, Serialize};
 use tokio::net::{TcpStream, TcpListener};
 use tokio::task::JoinSet;
-use tracing::warn;
+use tracing::{warn, debug};
 
 use super::LogWriter;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-enum Msg {
+pub enum Msg {
     ClientReq(protocol::Request),
     // LoadReport,
     // MinisterReq,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-enum Reply {
+pub enum Reply {
     GoAway, // president does not forward
 }
 
@@ -27,10 +27,11 @@ async fn handle_conn(stream: TcpStream, _log: LogWriter) {
     use Msg::*;
     use Reply::*;
     let mut stream: connection::MsgStream<Msg, Reply> = connection::wrap(stream);
-    while let Ok(msg) = stream.try_next().await {
+    while let Ok(Some(msg)) = stream.try_next().await {
+        debug!("president got request: {msg:?}");
+
         let reply = match msg {
-            None => continue,
-            Some(ClientReq(_)) => Some(GoAway),
+            ClientReq(_) => Some(GoAway),
         };
 
         if let Some(reply) = reply {

@@ -31,14 +31,14 @@ pub async fn wait_till_pres(
 
 #[derive(Debug, Clone)]
 pub struct CurrPres {
-    state: Arc<Mutex<Option<Id>>>,
+    id: Arc<Mutex<Option<Id>>>,
     notify: Arc<Notify>,
 }
 
 impl Default for CurrPres {
     fn default() -> Self {
         Self {
-            state: Arc::new(Mutex::new(None)),
+            id: Arc::new(Mutex::new(None)),
             notify: Default::default(),
         }
     }
@@ -67,24 +67,22 @@ impl CurrPres {
     }
 
     pub fn get(&mut self) -> Option<Id> {
-        self.state.lock().unwrap().clone()
+        self.id.lock().unwrap().clone()
     }
 
     pub fn unset(&mut self, id: Id) {
         {
-            let mut state = self.state.lock().unwrap();
+            let mut state = self.id.lock().unwrap();
 
             match *state {
                 Some(curr_id) if curr_id == id => *state = None,
                 _ => (),
             }
         }
-        dbg!(&self.state);
     }
 
     pub fn set(&mut self, id: Id) -> PresGuard {
-        let old = { self.state.lock().unwrap().replace(id) };
-        dbg!(&self.state);
+        let old = { self.id.lock().unwrap().replace(id) };
         assert_eq!(old, None, "can only be one president");
         self.notify.notify_one();
         PresGuard {

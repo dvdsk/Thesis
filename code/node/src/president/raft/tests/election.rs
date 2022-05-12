@@ -6,7 +6,7 @@ use tracing::info;
 
 use crate::util;
 
-use super::mock::TestNode;
+use super::mock::TestVoteNode;
 use super::util::CurrPres;
 use super::*;
 
@@ -36,7 +36,7 @@ async fn test() -> Result<()> {
     let mut nodes = HashMap::new();
     let mut orders = Vec::new();
     for id in 0..N {
-        let (node, queue) = TestNode::new(id, N as u16, curr_pres.clone(), discovery_port)
+        let (node, queue) = TestVoteNode::new(id, N as u16, curr_pres.clone(), discovery_port)
             .await
             .unwrap();
         orders.push((id, queue));
@@ -80,7 +80,7 @@ async fn test() -> Result<()> {
     // add a node
     // N - 1 nodes left
     let id = N + 1;
-    let (node, queue) = TestNode::new(id, N as u16, curr_pres.clone(), discovery_port)
+    let (node, queue) = TestVoteNode::new(id, N as u16, curr_pres.clone(), discovery_port)
         .await
         .unwrap();
     nodes.insert(id, node);

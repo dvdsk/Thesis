@@ -14,6 +14,7 @@ pub trait Message<'de>: Serialize + Deserialize<'de> {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum Request {
+    Test(u8), // TODO remove
 }
 
 #[derive(Debug, Serialize, Deserialize)]
