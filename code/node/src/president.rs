@@ -14,7 +14,14 @@ use crate::Term;
 #[derive(Debug, Clone)]
 pub struct LogWriter {
     _state: raft::State,
-    _broadcast: broadcast::Sender<()>,
+    broadcast: broadcast::Sender<Order>,
+}
+
+impl LogWriter {
+    fn append(&self, order: Order) {
+        //self.state.append()
+        self.broadcast.send(order).unwrap();
+    }
 }
 
 pub(super) async fn work(
@@ -28,7 +35,7 @@ pub(super) async fn work(
     let (broadcast, _) = broadcast::channel(16);
     let log_writer = LogWriter {
         _state: state.clone(),
-        _broadcast: broadcast.clone(),
+        broadcast: broadcast.clone(),
     };
 
     tokio::select! {

@@ -10,7 +10,7 @@ use super::*;
 
 #[tokio::test]
 async fn spread_order() -> Result<()> {
-    util::setup_test_tracing("node=warn,node::president=debug,node::president::raft=warn");
+    util::setup_test_tracing("node=warn,node::president=trace,node::president::raft::subjects=trace,node::president::raft=warn");
     // util::setup_test_tracing("");
     const N: u64 = 4;
 

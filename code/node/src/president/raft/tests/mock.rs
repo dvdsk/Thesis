@@ -120,7 +120,7 @@ pub async fn president(
         let (broadcast, _) = broadcast::channel(16);
         let log_writer = LogWriter {
             _state: state.clone(),
-            _broadcast: broadcast.clone(),
+            broadcast: broadcast.clone(),
         };
 
         tokio::select! {

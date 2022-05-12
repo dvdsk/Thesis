@@ -4,24 +4,26 @@ use std::sync::atomic::AtomicU32;
 use std::sync::Arc;
 
 use crate::president::Chart;
-use crate::Term;
+use crate::{Id, Term};
 use futures::SinkExt;
 use protocol::connection;
 use tokio::net::TcpStream;
 use tokio::sync::broadcast;
 use tokio::task::JoinSet;
 use tokio::time::{sleep, timeout_at, Instant};
-use tracing::{warn, instrument};
+use tracing::{instrument, trace, warn};
 
-use super::state::LogMeta;
 use super::state::append::Request;
+use super::state::LogMeta;
+use super::{Msg, Order, Reply};
 use super::{State, HB_PERIOD};
-use super::{Msg, Reply};
 
-#[instrument(skip_all, fields(id = base_msg.leader_id))]
+// TODO refactor this ungodly hellscape
+#[instrument(skip_all, fields(president_id = base_msg.leader_id, subject_id = subject_id))]
 async fn manage_subject(
+    subject_id: Id,
     address: SocketAddr,
-    mut broadcast: broadcast::Receiver<()>,
+    mut broadcast: broadcast::Receiver<Order>,
     _next_idx: u32,
     _match_idx: Arc<AtomicU32>,
     base_msg: Request,
@@ -55,18 +57,21 @@ async fn manage_subject(
 
         loop {
             let next_hb = Instant::now() + HB_PERIOD;
-            match timeout_at(next_hb, broadcast.recv()).await {
-                Ok(Ok(_order)) => todo!("send order"),
-                Ok(Err(_e)) => todo!("handle backorder"),
-                Err(..) => {
-                    let to_send = next_msg.clone();
-                    match stream.send(Msg::AppendEntries(to_send)).await {
-                        Ok(..) => continue,
-                        Err(e) => {
-                            warn!("could not send to host, error: {e:?}");
-                            break;
-                        }
-                    }
+            let to_send = match timeout_at(next_hb, broadcast.recv()).await {
+                Ok(Ok(order)) => Request {
+                    entries: vec![order],
+                    ..next_msg.clone()
+                },
+                Ok(Err(_e)) => todo!("broadcast overflow when the subject is too slow"),
+                Err(..) => next_msg.clone(),
+            };
+
+            trace!("sending AppendEntries: {to_send:?}");
+            match stream.send(Msg::AppendEntries(to_send)).await {
+                Ok(..) => continue,
+                Err(e) => {
+                    warn!("could not send to host, error: {e:?}");
+                    break;
                 }
             }
         }
@@ -75,9 +80,17 @@ async fn manage_subject(
 
 /// look for new subjects in the chart and register them
 #[instrument(skip_all, fields(id = state.id))]
-pub async fn instruct(chart: &mut Chart, orders: broadcast::Sender<()>, state: State, term: Term) {
+pub async fn instruct(
+    chart: &mut Chart,
+    orders: broadcast::Sender<Order>,
+    state: State,
+    term: Term,
+) {
     // todo slice of len cluster size for match_idxes
-    let LogMeta { idx: prev_idx, term: prev_term } = state.last_log_meta();
+    let LogMeta {
+        idx: prev_idx,
+        term: prev_term,
+    } = state.last_log_meta();
     let base_msg = Request {
         term,
         leader_id: chart.our_id(),
@@ -88,24 +101,24 @@ pub async fn instruct(chart: &mut Chart, orders: broadcast::Sender<()>, state: S
     };
 
     let mut subjects = JoinSet::new();
-    let mut add_subject = |addr| {
+    let mut add_subject = |id, addr| {
         let rx = orders.subscribe();
         let match_idx = Arc::new(AtomicU32::new(0));
         let next_idx = state.last_applied() + 1;
-        let manage = manage_subject(addr, rx, next_idx, match_idx, base_msg.clone());
+        let manage = manage_subject(id, addr, rx, next_idx, match_idx, base_msg.clone());
         subjects.spawn(manage);
     };
 
     let mut notify = chart.notify();
     let mut adresses: HashSet<_> = chart.nth_addr_vec::<0>().into_iter().collect();
-    for addr in adresses.iter().cloned() {
-        add_subject(addr)
+    for (id, addr) in adresses.iter().cloned() {
+        add_subject(id, addr)
     }
 
-    while let Ok((_id, addr)) = notify.recv_nth_addr::<0>().await {
-        let is_new = adresses.insert(addr);
+    while let Ok((id, addr)) = notify.recv_nth_addr::<0>().await {
+        let is_new = adresses.insert((id, addr));
         if is_new {
-            add_subject(addr)
+            add_subject(id, addr)
         }
     }
 }

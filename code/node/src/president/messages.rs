@@ -10,20 +10,30 @@ use super::LogWriter;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Msg {
     ClientReq(protocol::Request),
+    #[cfg(test)]
+    Test(u8),
     // LoadReport,
     // MinisterReq,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Reply {
-    GoAway, // president does not forward
+    GoAway, // president itself does not assist citizens
+    // Okay,
 }
 
 #[allow(dead_code)]
 async fn client_req() {
 }
 
-async fn handle_conn(stream: TcpStream, _log: LogWriter) {
+#[cfg(test)]
+async fn test_req(n: u8, log: &mut LogWriter) -> Option<Reply> {
+    use super::Order;
+    log.append(Order::Test(n));
+    None
+}
+
+async fn handle_conn(stream: TcpStream, mut log: LogWriter) {
     use Msg::*;
     use Reply::*;
     let mut stream: connection::MsgStream<Msg, Reply> = connection::wrap(stream);
@@ -32,6 +42,8 @@ async fn handle_conn(stream: TcpStream, _log: LogWriter) {
 
         let reply = match msg {
             ClientReq(_) => Some(GoAway),
+            #[cfg(test)]
+            Test(n) => test_req(n, &mut log).await,
         };
 
         if let Some(reply) = reply {

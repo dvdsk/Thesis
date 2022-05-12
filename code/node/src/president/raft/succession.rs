@@ -76,6 +76,7 @@ pub(super) async fn run_for_office(
     let mut requests: JoinSet<_> = chart
         .nth_addr_vec::<0>()
         .into_iter()
+        .map(|(_, addr)| addr)
         .map(|addr| request_vote(addr, campaign.clone(), chart.our_id()))
         .fold(JoinSet::new(), |mut set, fut| {
             set.spawn(fut);
