@@ -6,15 +6,16 @@ use std::time::Duration;
 
 use crate::president::Chart;
 use crate::{Id, Term};
-use futures::SinkExt;
+use color_eyre::eyre::eyre;
+use futures::{SinkExt, TryStreamExt};
 use protocol::connection::{self, MsgStream};
 use tokio::net::TcpStream;
 use tokio::sync::broadcast;
 use tokio::task::JoinSet;
-use tokio::time::{sleep, timeout_at, Instant, Sleep};
-use tracing::{instrument, trace, warn};
+use tokio::time::{sleep, sleep_until, timeout_at, Instant};
+use tracing::{debug, instrument, trace, warn};
 
-use super::state::append::Request;
+use super::state::append::{self, Request};
 use super::state::LogMeta;
 use super::{Msg, Order, Reply};
 use super::{State, HB_PERIOD};
@@ -46,9 +47,10 @@ async fn manage_subject(
     subject_id: Id,
     address: SocketAddr,
     mut broadcast: broadcast::Receiver<Order>,
-    _next_idx: u32,
+    mut next_idx: u32,
     _match_idx: Arc<AtomicU32>,
     base_msg: Request,
+    state: State,
 ) {
     loop {
         let mut stream = connect(&address).await;
@@ -60,32 +62,102 @@ async fn manage_subject(
             continue;
         }
 
-        pass_on_orders(&mut broadcast, &mut next_msg, &mut stream).await;
+        pass_on_orders(
+            &mut broadcast,
+            &mut next_msg,
+            &mut next_idx,
+            &mut stream,
+            &state,
+        )
+        .await;
+    }
+}
+
+fn missing_logs(state: &State, next_idx: u32) -> bool {
+    state.last_log_meta().idx >= next_idx
+}
+
+fn append(base_msg: Request, state: &State, next_idx: u32) -> Request {
+    let prev_entry = state.entry_at(next_idx - 1);
+    let entry = state.entry_at(next_idx);
+    Request {
+        prev_log_idx: next_idx - 1,
+        prev_log_term: prev_entry.term,
+        entries: vec![entry.order],
+        ..base_msg
+    }
+}
+
+fn heartbeat(base_msg: Request) -> Request {
+    Request {
+        prev_log_term: base_msg.term,
+        entries: Vec::new(),
+        ..base_msg
+    }
+}
+
+async fn recieve_reply(
+    stream: &mut MsgStream<Reply, Msg>,
+    next_idx: &mut u32,
+    base_msg: &mut Request,
+) -> color_eyre::Result<()> {
+    loop {
+        match stream.try_next().await {
+            Ok(None) => return Err(eyre!("did not recieve reply from host")),
+            Err(e) => return Err(eyre!("did not recieve reply from host, error: {e:?}")),
+            Ok(Some(Reply::RequestVote(..))) => {
+                unreachable!("no vote request is ever send on this connection")
+            }
+
+            Ok(Some(Reply::AppendEntries(append::Reply::HeartBeatOk))) => (),
+            Ok(Some(Reply::AppendEntries(append::Reply::AppendOk))) => {
+                base_msg.prev_log_term = base_msg.term;
+                base_msg.prev_log_idx = *next_idx;
+                *next_idx += 1;
+            }
+
+            Ok(Some(Reply::AppendEntries(append::Reply::InconsistentLog))) => *next_idx -= 1,
+            Ok(Some(Reply::AppendEntries(append::Reply::ExPresident(new_term)))) => {
+                warn!("we are not the current president, new president has term: {new_term}")
+            }
+        }
     }
 }
 
 async fn pass_on_orders(
-    broadcast: &mut broadcast::Receiver<Order>,
-    next_msg: &mut Request,
+    _broadcast: &mut broadcast::Receiver<Order>,
+    base_msg: &mut Request,
+    next_idx: &mut u32,
     stream: &mut MsgStream<Reply, Msg>,
+    state: &State,
 ) {
-    loop {
-        let next_hb = Instant::now() + HB_PERIOD;
-        let to_send = match timeout_at(next_hb, broadcast.recv()).await {
-            Ok(Ok(order)) => Request {
-                entries: vec![order],
-                ..next_msg.clone()
-            },
-            Ok(Err(_e)) => todo!("broadcast overflow when the subject is too slow"),
-            Err(..) => next_msg.clone(),
-        };
+    let mut next_hb = Instant::now() + HB_PERIOD;
+    sleep_until(next_hb).await;
 
-        trace!("sending AppendEntries: {to_send:?}");
-        match stream.send(Msg::AppendEntries(to_send)).await {
-            Ok(..) => continue,
-            Err(e) => {
-                warn!("could not send to host, error: {e:?}");
-                return;
+    loop {
+        next_hb = next_hb + HB_PERIOD;
+
+        let to_send = if missing_logs(state, *next_idx) {
+            debug!("sending missing logs at idx: {next_idx}");
+            append(base_msg.clone(), state, *next_idx)
+        } else {
+            trace!("sending heartbeat");
+            heartbeat(base_msg.clone())
+        };
+        trace!("sending msg: {base_msg:?}");
+
+        if let Err(e) = stream.send(Msg::AppendEntries(to_send)).await {
+            warn!("did not send to host, error: {e:?}");
+            return;
+        }
+
+        // recieve for as long as possible,
+        match timeout_at(next_hb, recieve_reply(stream, next_idx, base_msg)).await {
+            Err(..) => (), // not a problem reply can arrive later
+            Ok(Ok(..)) => unreachable!("we always keep recieving"),
+            Ok(Err(e)) => {
+                warn!("did not recieve reply, error: {e:?}");
+                sleep_until(next_hb).await;
             }
         }
     }
@@ -104,11 +176,12 @@ pub async fn instruct(
         idx: prev_idx,
         term: prev_term,
     } = state.last_log_meta();
+
     let base_msg = Request {
         term,
         leader_id: chart.our_id(),
-        prev_log_idx: prev_idx,
-        prev_log_term: prev_term,
+        prev_log_idx: dbg!(prev_idx),
+        prev_log_term: dbg!(prev_term),
         entries: Vec::new(),
         leader_commit: state.commit_index(),
     };
@@ -118,7 +191,15 @@ pub async fn instruct(
         let rx = orders.subscribe();
         let match_idx = Arc::new(AtomicU32::new(0));
         let next_idx = state.last_applied() + 1;
-        let manage = manage_subject(id, addr, rx, next_idx, match_idx, base_msg.clone());
+        let manage = manage_subject(
+            id,
+            addr,
+            rx,
+            next_idx,
+            match_idx,
+            base_msg.clone(),
+            state.clone(),
+        );
         subjects.spawn(manage);
     };
 

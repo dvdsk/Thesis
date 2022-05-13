@@ -38,7 +38,7 @@ impl State {
             nothing_to_append = req.entries.is_empty();
             for (i, order) in req.entries.into_iter().enumerate() {
                 let index = req.prev_log_idx + i as u32 + 1;
-                self.prepare_log(index, req.term);
+                self.prepare_log(index, req.prev_log_term);
                 let entry = LogEntry { term: *term, order };
                 self.insert_into_log(index, &entry)
             }
@@ -66,8 +66,8 @@ impl State {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LogEntry {
-    term: Term,
-    order: Order,
+    pub term: Term,
+    pub order: Order,
 }
 
 impl Default for LogEntry {
@@ -84,7 +84,14 @@ impl State {
     pub(super) fn log_contains(&self, prev_log_idx: u32, prev_log_term: u32) -> bool {
         match self.db.get_val(db::log_key(prev_log_idx)) {
             Some(LogEntry { term, .. }) if term == prev_log_term => true,
-            _ => false,
+            Some(LogEntry { term, .. }) => {
+                warn!("log contains entry with term: {term}, which is not the required: {prev_log_term}");
+                false
+            }
+            None => {
+                warn!("log does not contain an entry for index: {prev_log_idx}");
+                false
+            }
         }
     }
 
@@ -117,7 +124,7 @@ impl State {
 
     #[instrument(skip(self))]
     pub(super) async fn apply_log(&self, idx: u32) {
-        let LogEntry{order, ..} = self
+        let LogEntry { order, .. } = self
             .db
             .get_val(db::log_key(idx))
             .expect("there should be an item in the log");
