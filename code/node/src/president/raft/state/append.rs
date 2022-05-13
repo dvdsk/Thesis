@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::Ordering;
-use tracing::instrument;
+use tracing::{instrument, warn};
 
 use super::{db, LogIdx, Order, State};
 use crate::util::TypedSled;
@@ -9,6 +9,7 @@ use crate::{Id, Term};
 impl State {
     #[instrument(skip(self), fields(id = self.id), ret)]
     pub async fn append_req(&self, req: Request) -> Reply {
+        let nothing_to_append;
         {
             // lock scope of election_office
             let mut election_office = self.election_office.lock().unwrap();
@@ -24,7 +25,7 @@ impl State {
                 return Reply::ExPresident(*term);
             }
 
-            // at this point the request can only be from 
+            // at this point the request can only be from
             // (as seen from this node) a valid leader
             self.vars.heartbeat.notify_one();
 
@@ -34,6 +35,7 @@ impl State {
             }
 
             let n_entries = req.entries.len() as u32;
+            nothing_to_append = req.entries.is_empty();
             for (i, order) in req.entries.into_iter().enumerate() {
                 let index = req.prev_log_idx + i as u32 + 1;
                 self.prepare_log(index, req.term);
@@ -55,7 +57,10 @@ impl State {
             self.apply_log(to_apply).await;
         }
 
-        Reply::Ok
+        match nothing_to_append {
+            true => Reply::HeartBeatOk,
+            false => Reply::AppendOk,
+        }
     }
 }
 
@@ -151,7 +156,8 @@ pub struct Request {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum Reply {
-    Ok,
+    HeartBeatOk,
+    AppendOk,
     ExPresident(Term),
     InconsistentLog,
 }

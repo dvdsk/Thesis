@@ -106,20 +106,20 @@ async fn only_correct_entries() {
     let (mut gen, state, mut order_rx) = setup();
 
     let reply = state.append_req(gen.correct(1)).await;
-    assert_eq!(reply, Reply::Ok);
+    assert_eq!(reply, Reply::AppendOk);
 
     gen.commit(1);
     let reply = state.append_req(gen.heartbeat()).await;
-    assert_eq!(reply, Reply::Ok);
+    assert_eq!(reply, Reply::HeartBeatOk);
     let order = order_rx.recv().await.unwrap();
     assert_eq!(order, Order::Test(1));
 
     let reply = state.append_req(gen.correct(2)).await;
-    assert_eq!(reply, Reply::Ok);
+    assert_eq!(reply, Reply::AppendOk);
 
     gen.commit(2);
     let reply = state.append_req(gen.correct(3)).await;
-    assert_eq!(reply, Reply::Ok);
+    assert_eq!(reply, Reply::AppendOk);
     let order = order_rx.recv().await.unwrap();
     assert_eq!(order, Order::Test(2));
 }
@@ -131,17 +131,17 @@ async fn some_incorrect_entries() {
 
     for n in 10..13 {
         let reply = state.append_req(gen.correct(n)).await;
-        assert_eq!(reply, Reply::Ok);
+        assert_eq!(reply, Reply::AppendOk);
     }
     gen.commit(10);
     let reply = state.append_req(gen.heartbeat()).await;
-    assert_eq!(reply, Reply::Ok);
+    assert_eq!(reply, Reply::HeartBeatOk);
 
     // simulate a newly elected leader
     let mut zombi_gen = gen;
     let mut gen = zombi_gen.new_leader(2);
     let reply = state.append_req(gen.correct(21)).await;
-    assert_eq!(reply, Reply::Ok);
+    assert_eq!(reply, Reply::AppendOk);
 
     let order = order_rx.recv().await.unwrap();
     assert_eq!(order, Order::Test(10));
@@ -152,7 +152,7 @@ async fn some_incorrect_entries() {
 
     gen.commit(21);
     let reply = state.append_req(gen.heartbeat()).await;
-    assert_eq!(reply, Reply::Ok);
+    assert_eq!(reply, Reply::HeartBeatOk);
 
     let order = order_rx.recv().await.unwrap();
     assert_eq!(order, Order::Test(21));
@@ -164,7 +164,7 @@ async fn append_correct(mut gen: RequestGen, state: State, barrier: Arc<Barrier>
         let req = gen.correct(n);
 
         let reply = state.append_req(req).await;
-        assert_eq!(reply, Reply::Ok);
+        assert_eq!(reply, Reply::AppendOk);
     }
     gen
 }
@@ -191,7 +191,7 @@ async fn append_multiple_simultaneous() {
     for n in 0..10 {
         gen.commit(n);
         let reply = state.append_req(gen.heartbeat()).await;
-        assert_eq!(reply, Reply::Ok);
+        assert_eq!(reply, Reply::HeartBeatOk);
 
         let order = order_rx.recv().await.unwrap();
         assert_eq!(order, Order::Test(n));
