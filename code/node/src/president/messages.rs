@@ -29,6 +29,7 @@ async fn client_req() {
 #[cfg(test)]
 async fn test_req(n: u8, log: &mut LogWriter) -> Option<Reply> {
     use super::Order;
+    debug!("appending Test({n}) to log");
     log.append(Order::Test(n));
     None
 }

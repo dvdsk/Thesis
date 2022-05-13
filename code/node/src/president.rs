@@ -19,7 +19,7 @@ pub struct LogWriter {
 
 impl LogWriter {
     fn append(&self, order: Order) {
-        //self.state.append()
+        //self.state.append() // Todo first write to local state
         self.broadcast.send(order).unwrap();
     }
 }

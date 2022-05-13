@@ -205,7 +205,7 @@ impl TestAppendNode {
             .unwrap();
         if let Order::Test(i) = order {
             let mut stream: connection::MsgStream<Reply, Msg> = connection::wrap(stream);
-            stream.send(Msg::ClientReq(protocol::Request::Test(i))).await.unwrap();
+            stream.send(Msg::Test(i)).await.unwrap();
         } else {
             unreachable!("only Order::Test should be send during testing");
         }
