@@ -4,6 +4,7 @@ use std::sync::{Arc, Mutex};
 use tokio::sync::{mpsc, Notify};
 use tracing::{debug, instrument};
 
+use self::append::LogEntry;
 use self::vote::ElectionOffice;
 
 use super::Order;
@@ -83,7 +84,7 @@ impl State {
             db,
             vars: Default::default(),
         };
-        // append_msg committed index starts at zero, insert a zeroth 
+        // append_msg committed index starts at zero, insert a zeroth
         // log entry that can safely be committed
         state.insert_into_log(0, &append::LogEntry::default());
         state
@@ -97,7 +98,7 @@ impl State {
                 sled::Event::Insert { key, value } if key == db::ELECTION_DATA => {
                     let data: vote::ElectionData = bincode::deserialize(&value).unwrap();
                     debug!("term increased, new term is: {}", data.term());
-                    return
+                    return;
                 }
                 _ => panic!("term key should never be removed"),
             }
@@ -121,7 +122,7 @@ pub struct LogMeta {
 }
 
 impl State {
-    /// for an empty log return (0,0)
+    /// for an empty log return LogMeta{ term: 0, idx: 0 }
     pub(crate) fn last_log_meta(&self) -> LogMeta {
         use db::Prefix;
 
@@ -138,6 +139,23 @@ impl State {
                 term: u32::from_ne_bytes(value[0..4].try_into().unwrap()),
             },
             _ => Default::default(),
+        }
+    }
+
+    pub(crate) fn entry_at(&self, idx: u32) -> LogEntry {
+        use crate::util::TypedSled;
+        self.db.get_val(db::log_key(idx)).unwrap()
+    }
+
+    pub(crate) fn append(&self, order: Order) {
+        use crate::util::TypedSled;
+        loop {
+            let LogMeta { idx, term } = self.last_log_meta();
+            let entry = LogEntry { term, order: order.clone() };
+            let res = self.db.set_unique(db::log_key(idx + 1), entry);
+            if res.is_ok() {
+                break;
+            }
         }
     }
 

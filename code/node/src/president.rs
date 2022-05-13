@@ -13,13 +13,13 @@ use crate::Term;
 
 #[derive(Debug, Clone)]
 pub struct LogWriter {
-    _state: raft::State,
+    state: raft::State,
     broadcast: broadcast::Sender<Order>,
 }
 
 impl LogWriter {
     fn append(&self, order: Order) {
-        //self.state.append() // Todo first write to local state
+        self.state.append(order.clone());
         self.broadcast.send(order).unwrap();
     }
 }
@@ -34,7 +34,7 @@ pub(super) async fn work(
     let Log { orders, state, .. } = log;
     let (broadcast, _) = broadcast::channel(16);
     let log_writer = LogWriter {
-        _state: state.clone(),
+        state: state.clone(),
         broadcast: broadcast.clone(),
     };
 
