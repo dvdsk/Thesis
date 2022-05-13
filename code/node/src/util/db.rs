@@ -9,6 +9,14 @@ use tracing::trace;
 pub trait TypedSled {
     fn get_val<T: DeserializeOwned + Debug>(&self, key: impl AsRef<[u8]>) -> Option<T>;
     fn set_val<T: Serialize + Debug>(&self, key: impl AsRef<[u8]>, val: T);
+    /// Set value only if key had no value.
+    /// # Error
+    /// if key was set return the current vale
+    fn set_unique<T: Serialize + DeserializeOwned + Debug>(
+        &self,
+        key: impl AsRef<[u8]>,
+        val: T,
+    ) -> Result<(), T>;
     fn increment<T>(&self, key: impl AsRef<[u8]>) -> T
     where
         T: Add + DeserializeOwned + Serialize + One + Zero + Unsigned,
@@ -32,6 +40,20 @@ impl TypedSled for sled::Tree {
         let bytes = bincode::serialize(&val).unwrap();
         trace!("serializing: {val:?} as {bytes:?}");
         let _ig_old_key = self.insert(key, bytes).unwrap();
+    }
+    fn set_unique<T: Serialize + DeserializeOwned + Debug>(
+        &self,
+        key: impl AsRef<[u8]>,
+        val: T,
+    ) -> Result<(), T> {
+        let bytes = bincode::serialize(&val).unwrap();
+        trace!("serializing: {val:?} as {bytes:?}");
+        self.compare_and_swap(key, None as Option<&[u8]>, Some(bytes))
+            .unwrap()
+            .map_err(|err| err.current)
+            .map_err(Option::unwrap)
+            .map_err(|bytes| bincode::deserialize(&bytes))
+            .map_err(Result::unwrap)
     }
     /// increment the value in the db or insert zero if none has been set
     fn increment<T>(&self, key: impl AsRef<[u8]>) -> T
