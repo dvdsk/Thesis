@@ -1,13 +1,13 @@
-Here I will present \name{}'s design and explain how it enables scalable consistent distributed file storage. First I will discuss the \ac{api} exposed by my system then I will present the architecture, finally I will detail some of the system behaviour using state machine diagrams. 
+Here I will present \name{}'s design and explain how it enables scalable consistent distributed file storage. First I will discuss the \ac{api} exposed by my system then I will present the architecture, finally I will detail some system behavior using state machine diagrams. 
 %
 \subsection{API and Capabilities}
-The filesystem is set up hierarchically: data is stored in files which are kept in folders. Folders can contain other folders. The hierarchy looks like a tree where each level may have 1 to n nodes.
+The file system is set up hierarchically: data is stored in files which are kept in folders. Folders can contain other folders. The hierarchy looks like a tree where each level may have 1 to n nodes.
 
-The \ac{posix} has enabled applications to be developed once for all complying filesystem and my system's \ac{api} is based on it. If we expand beyond \ac{posix} by adding methods that allow for greater performance we excludes existing applications from these gains. This is a tradeoff made by \ceph{}~\[\cref{sec:ceph}\] by implementing part of the \ac{posix} \ac{hpc} IO extensions~\cite{hpc_posix}. \ceph{} also trades in all consistency for files using the \ac{hpc} \ac{api}. 
+The \ac{posix} has enabled applications to be developed once for all complying file system and my system's \ac{api} is based on it. If we expand beyond \ac{posix} by adding methods that allow for greater performance we exclude existing applications from these gains. This is a trade-off made by \ceph{}~(\cref{sec:ceph}) by implementing part of the \ac{posix} \ac{hpc} IO extensions~\cite{hpc_posix}. \ceph{} also trades in all consistency for files using the \ac{hpc} \ac{api}. 
 
-Key to my approach is also expanding the file system \ac{api} beyond posix. While this makes my system harder to use it does not come at a cost of reducing consistency. Specifically \name{} expands upon \ac{posix} with the addition of \textsl{open region}. A client that \textit{opens} a file \textit{region} can access only a range of data in the file. This \ac{api} enables consistent \emph{limited parallel concurrent} writes on, or combinations of reading and writing in the same file.
+Key to my approach is also expanding the file system \ac{api} beyond \ac{posix}. While this makes my system harder to use it does not come at a cost of reducing consistency. Specifically \name{} expands upon \ac{posix} with the addition of \textsl{open region}. A client that \textit{opens} a file \textit{region} can access only a range of data in the file. This \ac{api} enables consistent \emph{limited parallel concurrent} writes on, or combinations of reading and writing in the same file.
 
-Like \ceph{} in \name{} clients gain capabilities when they open files. These capabilities determine what actions a client may perform on a file. There are four capablities: \nopagebreak
+Like \ceph{} in \name{} clients gain capabilities when they open files. These capabilities determine what actions a client may perform on a file. There are four capabilities: \nopagebreak
 %
 \begin{multicols}{4} % 2 does not work, anyway this way the list is nice, tight and centerd
 \begin{itemize}
@@ -18,10 +18,10 @@ Like \ceph{} in \name{} clients gain capabilities when they open files. These ca
 \end{itemize}
 \end{multicols}
 %
-A client with write capabilities may also read data. 
+A client with write capabilities may also read data. Similar to \ceph{} capabilities are only given for a limited time, this means a client is given a lease to certain capabilities. The lease needs to be renewed if the client is not done with its file operations in time. The lease can also be revoked early by the system.
 
 \begin{samepage}
-\Name{} tracks the capabilities for a each of its files. It will only give out capabilities that uphold the following:
+\Name{} tracks the capabilities for each of its files. It will only give out capabilities that uphold the following:
 %
 \begin{itemize}
 	\item Multiple clients can have capabilities on the same file as long as write capabilities have no overlap with any region.
@@ -34,22 +34,22 @@ A client with write capabilities may also read data.
 	\caption{An overview of the architecture. There is one president, $n$ \emph{ministers}~\amdsLeg{}, each ministry can have a different number of \emph{clerks}~\cmdsLeg{}. Not all servers in a cluster are always actively used as represented by the \emph{idle} nodes~\umdsLeg{}}
 \end{figure}
 
-\Name{} uses hierarchical leadership, there is one president elected by all servers. The president in turn appoints multiple ministers then assigns each a group of clerks. An minister contacts its group, and promotes each member from idle to clerk, forming a ministry. 
+\Name{} uses hierarchical leadership, there is one president elected by all servers. The president in turn appoints multiple ministers then assigns each a group of clerks. A minister contacts its group, and promotes each member from idle to clerk, forming a ministry. 
 
 The president coordinates the cluster: monitoring the population, assigning new ministers on failures, adjusting groups given failures and load balances between all groups. Load balancing is done in two ways: increasing the size of a group and increasing the number of groups. To enable the president to make load balancing decisions each minister periodically sends file popularity.
 
-Metadata changes are coordinated by ministers, they serializes metadata modifying requests and ensures the changes proliferate to the ministry's clerks. Changes are only completed when they are written to half of the clerks. Additionally each minister also collects file popularity by querying its clerks periodically. Finally the ministers issue write capabilities.
+Metadata changes are coordinated by ministers, they serialize metadata modifying requests and ensures the changes proliferate to the ministry's clerks. Changes are only completed when they are written to half of the clerks. Each minister also collects file popularity by querying its clerks periodically. Finally, write capabilities can only be issued by ministers.
 
-A ministry's clerks handle metadata queries: issueing read capabilities and providing information about the filesystem tree. Additionally each clerk tracks file popularity to provide to the minister. 
+A ministry's clerks handle metadata queries: issuing read capabilities and providing information about the file system tree. Additionally, each clerk tracks file popularity to provide to the minister. 
 
-It is not a good idea to assign as much clerks to ministries as possible. Each extra clerk is one more machine the minister needs to contact for each change. The cluster might therefore keep some nodes idle. I will get back to this when discussing load balancing in \Cref{sec:loadb}.
+It is not a good idea to assign as many clerks to ministries as possible. Each extra clerk is one more machine the minister needs to contact for each change. The cluster might therefore keep some nodes idle. I will get back to this when discussing load balancing in \Cref{sec:loadb}.
 %
 \subsubsection*{Consensus} \label{sec:concensus} \label{sec:praft}
 Consistent communication has a performance penalty and complicates system design. Not all communication is critical to system or data integrity. I use simpler protocols where possible. 
 
 The president is elected using \raft{}. Its coordination is communicated using \raft{}'s log replication. On failure a new president is elected by all nodes.
 
-Communication from the minister to its ministries clerks uses log replication similar to \raft{}. When an minister is appointed it gets a \raft{} term. Changes to the metadata are shared with clerks using log replication. An minister can fail after the change was comitted but before the client was informed of the success. The log index is shared with the client before it is committed, on minister failure the client can check with an clerks to see if its log entry exists\footnote{Without the log index the client can not distinquish between failure and a succesfull change followed by a new change overriding the clients.}. When the minister fails the president selects the clerk with the highest \textsl{commit index} as the new minister. I call this adaptation \ac{praft}.
+Communication from the minister to its ministries clerks uses log replication similar to \raft{}. When a minister is appointed it gets a \raft{} term. Changes to the metadata are shared with clerks using log replication. A minister can fail after the change was committed but before the client was informed of the success. The log index is shared with the client before it is committed, on minister failure the client can check with a clerk to see if its log entry exists\footnote{Without the log index the client can not distinguish between failure and a successful change followed by a new change overriding the clients.}. When the minister fails the president selects the clerk with the highest \textsl{commit index} as the new minister. I call this adaptation \ac{praft}.
 
-Load reports to the president are send over normal TCP ensuring the arrive in order. A minister that froze, was replaced and starts working again however can still send outdated reports. By including the term of the sending minister the president detects outdated reports and discards them.
+Load reports to the president are sent over TCP, it will almost always insure the reports arrive in order. A minister that froze, was replaced and starts working again however can still send outdated reports. By including the term of the sending minister the president detects outdated reports and discards them.
 %

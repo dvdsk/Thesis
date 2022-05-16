@@ -1,10 +1,10 @@
 \begin{tikzpicture}
 
 	\node (start) [client] {Contact random node};
-	\node (wrong_tree) [uMds, below =of start] {An official\\in wrong subtree};
+	\node (wrong_tree) [uMds, below =of start] {Official\\ \textit{wrong subtree}};
 	\node (spacer) [invisible, below=of wrong_tree] {};
 	\node (amds) [aMds, left=of spacer] {Minister};
-	\node (right_subtree) [cMds, right=of amds] {Clerk\\right subtree};
+	\node (right_subtree) [cMds, right=of amds] {Clerk\\ \textit{correct subtree}};
 
 	\begin{pgfonlayer}{background}
 		\node [fill=black!8, fit=(right_subtree) (amds)] {};
