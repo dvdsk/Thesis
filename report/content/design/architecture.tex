@@ -1,13 +1,13 @@
-Here I will go over \name{}'s design and how it enables scalable consistent distributed file storage. First I will discuss the \ac{api} exposed by my system then I will present the architecture, finally I will detail some of the system behaviour using state machine diagrams. 
+Here I will present \name{}'s design and explain how it enables scalable consistent distributed file storage. First I will discuss the \ac{api} exposed by my system then I will present the architecture, finally I will detail some of the system behaviour using state machine diagrams. 
 %
 \subsection{API and Capabilities}
-\Name{} is a hierarchical file system: data is stored in files which are stored in folders. Folders can contain other folders. The file system hierarchy looks like a tree where each level may have 1 to n nodes.
+The filesystem is set up hierarchically: data is stored in files which are kept in folders. Folders can contain other folders. The hierarchy looks like a tree where each level may have 1 to n nodes.
 
-The \ac{posix} has allowed applications to be developed once for all complying filesystem and forms the basis of \name{}'s \ac{api}. Expanding beyond \ac{posix}, realising performance gains in the new methods, excludes existing applications from these gains. \ceph{}~\cref{sec:ceph} does this trading some usability for performance by implementing part of the \ac{posix} \ac{hpc} IO extensions~\cite{hpc_posix}. \ceph{} also trades in all consistency for files using the \ac{hpc} \ac{api}. 
+The \ac{posix} has enabled applications to be developed once for all complying filesystem and my system's \ac{api} is based on it. If we expand beyond \ac{posix} by adding methods that allow for greater performance we excludes existing applications from these gains. This is a tradeoff made by \ceph{}~\[\cref{sec:ceph}\] by implementing part of the \ac{posix} \ac{hpc} IO extensions~\cite{hpc_posix}. \ceph{} also trades in all consistency for files using the \ac{hpc} \ac{api}. 
 
-A key to my approach is expanding the file system \ac{api} beyond posix. While this makes my system harder to use it gains back the consistency lost by \ceph{} while keeping its scalability. Where \name{} expands upon \ac{posix} is the addition of \textsl{open region}. A client that \textit{opens} a file \textit{region} can access to only a range of data in the file. This \ac{api} enables consistent limited \emph{parallel concurrent} writes on or combinations of reading and writing in the same file.
+Key to my approach is also expanding the file system \ac{api} beyond posix. While this makes my system harder to use it does not come at a cost of reducing consistency. Specifically \name{} expands upon \ac{posix} with the addition of \textsl{open region}. A client that \textit{opens} a file \textit{region} can access only a range of data in the file. This \ac{api} enables consistent \emph{limited parallel concurrent} writes on, or combinations of reading and writing in the same file.
 
-Like in \ceph{} in \name{} clients gain capability when they open files. These capabilities determine what a client may perform on a file. There are four capablities: \nopagebreak
+Like \ceph{} in \name{} clients gain capabilities when they open files. These capabilities determine what actions a client may perform on a file. There are four capablities: \nopagebreak
 %
 \begin{multicols}{4} % 2 does not work, anyway this way the list is nice, tight and centerd
 \begin{itemize}
@@ -21,7 +21,7 @@ Like in \ceph{} in \name{} clients gain capability when they open files. These c
 A client with write capabilities may also read data. 
 
 \begin{samepage}
-An \ac{mds} tracks the capabilities for a each of its files. The \ac{mds} will not give out a capability that breaks the following condidtion:
+\Name{} tracks the capabilities for a each of its files. It will only give out capabilities that uphold the following:
 %
 \begin{itemize}
 	\item Multiple clients can have capabilities on the same file as long as write capabilities have no overlap with any region.
@@ -31,25 +31,25 @@ An \ac{mds} tracks the capabilities for a each of its files. The \ac{mds} will n
 \subsection{Architecture} \label{sec:arch}
 \begin{figure}
 	\input{figs/diagrams/arch.tex}
-	\caption{An overview of the architecture. Note there are $n$ \acf{amds} groups, each group can have a different number of \acfp{cmds}. Not all servers in a cluster are always actively used as represented by the grey \acfp{umds}}
+	\caption{An overview of the architecture. There is one president, $n$ \emph{ministers}~\amdsLeg{}, each ministry can have a different number of \emph{clerks}~\cmdsLeg{}. Not all servers in a cluster are always actively used as represented by the \emph{idle} nodes~\umdsLeg{}}
 \end{figure}
 
-\Name{} uses hierarchical leadership, there is one president elected by all \acp{mds}. The president in turn appoints multiple \acfp{amds} then assigns each a group of \acfp{umds}. An \ac{amds} contacts its group, and promotes each member from unassigned to caching. 
+\Name{} uses hierarchical leadership, there is one president elected by all servers. The president in turn appoints multiple ministers then assigns each a group of clerks. An minister contacts its group, and promotes each member from idle to clerk, forming a ministry. 
 
-The president coordinates the cluster: monitoring the population, assigning new \acp{amds} on failures, adjusting group given failures and load balances between all groups. Load balancing is done in two ways: increasing the size of a group and increasing the number of groups using dynamic subtree partitioning~\cite{ceph} (see:~\cref{sec:subtree}). To enable the president to make load balancing decisions each \ac{amds} periodically sends file innode popularity.
+The president coordinates the cluster: monitoring the population, assigning new ministers on failures, adjusting groups given failures and load balances between all groups. Load balancing is done in two ways: increasing the size of a group and increasing the number of groups. To enable the president to make load balancing decisions each minister periodically sends file popularity.
 
-Metadata changes are coordinated by an \ac{amds} it serializes metadata modifying requests and ensures the changes proliferate to the group's \acp{cmds}. Changes are only completed when they are written to half of the \acp{cmds}. Additionally the \ac{amds} keeps track of file innode popularity querying its \acp{cmds} periodically.
+Metadata changes are coordinated by ministers, they serializes metadata modifying requests and ensures the changes proliferate to the ministry's clerks. Changes are only completed when they are written to half of the clerks. Additionally each minister also collects file popularity by querying its clerks periodically. Finally the ministers issue write capabilities.
 
-A groups \acp{cmds} handle metadata queries: issueing read capabilities and providing information about the filesystem tree. Additionally each \ac{cmds} tracks file innode popularity to provide to the \ac{amds}. 
+A ministry's clerks handle metadata queries: issueing read capabilities and providing information about the filesystem tree. Additionally each clerk tracks file popularity to provide to the minister. 
 
-It is not a good idea to assign as much \acp{cmds} to groups as possible. Each extra \ac{cmds} is one more machine the \ac{amds} needs to contact for each change. The cluster might therefore keep some \acp{umds} unassigned. I will get back to this when discussing how to add a new subtree in \Cref{sec:loadb}.
+It is not a good idea to assign as much clerks to ministries as possible. Each extra clerk is one more machine the minister needs to contact for each change. The cluster might therefore keep some nodes idle. I will get back to this when discussing load balancing in \Cref{sec:loadb}.
 %
 \subsubsection*{Consensus} \label{sec:concensus} \label{sec:praft}
-Consensus communication has a performance penalty and complicates system design. Not all communication is critical to data integrity or system. I use simpler protocols where possible. 
+Consistent communication has a performance penalty and complicates system design. Not all communication is critical to system or data integrity. I use simpler protocols where possible. 
 
-The president is elected using \raft{}. Its coordination is communicated using \raft{}'s log replication. On failure a new president is elected by all \acp{mds} using \raft{}.
+The president is elected using \raft{}. Its coordination is communicated using \raft{}'s log replication. On failure a new president is elected by all nodes.
 
-Communication from the \ac{amds} to its group members uses log replication similar to \raft{}. When an \ac{amds} is appointed it gets a \raft{} term. Changes to the metadata are shared with \acp{cmds} using log replication. An \ac{amds} can fail after the change was comitted but before the client was informed of the success. The log index is shared with the client before it is committed, on \ac{amds} failure the client can check with an \ac{cmds} to see if its log entry exists\footnote{Without the log index the client can not distinquish between failure to apply the change and a new change overriding its own.}. When the \ac{amds} fails the president selects the \ac{cmds} with the highest \textsl{commit index} as the new \ac{amds}. I call this \ac{praft}.
+Communication from the minister to its ministries clerks uses log replication similar to \raft{}. When an minister is appointed it gets a \raft{} term. Changes to the metadata are shared with clerks using log replication. An minister can fail after the change was comitted but before the client was informed of the success. The log index is shared with the client before it is committed, on minister failure the client can check with an clerks to see if its log entry exists\footnote{Without the log index the client can not distinquish between failure and a succesfull change followed by a new change overriding the clients.}. When the minister fails the president selects the clerk with the highest \textsl{commit index} as the new minister. I call this adaptation \ac{praft}.
 
-Load reports to the president are send over normal TCP ensuring the arrive in order. An \ac{amds} that froze, was replaced and starts working again however can still send outdated reports. By including the term of the sending \ac{amds} the president detects outdated reports and discards them.
+Load reports to the president are send over normal TCP ensuring the arrive in order. A minister that froze, was replaced and starts working again however can still send outdated reports. By including the term of the sending minister the president detects outdated reports and discards them.
 %
