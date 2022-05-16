@@ -5,16 +5,16 @@
 	\node (rpres) [circle, fill, inner sep=2pt, right=0.6 of pres] {};
 	\draw[text_small] (mds0) to [out=0, in=180] node [midway] {load\\report} (pres);
 	
-	\node (a0)[aMds, below=of lpres]{$\text{aMDS}_0$};
-    \node (a1)[aMds, below=of a0]{$\text{aMDS}_1$};
-    \node (a2)[aMds, below=of a1]{$\text{aMDS}_2$};
+	\node (a0)[aMds, below=of lpres]{$\text{Minister}_0$};
+    \node (a1)[aMds, below=of a0]{$\text{Minister}_1$};
+    \node (a2)[aMds, below=of a1]{$\text{Minister}_2$};
 
 	\foreach \n in {0,1,2}
 	{
-		\node (c0) [cMds, right=of a\n] {$\text{cMDS}_0$};
-		\node (c1) [cMds, right=of c0] {$\text{cMDS}_1$};
-		\node (c2) [cMds, right=of c1] {$\text{cMDS}_2$};
-		\node (c3_\n) [cMds, right=of c2] {$\text{cMDS}_3$};
+		\node (c0) [cMds, right=of a\n] {$\text{Clerk}_0$};
+		\node (c1) [cMds, right=of c0] {$\text{Clerk}_1$};
+		\node (c2) [cMds, right=of c1] {$\text{Clerk}_2$};
+		\node (c3_\n) [cMds, right=of c2] {$\text{Clerk}_3$};
 
 		\begin{pgfonlayer}{background}
 			\node [fill=black!8, fit=(a\n) (c3_\n)] {};
@@ -25,11 +25,11 @@
 	\draw[text_small, -] (pres) to [out=0, in=180] node [xshift=20] {\raft{}(unassign)} (rpres.center);
 
 	\node (c0_dots) [text_small, below=1.2 of a2] {\ldots};
-	\node (c0)[cMds, right=0.2 of c0_dots]{$\text{cMDS}_3$};
+	\node (c0)[cMds, right=0.2 of c0_dots]{$\text{Clerk}_3$};
 	\node (c1_dots) [text_small, below=0.6 of c0_dots] {\ldots};
-    \node (c1)[cMds, right=0.2 of c1_dots]{$\text{cMDS}_3$};
+    \node (c1)[cMds, right=0.2 of c1_dots]{$\text{Clerk}_3$};
 	\node (c2_dots) [text_small, below=0.6 of c1_dots] {\ldots};
-    \node (c2)[cMds, right=0.2 of c2_dots]{$\text{cMDS}_3$};
+    \node (c2)[cMds, right=0.2 of c2_dots]{$\text{Clerk}_3$};
 
 	\begin{pgfonlayer}{background}
 		\foreach \n in {0,1,2}
@@ -43,7 +43,7 @@
 
 	\foreach \n in {0,1,2} 
 	{
-		\node (u\n) [uMds, right=of c\n] {uMDS};
+		\node (u\n) [uMds, right=of c\n] {Idle};
 		\draw[text_small] (c\n) to [out=0, in=180] node [] {} (u\n);
 	}
 
@@ -63,9 +63,9 @@
 	\draw[text_small, font=\ssmall] (pres) to [out=180, in=0, looseness=0.8, bend left] 
 		node [] {\raft{}(assign and promote)} (u2.south east);
 
-	\node (a0) [aMds, below=4.8 of a2] {$\text{aMDS}_3$};
-	\node (c0) [cMds, right=of a0] {$\text{cMDS}_0$};
-	\node (c1) [cMds, right=of c0] {$\text{cMDS}_1$};
+	\node (a0) [aMds, below=4.8 of a2] {$\text{Minister}_3$};
+	\node (c0) [cMds, right=of a0] {$\text{Clerk}_0$};
+	\node (c1) [cMds, right=of c0] {$\text{Clerk}_1$};
 	\node (dots) [text_large, right=of c1] {\ldots};
 
 	\begin{pgfonlayer}{background}

@@ -6,7 +6,7 @@ For all requests a client needs to find an offical to talk to. If the request mo
 \begin{figure}[htbp]
 	\centering
 	\input{figs/diagrams/find_aMDS.tex}
-	\caption{A new client~\clientLeg{} finding the responsible minister~\amdsLeg{} for a file. Its route can go through the wrong subtree~\umdsLeg{} or via the correct ministries clerk~\cmdsLeg{}. Whenever there is a choice dotted lines indicate the less likely path.}
+	\caption{A new client~\clientLeg{} finding the responsible minister~\amdsLeg{} for a file. Its route can go through the wrong subtree~\umdsLeg{} or via the correct ministrie's clerk~\cmdsLeg{}. Whenever there is a choice dotted lines indicate the less likely path.}
 	\label{fig:find_aMDS}
 \end{figure}
 %
@@ -18,7 +18,7 @@ If the client needs read capabilities it sends its requests to a clerk. The cler
 \begin{figure}[htbp]
 	\centering
 	\input{figs/diagrams/write.tex}
-	\caption{A client~\clientLeg{} requesting ranged write capabilities. It finds and contacts the responsible minister~\amdsLeg{}. The minister then contacts the ministries clerks~\cmdsLeg to clear conflicting read capabilities. Meanwhile it revokes any conflicting write leases it gave out.}
+	\caption{A client~\clientLeg{} requesting ranged write capabilities. It finds and contacts the responsible minister~\amdsLeg{}. The minister then contacts the ministrie's clerks~\cmdsLeg to clear conflicting read capabilities. Meanwhile it revokes any conflicting write leases it gave out.}
 	\label{fig:write}
 \end{figure}
 %
@@ -30,7 +30,7 @@ Removing a directory spanning one or more load balanced subtrees needs a little 
 \begin{figure}[htbp]
 	\centering
 	\input{figs/diagrams/del_dir.tex}
-	\caption{An minister~\amdsLeg{}, here $\ac{amds}_j$, removes a directory (tree) that is load balanced between multiple ministries. The president~\presidentLeg{} coordinates the removal by appending a command to the log. Once it is committed the ministers hosting subtrees of the directory demote themself to \ac{umds} and $\ac{mds}$ group $j$ drops the directory from its db}
+	\caption{An minister~\amdsLeg{}, here $\text{Minister}_j$, removes a directory (tree) that is load balanced between multiple ministries. The president~\presidentLeg{} coordinates the removal by appending a command to the log. Once it is committed the ministers hosting subtrees of the directory demote themself to idle and $\text{Ministry}_j$ drops the directory from its db}
 	\label{fig:rm}
 \end{figure}
 %
@@ -55,7 +55,7 @@ When the groups minister appends to the groups \ac{praft} log it will notice the
 \begin{figure}[htbp]
 	\centering
 	\input{figs/diagrams/apoint.tex}
-	\caption{An minister~\amdsLeg{} fails and does not send a heartbeat on time (1). The president~\presidentLeg{} requests the latest commit index (2). Node $\text{\ac{cmds}}_1$~\cmdsLeg{} has index $k$ and it is the highest (3). The president has promoted $\text{\ac{cmds}}_1$ to minister, it has started sending heartbeats (4). Note the heartbeats send by the clerks are not shown.}
+	\caption{An minister~\amdsLeg{} fails and does not send a heartbeat on time (1). The president~\presidentLeg{} requests the latest commit index (2). Node $\text{Clerk}_1$~\cmdsLeg{} has index $k$ and it is the highest (3). The president has promoted $\text{Clerk}_1$ to minister, it has started sending heartbeats (4). Note the heartbeats send by the clerks are not shown.}
 	\label{fig:appoint}
 \end{figure}
 %

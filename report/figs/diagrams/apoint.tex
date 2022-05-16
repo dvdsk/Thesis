@@ -2,10 +2,10 @@
 
 	\node (1) [text_large] {1)};
 	\node (pres) [president, right=of 1] {President};
-	\node (amds) [aMds, right = 1 of pres] {\ac{amds} (failing)};
-	\node (c1) [cMds, right=of amds] {$\text{cMDS}_{1}$};
-	\node (c2) [cMds, right=of c1] {$\text{cMDS}_{2}$};
-	\node (cn) [cMds, right=of c2] {$\text{cMDS}_{n}$};
+	\node (amds) [aMds, right = 1 of pres] {Minister (failing)};
+	\node (c1) [cMds, right=of amds] {$\text{Clerk}_{1}$};
+	\node (c2) [cMds, right=of c1] {$\text{Clerk}_{2}$};
+	\node (cn) [cMds, right=of c2] {$\text{Clerk}_{n}$};
 	\node at ($(c2.east)!.5!(cn.west)$) {\ldots}; 
 	\begin{pgfonlayer}{background}
 		\node [fill=black!8, fit=(amds) (cn)] {};
@@ -17,9 +17,9 @@
 	\node (2) [text_large, below=1 of 1] {2)};
 	\node (pres) [president, right=of 2] {President};
 
-	\node (c1) [cMds, right=2 of pres] {$\text{cMDS}_{1}$};
-	\node (c2) [cMds, right=of c1] {$\text{cMDS}_{2}$};
-	\node (cn) [cMds, right=of c2] {$\text{cMDS}_{n}$};
+	\node (c1) [cMds, right=2 of pres] {$\text{Clerk}_{1}$};
+	\node (c2) [cMds, right=of c1] {$\text{Clerk}_{2}$};
+	\node (cn) [cMds, right=of c2] {$\text{Clerk}_{n}$};
 	\node at ($(c2.east)!.5!(cn.west)$) {\ldots}; 
 	\begin{pgfonlayer}{background}
 		\node [fill=black!8, fit=(c1) (cn)] {};
@@ -32,9 +32,9 @@
 	\node (3) [text_large, below=1.5 of 2] {3)};
 	\node (pres) [president, right=of 3] {President};
 
-	\node (c1) [cMds, right=2 of pres] {$\text{cMDS}_{1}$};
-	\node (c2) [cMds, right=of c1] {$\text{cMDS}_{2}$};
-	\node (cn) [cMds, right=of c2] {$\text{cMDS}_{n}$};
+	\node (c1) [cMds, right=2 of pres] {$\text{Clerk}_{1}$};
+	\node (c2) [cMds, right=of c1] {$\text{Clerk}_{2}$};
+	\node (cn) [cMds, right=of c2] {$\text{Clerk}_{n}$};
 	\node at ($(c2.east)!.5!(cn.west)$) {\ldots}; 
 	\begin{pgfonlayer}{background}
 		\node [fill=black!8, fit=(c1) (cn)] {};
@@ -47,9 +47,9 @@
 	\node (4) [text_large, below=1.5 of 3] {4)};
 	\node (pres) [president, right=of 4] {President};
 
-	\node (amds) [aMds, right=1.7 of pres] {$\text{aMDS}$};
-	\node (c2) [cMds, right=of amds] {$\text{cMDS}_{2}$};
-	\node (cn) [cMds, right=of c2] {$\text{cMDS}_{n}$};
+	\node (amds) [aMds, right=1.7 of pres] {$\text{Minister}$};
+	\node (c2) [cMds, right=of amds] {$\text{Clerk}_{2}$};
+	\node (cn) [cMds, right=of c2] {$\text{Clerk}_{n}$};
 	\node at ($(c2.east)!.5!(cn.west)$) {\ldots}; 
 	\begin{pgfonlayer}{background}
 		\node [fill=black!8, fit=(amds) (cn)] {};

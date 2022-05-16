@@ -2,15 +2,15 @@
 
     \node (president) [president] {President};
 
-	\node (a1)[aMds, below=of president]{$\text{aMDS}_1$};
-    \node (a0)[aMds, left=of a1]{$\text{aMDS}_0$};
-    \node (an)[aMds, right=2.5 of a1]{$\text{aMDS}_n$};
+	\node (a1)[aMds, below=of president]{$\text{Minister}_1$};
+    \node (a0)[aMds, left=of a1]{$\text{Minister}_0$};
+    \node (an)[aMds, right=2.5 of a1]{$\text{Minister}_n$};
 
 	\foreach \n\j in {0/i,1/j,n/k}
 	{
-		\node (c\n_1)[cMds, below=of a\n]{cMDS};
-		\node (c\n_2)[cMds, below=of c\n_1]{cMDS};
-		\node (c\n_\j)[cMds, below=1 of c\n_2]{$\text{cMDS}_{\j}$};
+		\node (c\n_1)[cMds, below=of a\n]{Clerk};
+		\node (c\n_2)[cMds, below=of c\n_1]{Clerk};
+		\node (c\n_\j)[cMds, below=1 of c\n_2]{$\text{Clerk}_{\j}$};
 		\node at ($(c\n_2)!.5!(c\n_\j)$) {\vdots};
 
 		\begin{pgfonlayer}{background}
@@ -23,13 +23,13 @@
 	\node at ($(c1_1)!.5!(cn_1)$) {\ldots}; 
 	\node at ($(c1_2)!.5!(cn_2)$) {\ldots}; 
 
-	\node (u1)[uMds, right =1.5 of an] {uMDS};
-	\node (u2)[uMds, below =0.5 of u1] {uMDS};
-	\node (u3)[uMds, below =0.5 of u2] {uMDS};
-	\node (u4)[uMds, below =0.5 of u3] {uMDS};
-	\node (u5)[uMds, right =0.5 of u1] {uMDS};
-	\node (u6)[uMds, right =0.5 of u2] {uMDS};
-	\node (u7)[uMds, right =0.5 of u3] {uMDS};
+	\node (u1)[uMds, right =1.5 of an] {Idle};
+	\node (u2)[uMds, below =0.5 of u1] {Idle};
+	\node (u3)[uMds, below =0.5 of u2] {Idle};
+	\node (u4)[uMds, below =0.5 of u3] {Idle};
+	\node (u5)[uMds, right =0.5 of u1] {Idle};
+	\node (u6)[uMds, right =0.5 of u2] {Idle};
+	\node (u7)[uMds, right =0.5 of u3] {Idle};
 	\node (u8)[right =0.5 of u4] {\ldots};
 
 \end{tikzpicture}

@@ -1,7 +1,7 @@
 \begin{tikzpicture}[node distance=0.5cm and 1.0cm, auto]
 
 	\node (start) [client] {start};
-	\node (find_amds) [client, subdiagram, right=1.5 of start] {find \ac{amds}};
+	\node (find_amds) [client, subdiagram, right=1.5 of start] {find Minister};
 	\draw[text_large] (start) to [out=0, in=180] node [] {} (find_amds);
 
 	\node (check_lease) [aMds, right=1.5 of find_amds] {clear conflicting leases};

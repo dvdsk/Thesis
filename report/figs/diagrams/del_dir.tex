@@ -1,15 +1,15 @@
 \begin{tikzpicture}[node distance=0.5cm and 1.0cm, auto]
 	\node (start) [invisible] {Start};
-	\node (amds_del1) [aMds, right=of start] {$\text{aMDS}_j$};
+	\node (amds_del1) [aMds, right=of start] {$\text{Minister}_j$};
 	\node (pres) [president, below=of amds_del1] {Subtree delete};
 	\draw[text_small] (amds_del1) to [out=270, in=90] node [] {req coordination} (pres);
 	\draw[text_small] (start) to [out=0, in=180] node [] {} (amds_del1);
 
 	\node (dots_a) [invisible, below= 1 of pres] {\ldots};
-	\node (amds1) [aMds, left=0.5 of dots_a] {$\text{aMDS}_1$};
-	\node (amds0) [aMds, left=of amds1] {$\text{aMDS}_0$};
-	\node (amdsj) [aMds, right=0.5 of dots_a] {$\text{aMDS}_j$};
-	\node (amdsn) [aMds, right=of amdsj] {$\text{aMDS}_n$};
+	\node (amds1) [aMds, left=0.5 of dots_a] {$\text{Minister}_1$};
+	\node (amds0) [aMds, left=of amds1] {$\text{Minister}_0$};
+	\node (amdsj) [aMds, right=0.5 of dots_a] {$\text{Minister}_j$};
+	\node (amdsn) [aMds, right=of amdsj] {$\text{Minister}_n$};
 	\node at ($(amdsj)!.5!(amdsn)$) {\ldots}; 
 
 	\node (dots_b) [invisible, below = 1of dots_a] {\ldots};
@@ -18,17 +18,17 @@
 	\node (line_end) [invisible, right=6 of mid] {Raft commit};
 	\draw[thick, dashed] (line_start) to [out=0, in=180] node [] {} (line_end);
 
-	\node (amds1_b) [aMds, left=0.5 of dots_b] {$\text{aMDS}_1$};
-	\node (amds0_b) [aMds, left=of amds1_b] {$\text{aMDS}_0$};
-	\node (amdsj_b) [aMds, right=0.5 of dots_b] {$\text{aMDS}_j$};
-	\node (amdsn_b) [aMds, right=of amdsj_b] {$\text{aMDS}_n-k$};
+	\node (amds1_b) [aMds, left=0.5 of dots_b] {$\text{Minister}_1$};
+	\node (amds0_b) [aMds, left=of amds1_b] {$\text{Minister}_0$};
+	\node (amdsj_b) [aMds, right=0.5 of dots_b] {$\text{Minister}_j$};
+	\node (amdsn_b) [aMds, right=of amdsj_b] {$\text{Minister}_n-k$};
 	\node at ($(amdsj_b)!.5!(amdsn_b)$) {\ldots}; 
 
 	\node (dots_c) [invisible, below= 1 of dots_b] {\ldots};
-	\node (amds1_c) [aMds, left=0.5 of dots_c] {$\text{aMDS}_1$};
-	\node (amds0_c) [aMds, left=of amds1_c] {$\text{aMDS}_0$};
-	\node (amdsj_c) [aMds, right=0.5 of dots_c] {$\text{aMDS}_j$};
-	\node (amdsn_c) [aMds, right=of amdsj_c] {$\text{aMDS}_n-k$};
+	\node (amds1_c) [aMds, left=0.5 of dots_c] {$\text{Minister}_1$};
+	\node (amds0_c) [aMds, left=of amds1_c] {$\text{Minister}_0$};
+	\node (amdsj_c) [aMds, right=0.5 of dots_c] {$\text{Minister}_j$};
+	\node (amdsn_c) [aMds, right=of amdsj_c] {$\text{Minister}_n-k$};
 	\node at ($(amdsj_c)!.5!(amdsn_c)$) {\ldots}; 
 
 	\foreach \n in {0,1,j,n}
@@ -40,8 +40,8 @@
 
 	\draw[bracket] (amdsn_b.north east) to [out=270, in=90] node [] {} (amdsn_b.south east);
 
-	\node (umdsn_0) [uMds, right=1 of amdsn_c] {$\text{uMDS}_{0}$};
-	\node (umdsn_k) [uMds, right= of umdsn_0] {$\text{uMDS}_{k}$};
+	\node (umdsn_0) [uMds, right=1 of amdsn_c] {$\text{Idle}_{0}$};
+	\node (umdsn_k) [uMds, right= of umdsn_0] {$\text{Idle}_{k}$};
 	\node (dots_d) at ($(umdsn_0)!.5!(umdsn_k)$) {\ldots}; 
 
 	\draw[text_small] (amdsn_b) + (1.4,0) to [out=0, in=90] node [left, below, xshift=-6pt] {demote} (dots_d);
