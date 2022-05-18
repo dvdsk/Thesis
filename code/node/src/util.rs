@@ -34,7 +34,6 @@ pub fn free_udp_port() -> Result<(std::net::UdpSocket, u16)> {
 
     let open_port = socket.local_addr().unwrap().as_socket().unwrap().port();
     let socket = std::net::UdpSocket::from(socket);
-    dbg!(open_port);
     Ok((socket, open_port))
 }
 
