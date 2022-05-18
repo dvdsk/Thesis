@@ -100,7 +100,10 @@ impl ElectionOffice {
     }
     pub fn data<'a>(&'a self) -> ElectionGuard<'a> {
         let data = self.db.get_val(db::ELECTION_DATA).unwrap_or_default();
-        ElectionGuard { data, _office: self }
+        ElectionGuard {
+            data,
+            _office: self,
+        }
     }
 
     /// updates term and resets voted_for

@@ -14,12 +14,12 @@ use tokio::net::TcpListener;
 mod db;
 mod logging;
 pub use db::TypedSled;
-pub use logging::setup_tracing;
 pub use logging::setup_errors;
 #[allow(unused_imports)] // used by unit tests
 pub(crate) use logging::setup_test_tracing;
+pub use logging::setup_tracing;
 
-#[cfg(test)] 
+#[cfg(test)]
 #[allow(dead_code)]
 pub fn free_udp_port() -> Result<(std::net::UdpSocket, u16)> {
     use socket2::{Domain, SockAddr, Socket, Type};
@@ -74,6 +74,10 @@ pub fn run_number(dir: &Path) -> u16 {
     };
     fs::write(path, (run + 1).to_string().as_bytes()).unwrap();
     run
+}
+
+pub fn div_ceil(numerator: usize, denominator: usize) -> usize {
+    (numerator + denominator - 1) / denominator
 }
 
 use core::future::Future;
