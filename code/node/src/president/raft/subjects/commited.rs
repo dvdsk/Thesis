@@ -1,6 +1,7 @@
+use futures::stream;
+use tracing::debug;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
-use futures::stream;
 use tokio::sync::mpsc;
 
 struct Update {
@@ -45,15 +46,11 @@ impl<'a> Commited<'a> {
         *self
             .highest
             .iter()
-            .enumerate()
-            .map(|(i, candidate)| {
-                let n_higher = self.highest[i..]
-                    .iter()
-                    .filter(|idx| *idx > candidate)
-                    .count();
+            .map(|candidate| {
+                let n_higher = self.highest.iter().filter(|idx| *idx >= candidate).count();
                 (n_higher, candidate)
             })
-            .filter(|(n, _)| *n > majority)
+            .filter(|(n, _)| *n >= majority)
             .map(|(_, idx)| idx)
             .max()
             .unwrap()
@@ -61,9 +58,17 @@ impl<'a> Commited<'a> {
 
     pub async fn updates(&mut self) {
         use stream::StreamExt;
-        let update = self.streams.next().await.unwrap();
-        self.highest[update.stream_id] = update.appended;
-        let new = self.majority_appended();
-        self.commit_idx.store(new, Ordering::Relaxed);
+        loop {
+            let update = self.streams.next().await.unwrap();
+            self.highest[update.stream_id] = update.appended;
+            let new = self.majority_appended();
+
+            let old = self.commit_idx.load(Ordering::Relaxed);
+            if old < new {
+                debug!("commit index increased: {old} -> {new}");
+            }
+
+            self.commit_idx.store(new, Ordering::Relaxed);
+        }
     }
 }

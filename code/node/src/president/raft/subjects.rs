@@ -160,8 +160,6 @@ pub async fn instruct(
     state: State,
     term: Term,
 ) {
-    // todo slice of len cluster size for match_idxes
-
     let commit_idx = state.commit_index();
     let mut commit_idx = Commited::new(commit_idx);
     let base_msg = RequestGen::new(&state, &commit_idx, term, chart);

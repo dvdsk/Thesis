@@ -17,22 +17,21 @@ impl RequestGen {
     pub fn heartbeat(&self) -> Request {
         Request {
             leader_commit: self.commit_idx.load(Ordering::Relaxed),
-            prev_log_term: self.base.term,
             entries: Vec::new(),
             ..self.base
         }
     }
 
-    pub fn append(&self, state: &State, next_idx: u32) -> Request {
-        let prev_entry = state.entry_at(next_idx - 1);
+    pub fn append(&mut self, state: &State, next_idx: u32) -> Request {
         let entry = state.entry_at(next_idx);
-        Request {
+        let req = Request {
             leader_commit: self.commit_idx.load(Ordering::Relaxed),
             prev_log_idx: next_idx - 1,
-            prev_log_term: prev_entry.term,
             entries: vec![entry.order],
             ..self.base
-        }
+        };
+        self.base.prev_log_term = self.base.term;
+        req
     }
 
     pub fn new(state: &State, commit_idx: &Commited, term: Term, chart: &Chart) -> Self {
@@ -41,7 +40,7 @@ impl RequestGen {
             term: prev_term,
         } = state.last_log_meta();
 
-        let base_req = Request {
+        let base = Request {
             term,
             leader_id: chart.our_id(),
             prev_log_idx: prev_idx,
@@ -52,7 +51,7 @@ impl RequestGen {
 
         Self {
             commit_idx: commit_idx.commit_idx.clone(),
-            base: base_req,
+            base,
         }
     }
 }
