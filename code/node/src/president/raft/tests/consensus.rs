@@ -10,7 +10,7 @@ use super::*;
 
 #[tokio::test]
 async fn spread_order() -> Result<()> {
-    util::setup_test_tracing("node=warn,node::president=trace,node::president::raft::subjects=info,node::president::raft=info");
+    // util::setup_test_tracing("node=warn,node::president=trace,node::president::raft::subjects=trace,node::president::raft=info");
     // util::setup_test_tracing("");
     const N: u64 = 4;
 
@@ -50,7 +50,10 @@ async fn spread_order() -> Result<()> {
             let order = queue.recv().await.expect("queue was dropped");
             match order {
                 Order::ResignPres => continue,
-                _ => assert_eq!(order, Order::Test(1)),
+                _ => {
+                    assert_eq!(order, Order::Test(1));
+                    break;
+                }
             }
         }
     }
