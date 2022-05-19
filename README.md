@@ -1,7 +1,7 @@
+Notice: Work in Progress
+
 Below is an excerpt of the design section of my thesis automatically converted to markdown. I recommand you instead go to the Design section in my [thesis](report/main.pdf)
 
-
-Here I will present my system's design and explain how it enables scalable consistent distributed file storage. First I will discuss the API exposed by my system then I will present the architecture, finally I will detail some system behavior using state machine diagrams.
 
 API and Capabilities
 --------------------
