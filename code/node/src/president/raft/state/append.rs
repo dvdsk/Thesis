@@ -4,7 +4,7 @@ use tracing::{instrument, warn};
 
 use super::{db, LogIdx, Order, State};
 use crate::util::TypedSled;
-use crate::{Id, Term};
+use crate::{Id, Term, Idx};
 
 impl State {
     #[instrument(skip(self), fields(id = self.id), ret)]
@@ -45,7 +45,7 @@ impl State {
 
             if req.leader_commit > self.commit_index() {
                 let last_new_idx = req.prev_log_idx + n_entries;
-                let new = u32::min(req.leader_commit, last_new_idx);
+                let new = Idx::min(req.leader_commit, last_new_idx);
                 self.set_commit_index(new);
             }
         } // end lock scope
@@ -81,7 +81,7 @@ impl Default for LogEntry {
 
 impl State {
     /// return true if the log contains prev_log_idx and prev_log_texm
-    pub(super) fn log_contains(&self, prev_log_idx: u32, prev_log_term: u32) -> bool {
+    pub(super) fn log_contains(&self, prev_log_idx: Idx, prev_log_term: Term) -> bool {
         match self.db.get_val(db::log_key(prev_log_idx)) {
             Some(LogEntry { term, .. }) if term == prev_log_term => true,
             Some(LogEntry { term, .. }) => {
@@ -98,7 +98,7 @@ impl State {
     // TODO check side effects if called interleaved
     // If an existing entry conflicts with a new one (same index
     // but different terms), delete the existing entry and all that follow it
-    fn prepare_log(&self, index: u32, term: u32) {
+    fn prepare_log(&self, index: Idx, term: Term) {
         let existing_entry = self.db.get_val(db::log_key(index));
         let existing_term = match existing_entry {
             None => return,
@@ -118,12 +118,12 @@ impl State {
     }
 
     #[instrument(skip(self))]
-    pub(super) fn insert_into_log(&self, idx: u32, entry: &LogEntry) {
+    pub(super) fn insert_into_log(&self, idx: Term, entry: &LogEntry) {
         self.db.set_val(db::log_key(idx), entry);
     }
 
     #[instrument(skip(self))]
-    pub(super) async fn apply_log(&self, idx: u32) {
+    pub(super) async fn apply_log(&self, idx: Idx) {
         let LogEntry { order, .. } = self
             .db
             .get_val(db::log_key(idx))
@@ -134,19 +134,19 @@ impl State {
 
 impl State {
     /// Sets a new higher commit index
-    fn set_commit_index(&self, new: u32) {
+    fn set_commit_index(&self, new: Idx) {
         self.vars.commit_index.fetch_max(new, Ordering::SeqCst);
     }
 
-    pub fn commit_index(&self) -> u32 {
+    pub fn commit_index(&self) -> Idx {
         self.vars.commit_index.load(Ordering::SeqCst)
     }
 
-    fn increment_last_applied(&self) -> u32 {
+    fn increment_last_applied(&self) -> Idx {
         self.vars.last_applied.fetch_add(1, Ordering::SeqCst) + 1
     }
 
-    pub(crate) fn last_applied(&self) -> u32 {
+    pub(crate) fn last_applied(&self) -> Idx {
         self.vars.last_applied.load(Ordering::SeqCst)
     }
 }

@@ -17,7 +17,9 @@ mod minister;
 mod president;
 
 pub type Id = u64;
-pub type Term = u32;
+pub type Term = u32; // raft term
+pub type Idx = u32;  // raft idx
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum Role {
     Idle,

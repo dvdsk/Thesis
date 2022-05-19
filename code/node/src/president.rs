@@ -18,7 +18,7 @@ pub struct LogWriter {
 }
 
 impl LogWriter {
-    fn append(&self, order: Order) {
+    fn append(&self, order: Order) -> Result<u32> {
         self.state.append(order.clone());
         self.broadcast.send(order).unwrap();
     }
