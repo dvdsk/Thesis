@@ -35,6 +35,9 @@ Architecture
 
 My system uses hierarchical leadership, there is one president elected by all servers. The president in turn appoints multiple ministers then assigns each a group of clerks. A minister contacts its group, and promotes each member from idle to clerk, forming a ministry.
 
+![image](https://user-images.githubusercontent.com/11743287/169294808-2706dc07-f1b8-486c-839b-9ff196291bfa.png)
+
+
 The president coordinates the cluster: monitoring the population, assigning new ministers on failures, adjusting groups given failures and load balances between all groups. Load balancing is done in two ways: increasing the size of a group and increasing the number of groups. To enable the president to make load balancing decisions each minister periodically sends file popularity.
 
 Metadata changes are coordinated by ministers, they serialize metadata modifying requests and ensures the changes proliferate to the ministry's clerks. Changes are only completed when they are written to half of the clerks. Each minister also collects file popularity by querying its clerks periodically. Finally, write capabilities can only be issued by ministers.
@@ -58,10 +61,14 @@ Client requests
 
 In this section we go over all the operations of the system, while discussing four in greater detail. I also explain how most operations are simpler forms of these four. This section is split in two parts: client requests and coordination by the president. For all requests a client needs to find an official (a minister or clerk) to talk to. If the request modifies the namespace, such as write, create and delete, the client needs to contact the minister. In we see how this works. Since load balancing changes and minister appointments are communicated through Raft each cluster member knows which ministry owns a given subtree. A client can not judge whether the node it got directions from has up to date and correct information. In the rare case the directions where incorrect this means an extra jump through an irrelevant ministry before getting correct information.
 
+![image](https://user-images.githubusercontent.com/11743287/169294942-e3ec2456-6309-4c3c-abaf-519a6483fe2f.png)
+
 Capabilities 
 ------------
 
 A client needing write-capability on a file contacts the minister. It in turn checks if the lease can be given out and asks its clerks to revoke outstanding read leases that conflict. A read lease conflict when its region overlaps with the region needed for the write capability. If a clerk lost contact with a client it can not revoke the lease and has to wait till the lease expires. The process is illustrated in .
+
+![image](https://user-images.githubusercontent.com/11743287/169295058-794570ab-845d-4be3-b0ae-bba1f7e72aa4.png)
 
 If the client needs read capabilities it sends its requests to a clerk. The clerk checks against the Raft log if the leases would conflict with an outstanding write lease. If no conflict is found the lease is issued and the connection to the client kept active. Keeping an active connection makes it possible to revoke the lease or quickly refresh it.
 
@@ -71,6 +78,9 @@ Namespace Changes
 Most changes to the namespace need simple edits within ministries metadata table. The client sends its request to the minister. The change is performed by adding a command to the pRaft log (see: ). Before committing the change the client gets the log index for the change. If the minister goes down before acknowledging success the client verifies if the change happened using the log index.
 
 Removing a directory spanning one or more load balanced subtrees needs a little more care. One or more ministers will have to delete their entire subtree. This requires coordination across the entire cluster. The clients remove requests is forwarded by the minster to the *president*. It in turn appends *Subtree Delete* to the cluster wide log. The client receives the log index for the command to verify success even if the *president* goes down. The steps the minister takes are shown in .
+
+![image](https://user-images.githubusercontent.com/11743287/169295202-e6794ee9-18b3-4e50-9069-88965cdf57a6.png)
+
 
 Availability
 ------------
@@ -89,9 +99,13 @@ A clerk going down is handled by the president in one of two ways:
 
 When the groups' minister appends to the groups pRaft log it will notice the replacement misses entries and update it (see ).
 
+![image](https://user-images.githubusercontent.com/11743287/169295263-c91d7098-c238-4353-8af8-c19195822796.png)
+
 ### Load balancing 
 
 From the point of availability a system that is up but drowning in requests might as well be down. To prevent nodes from getting overloaded we actively balance the load between ministries, add and remove them and expand the read capacity of some. A load report contains CPU utilization for each node in the group and the popularity of each bit of metadata split into read and write. The President checks the balance for each report it receives.
+
+![image](https://user-images.githubusercontent.com/11743287/169295358-1d214d4b-bbfd-4383-9e79-b50f741db1c0.png)
 
 ##### Trade off 
 
