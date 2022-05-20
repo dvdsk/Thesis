@@ -66,7 +66,7 @@ async fn manage_subject(
             continue;
         }
 
-        pass_on_orders(
+        replicate_orders(
             &mut broadcast,
             &mut appended,
             &mut req_gen,
@@ -112,7 +112,7 @@ async fn recieve_reply(
     }
 }
 
-async fn pass_on_orders(
+async fn replicate_orders(
     _broadcast: &mut broadcast::Receiver<Order>,
     appended: &mut mpsc::Sender<u32>,
     req_gen: &mut RequestGen,

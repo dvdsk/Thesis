@@ -58,7 +58,12 @@ impl<'a> Drop for PresGuard<'a> {
 impl CurrPres {
     pub async fn wait_for(&mut self) -> Id {
         loop {
-            self.notify.notified().await;
+            let notified = self.notify.notified();
+            if let Some(id) = *self.id.lock().unwrap() {
+                return id
+            }
+
+            notified.await;
             match self.get() {
                 None => continue, // president resigned before this notify
                 Some(id) => return id,
