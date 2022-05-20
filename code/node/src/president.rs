@@ -34,6 +34,23 @@ impl LogWriter {
         self.broadcast.send(order).unwrap();
         AppendTicket { idx, notify }
     }
+    /// Verify an order was appended correctly, if it was not append it again
+    async fn re_append(&self, order: Order, prev_idx: Idx) -> AppendTicket {
+        use raft::LogEntry;
+
+        match self.state.entry_at(prev_idx) {
+            Some(LogEntry{order, ..}) if order == order => {
+                let notify = Arc::new(Notify::new());
+                self.notify_tx.send((prev_idx, notify.clone())).await.unwrap();
+                AppendTicket {
+                    idx: prev_idx,
+                    notify,
+                }
+            }
+            Some(LogEntry{..}) => self.append(order).await,
+            None => self.append(order).await,
+        }
+    }
 }
 
 pub(super) async fn work(

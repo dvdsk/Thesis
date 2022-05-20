@@ -18,6 +18,7 @@ mod succession;
 mod tests;
 
 pub use state::State;
+pub use state::LogEntry;
 
 use succession::ElectionResult;
 

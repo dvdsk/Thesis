@@ -23,7 +23,7 @@ impl RequestGen {
     }
 
     pub fn append(&mut self, state: &State, next_idx: u32) -> Request {
-        let entry = state.entry_at(next_idx);
+        let entry = state.entry_at(next_idx).unwrap();
         let req = Request {
             leader_commit: self.commit_idx.load(Ordering::Relaxed),
             prev_log_idx: next_idx - 1,

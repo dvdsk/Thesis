@@ -6,7 +6,7 @@ use tracing::{debug, instrument};
 
 use crate::Idx;
 
-use self::append::LogEntry;
+pub use self::append::LogEntry;
 use self::vote::ElectionOffice;
 
 use super::Order;
@@ -144,9 +144,9 @@ impl State {
         }
     }
 
-    pub(crate) fn entry_at(&self, idx: u32) -> LogEntry {
+    pub(crate) fn entry_at(&self, idx: u32) -> Option<LogEntry> {
         use crate::util::TypedSled;
-        self.db.get_val(db::log_key(idx)).unwrap()
+        self.db.get_val(db::log_key(idx))
     }
 
     pub(crate) fn append(&self, order: Order) -> Idx {

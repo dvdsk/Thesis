@@ -12,6 +12,8 @@ use super::util::CurrPres;
 use super::*;
 
 async fn order_cluster(curr_pres: &mut CurrPres, nodes: &mut HashMap<u64, TestAppendNode>, n: u8) {
+    // TODO: in case of break we need a different predident.order that uses the
+    // Logwriter::re_append
     loop {
         // president can fail before change is comitted therefore keep retrying
         let pres_id = match timeout(TIMEOUT, curr_pres.wait_for()).await {

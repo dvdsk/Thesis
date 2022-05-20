@@ -6,6 +6,26 @@ use std::fmt::Debug;
 use std::ops::Add;
 use tracing::trace;
 
+pub struct CompareAndSwapError<T> {
+    pub current: Option<T>,
+    pub proposed: Option<T>,
+}
+
+impl<T: DeserializeOwned> From<sled::CompareAndSwapError> for CompareAndSwapError<T> {
+    fn from(e: sled::CompareAndSwapError) -> Self {
+        Self {
+            current: e
+                .current
+                .map(|b| bincode::deserialize(&b))
+                .map(Result::unwrap),
+            proposed: e
+                .proposed
+                .map(|b| bincode::deserialize(&b))
+                .map(Result::unwrap),
+        }
+    }
+}
+
 pub trait TypedSled {
     fn get_val<T: DeserializeOwned + Debug>(&self, key: impl AsRef<[u8]>) -> Option<T>;
     fn set_val<T: Serialize + Debug>(&self, key: impl AsRef<[u8]>, val: T);
@@ -17,6 +37,12 @@ pub trait TypedSled {
         key: impl AsRef<[u8]>,
         val: T,
     ) -> Result<(), T>;
+    fn cas<T: Serialize + DeserializeOwned + Debug>(
+        &self,
+        key: impl AsRef<[u8]>,
+        old: T,
+        new: T,
+    ) -> Result<(), CompareAndSwapError<T>>;
     fn increment<T>(&self, key: impl AsRef<[u8]>) -> T
     where
         T: Add + DeserializeOwned + Serialize + One + Zero + Unsigned,
@@ -55,6 +81,20 @@ impl TypedSled for sled::Tree {
             .map_err(|bytes| bincode::deserialize(&bytes))
             .map_err(Result::unwrap)
     }
+
+    fn cas<T: Serialize + DeserializeOwned + Debug>(
+        &self,
+        key: impl AsRef<[u8]>,
+        old: T,
+        new: T,
+    ) -> Result<(), CompareAndSwapError<T>> {
+        let old = bincode::serialize(&old).unwrap();
+        let new = bincode::serialize(&new).unwrap();
+        self.compare_and_swap(key, Some(old), Some(new))
+            .unwrap()
+            .map_err(|err| err.into())
+    }
+
     /// increment the value in the db or insert zero if none has been set
     fn increment<T>(&self, key: impl AsRef<[u8]>) -> T
     where
