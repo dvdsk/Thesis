@@ -4,6 +4,8 @@ use std::sync::{Arc, Mutex};
 use tokio::sync::{mpsc, Notify};
 use tracing::{debug, instrument};
 
+use crate::Idx;
+
 use self::append::LogEntry;
 use self::vote::ElectionOffice;
 
@@ -147,14 +149,14 @@ impl State {
         self.db.get_val(db::log_key(idx)).unwrap()
     }
 
-    pub(crate) fn append(&self, order: Order) {
+    pub(crate) fn append(&self, order: Order) -> Idx {
         use crate::util::TypedSled;
         loop {
             let LogMeta { idx, term } = self.last_log_meta();
             let entry = LogEntry { term, order: order.clone() };
             let res = self.db.set_unique(db::log_key(idx + 1), entry);
             if res.is_ok() {
-                break;
+                break idx + 1;
             }
         }
     }

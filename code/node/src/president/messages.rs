@@ -1,9 +1,12 @@
-use futures::{TryStreamExt, SinkExt};
+use futures::{SinkExt, TryStreamExt};
 use protocol::connection;
+use protocol::connection::MsgStream;
 use serde::{Deserialize, Serialize};
-use tokio::net::{TcpStream, TcpListener};
+use tokio::net::{TcpListener, TcpStream};
 use tokio::task::JoinSet;
-use tracing::{warn, debug};
+use tracing::{debug, warn};
+
+use crate::Idx;
 
 use super::LogWriter;
 
@@ -19,35 +22,36 @@ pub enum Msg {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Reply {
     GoAway, // president itself does not assist citizens
+    Waiting(Idx),
+    Done,
+    Error,
     // Okay,
 }
 
-#[allow(dead_code)]
-async fn client_req() {
-}
-
 #[cfg(test)]
-async fn test_req(n: u8, log: &mut LogWriter) -> Option<Reply> {
+async fn test_req(n: u8, log: &mut LogWriter, stream: &mut MsgStream<Msg, Reply>) -> Option<Reply> {
     use super::Order;
     debug!("appending Test({n}) to log");
-    log.append(Order::Test(n));
-    None
+    let ticket = log.append(Order::Test(n)).await;
+    stream.send(Reply::Waiting(ticket.idx)).await.ok()?;
+    ticket.notify.notified().await;
+    Some(Reply::Done)
 }
 
 async fn handle_conn(stream: TcpStream, mut log: LogWriter) {
     use Msg::*;
     use Reply::*;
-    let mut stream: connection::MsgStream<Msg, Reply> = connection::wrap(stream);
+    let mut stream: MsgStream<Msg, Reply> = connection::wrap(stream);
     while let Ok(Some(msg)) = stream.try_next().await {
         debug!("president got request: {msg:?}");
 
-        let reply = match msg {
+        let final_reply = match msg {
             ClientReq(_) => Some(GoAway),
             #[cfg(test)]
-            Test(n) => test_req(n, &mut log).await,
+            Test(n) => test_req(n, &mut log, &mut stream).await,
         };
 
-        if let Some(reply) = reply {
+        if let Some(reply) = final_reply {
             if let Err(e) = stream.send(reply).await {
                 warn!("error replying to message: {e:?}");
                 return;

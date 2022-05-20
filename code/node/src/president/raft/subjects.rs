@@ -1,14 +1,15 @@
 use std::collections::HashSet;
 use std::net::SocketAddr;
+use std::sync::Arc;
 use std::time::Duration;
 
 use crate::president::Chart;
-use crate::{Id, Term};
+use crate::{Id, Term, Idx};
 use color_eyre::eyre::eyre;
 use futures::{SinkExt, TryStreamExt};
 use protocol::connection::{self, MsgStream};
 use tokio::net::TcpStream;
-use tokio::sync::{broadcast, mpsc};
+use tokio::sync::{broadcast, mpsc, Notify};
 use tokio::task::JoinSet;
 use tokio::time::{sleep, sleep_until, timeout_at, Instant};
 use tracing::{debug, instrument, trace, warn};
@@ -157,11 +158,12 @@ async fn pass_on_orders(
 pub async fn instruct(
     chart: &mut Chart,
     orders: broadcast::Sender<Order>,
+    notify_rx: mpsc::Receiver<(Idx, Arc<Notify>)>,
     state: State,
     term: Term,
 ) {
     let commit_idx = state.commit_index();
-    let mut commit_idx = Commited::new(commit_idx);
+    let mut commit_idx = Commited::new(commit_idx, notify_rx);
     let base_msg = RequestGen::new(&state, &commit_idx, term, chart);
 
     let mut subjects = JoinSet::new();
@@ -191,7 +193,7 @@ pub async fn instruct(
     loop {
         let recoverd = tokio::select! {
             res = notify.recv_nth_addr::<0>() => res,
-            _ = commit_idx.updates() => unreachable!(),
+            _ = commit_idx.maintain() => unreachable!(),
         };
 
         let (id, addr) = recoverd.unwrap();

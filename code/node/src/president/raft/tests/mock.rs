@@ -1,4 +1,5 @@
 use color_eyre::Result;
+use futures::StreamExt;
 use tokio::net::TcpListener;
 use tokio::net::TcpStream;
 use tokio::sync::broadcast;
@@ -13,6 +14,7 @@ use crate::president::subjects;
 use crate::president::LogWriter;
 use crate::president::Order;
 use crate::util;
+use crate::Idx;
 
 use super::util as test_util;
 use super::util::{wait_till_pres, CurrPres};
@@ -27,15 +29,16 @@ async fn heartbeat_while_pres(
     mut tx: mpsc::Sender<Order>,
     mut curr_pres: CurrPres,
 ) {
-    let (placeholder, _) = tokio::sync::broadcast::channel(16);
     loop {
         let term = wait_till_pres(&mut orders, &mut tx).await;
         let _drop_guard = curr_pres.set(chart.our_id());
 
+        let (fake_b, _) = tokio::sync::broadcast::channel(16);
+        let (_, fake_rx) = mpsc::channel(16);
         info!("id: {} became president, term: {term}", chart.our_id());
 
         tokio::select! {
-            () = subjects::instruct(&mut chart, placeholder.clone(), state.clone(), term) => unreachable!(),
+            () = subjects::instruct(&mut chart, fake_b, fake_rx, state.clone(), term) => unreachable!(),
             usurper = orders.recv() => match usurper {
                 Some(Order::ResignPres) => info!("president {} resigned", chart.our_id()),
                 Some(_other) => unreachable!("The president should never recieve
@@ -118,13 +121,15 @@ pub async fn president(
         info!("id: {} became president, term: {term}", chart.our_id());
 
         let (broadcast, _) = broadcast::channel(16);
+        let (tx, notify_rx) = mpsc::channel(16);
         let log_writer = LogWriter {
             state: state.clone(),
             broadcast: broadcast.clone(),
+            notify_tx: tx,
         };
 
         tokio::select! {
-            () = subjects::instruct(&mut chart, broadcast.clone(), state.clone(), term) => unreachable!(),
+            () = subjects::instruct(&mut chart, broadcast.clone(), notify_rx, state.clone(), term) => unreachable!(),
             () = messages::handle_incoming(&mut listener, log_writer) => unreachable!(),
             usurper = orders.recv() => match usurper {
                 Some(Order::ResignPres) => info!("president {} resigned", chart.our_id()),
@@ -194,20 +199,53 @@ impl TestAppendNode {
             debug_rx,
         ))
     }
+}
 
-    pub async fn order(&mut self, order: Order) {
-        use crate::president::messages::{Msg, Reply};
+use crate::president::messages::{Msg, Reply};
+use protocol::connection;
+pub struct IncompleteOrder {
+    stream: connection::MsgStream<Reply, Msg>,
+    pub idx: Idx,
+}
+
+impl IncompleteOrder {
+    pub async fn completed(mut self) -> Result<(), &'static str> {
+        let res = self
+            .stream
+            .next()
+            .await
+            .ok_or("Not committed, recieved None")?
+            .map_err(|_| "Not committed, connection failed")?;
+        match res {
+            Reply::Done => Ok(()),
+            _ => Err("Not committed, incorrect reply send"),
+        }
+    }
+}
+
+impl TestAppendNode {
+    pub async fn order(&mut self, order: Order) -> Result<IncompleteOrder, &'static str> {
         use futures::SinkExt;
-        use protocol::connection;
 
         let stream = TcpStream::connect(("127.0.0.1", self.req_port))
             .await
             .unwrap();
-        if let Order::Test(i) = order {
-            let mut stream: connection::MsgStream<Reply, Msg> = connection::wrap(stream);
-            stream.send(Msg::Test(i)).await.unwrap();
-        } else {
-            unreachable!("only Order::Test should be send during testing");
+        let i = match order {
+            Order::Test(i) => i,
+            _ => unreachable!("only Order::Test should be send during testing"),
+        };
+
+        let mut stream: connection::MsgStream<Reply, Msg> = connection::wrap(stream);
+        stream.send(Msg::Test(i)).await.unwrap();
+        let reply = stream
+            .next()
+            .await
+            .unwrap()
+            .map_err(|e| "Connection was reset, president probably resigned")?;
+
+        match reply {
+            Reply::Waiting(idx) => Ok(IncompleteOrder { idx, stream }),
+            _ => unreachable!("Got unexpected reply: {reply:?}"),
         }
     }
 }
