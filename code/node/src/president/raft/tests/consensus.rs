@@ -1,6 +1,5 @@
 use color_eyre::Result;
 use futures::stream;
-use futures::task::noop_waker_ref;
 use std::collections::HashMap;
 use stream::StreamExt;
 use tokio::time::timeout;
@@ -12,9 +11,29 @@ use super::util::CurrPres;
 use super::*;
 
 async fn order_cluster(curr_pres: &mut CurrPres, nodes: &mut HashMap<u64, TestAppendNode>, n: u8) {
-    // TODO: in case of break we need a different predident.order that uses the
-    // Logwriter::re_append
+    let mut incomplete_order = loop { // first try
+        let pres_id = match timeout(TIMEOUT, curr_pres.wait_for()).await {
+            Ok(pres) => pres,
+            Err(_) => panic!("timed out waiting for president to be elected"),
+        };
+        let president = nodes.get_mut(&pres_id).unwrap();
+        match president.order(Order::Test(n), None).await {
+            Ok(incomplete) => break incomplete,
+            Err(e) => {
+                warn!(e);
+                continue;
+            }
+        }
+    };
+
+    match incomplete_order.completed().await {
+        Ok(..) => return,
+        Err(e) => warn!(e),
+    }
+
+    // finish incomplete order
     loop {
+        warn!("order incomplete trying to finish");
         // president can fail before change is comitted therefore keep retrying
         let pres_id = match timeout(TIMEOUT, curr_pres.wait_for()).await {
             Ok(pres) => pres,
@@ -22,14 +41,14 @@ async fn order_cluster(curr_pres: &mut CurrPres, nodes: &mut HashMap<u64, TestAp
         };
 
         let president = nodes.get_mut(&pres_id).unwrap();
-        let incomplete_order = match president.order(Order::Test(n)).await {
+        let follow_up = incomplete_order.idx;
+        let mut incomplete_order = match president.order(Order::Test(n), Some(follow_up)).await {
             Ok(incomplete) => incomplete,
             Err(e) => {
                 warn!(e);
                 continue;
             }
         };
-        assert_eq!(incomplete_order.idx, n as u32);
 
         match incomplete_order.completed().await {
             Ok(..) => break,
@@ -83,8 +102,9 @@ async fn spread_order() -> Result<()> {
 
 #[tokio::test]
 async fn kill_president_mid_order() -> Result<()> {
-    util::setup_test_tracing("node=warn,node::president=trace,node::president::raft::subjects=trace,node::president::raft=info");
-    // util::setup_test_tracing("");
+    // util::setup_test_tracing("node=warn,node::president=trace,node::president::raft::subjects=trace,node::president::raft=info");
+    util::setup_test_tracing("node=trace,node::util=warn");
+    // util::setup_test_tracing("node=warn,node::president::raft::test::consensus=trace,node::president::raft::state::append=info");
     const N: u64 = 4;
 
     let (_guard, discovery_port) = util::free_udp_port()?;

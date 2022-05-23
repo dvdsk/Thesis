@@ -5,6 +5,7 @@ use tokio::sync::{mpsc, Notify};
 use tracing::debug;
 
 use crate::Idx;
+use crate::president::raft::State;
 
 struct Waiters {
     new: mpsc::Receiver<(Idx, Arc<Notify>)>,
@@ -44,20 +45,20 @@ struct Update {
 pub struct Commited<'a> {
     streams: stream::SelectAll<stream::BoxStream<'a, Update>>,
     highest: Vec<u32>, // index = stream_id
-    pub commit_idx: Arc<AtomicU32>,
     waiters: Waiters,
+    state: &'a State
 }
 
 impl<'a> Commited<'a> {
-    pub fn new(commit_idx: u32, notify_rx: mpsc::Receiver<(Idx, Arc<Notify>)>) -> Self {
+    pub fn new(notify_rx: mpsc::Receiver<(Idx, Arc<Notify>)>, state: &'a State) -> Self {
         Self {
             streams: stream::SelectAll::new(),
             highest: Vec::new(),
-            commit_idx: Arc::new(AtomicU32::new(commit_idx)),
             waiters: Waiters {
                 new: notify_rx,
                 list: Vec::new(),
             },
+            state,
         }
     }
 
@@ -102,12 +103,13 @@ impl<'a> Commited<'a> {
                     self.highest[update.stream_id] = update.appended;
                     let new = self.majority_appended();
 
-                    let old = self.commit_idx.load(Ordering::Relaxed);
+                    let old = self.state.commit_index();
                     if old < new {
                         self.waiters.notify(new);
                         debug!("commit index increased: {old} -> {new}");
                     }
-                    self.commit_idx.store(new, Ordering::Relaxed);
+                    self.state.set_commit_index(new);
+                    self.state.apply_comitted().await;
                 }
                 () = self.waiters.maintain() => (),
             }

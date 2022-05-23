@@ -28,7 +28,6 @@ async fn connect(address: &SocketAddr) -> MsgStream<Reply, Msg> {
     loop {
         match TcpStream::connect(address).await {
             Ok(stream) => {
-                // stream.set_nodelay(true).unwrap();
                 let stream = connection::wrap(stream);
                 break stream;
             }
@@ -51,9 +50,7 @@ async fn manage_subject(
     address: SocketAddr,
     mut broadcast: broadcast::Receiver<Order>,
     mut appended: mpsc::Sender<u32>,
-    mut next_idx: u32,
     mut req_gen: RequestGen,
-    state: State,
 ) {
     loop {
         let mut stream = connect(&address).await;
@@ -70,9 +67,7 @@ async fn manage_subject(
             &mut broadcast,
             &mut appended,
             &mut req_gen,
-            &mut next_idx,
             &mut stream,
-            &state,
         )
         .await;
     }
@@ -84,7 +79,6 @@ fn missing_logs(state: &State, next_idx: u32) -> bool {
 
 async fn recieve_reply(
     stream: &mut MsgStream<Reply, Msg>,
-    next_idx: &mut u32,
     req_gen: &mut RequestGen,
     appended: &mut mpsc::Sender<u32>,
 ) -> color_eyre::Result<()> {
@@ -98,13 +92,11 @@ async fn recieve_reply(
 
             Ok(Some(Reply::AppendEntries(append::Reply::HeartBeatOk))) => (),
             Ok(Some(Reply::AppendEntries(append::Reply::AppendOk))) => {
-                req_gen.base.prev_log_term = req_gen.base.term;
-                req_gen.base.prev_log_idx = *next_idx;
-                appended.send(*next_idx).await.unwrap();
-                *next_idx += 1;
+                appended.send(req_gen.next_idx).await.unwrap();
+                req_gen.increment_idx();
             }
 
-            Ok(Some(Reply::AppendEntries(append::Reply::InconsistentLog))) => *next_idx -= 1,
+            Ok(Some(Reply::AppendEntries(append::Reply::InconsistentLog))) => req_gen.decrement_idx(),
             Ok(Some(Reply::AppendEntries(append::Reply::ExPresident(new_term)))) => {
                 warn!("we are not the current president, new president has term: {new_term}")
             }
@@ -116,9 +108,7 @@ async fn replicate_orders(
     _broadcast: &mut broadcast::Receiver<Order>,
     appended: &mut mpsc::Sender<u32>,
     req_gen: &mut RequestGen,
-    next_idx: &mut u32,
     stream: &mut MsgStream<Reply, Msg>,
-    state: &State,
 ) {
     let mut next_hb = Instant::now() + HB_PERIOD;
     sleep_until(next_hb).await;
@@ -126,9 +116,9 @@ async fn replicate_orders(
     loop {
         next_hb = next_hb + HB_PERIOD;
 
-        let to_send = if missing_logs(state, *next_idx) {
-            debug!("sending missing logs at idx: {next_idx}");
-            req_gen.append(state, *next_idx)
+        let to_send = if req_gen.misses_logs() {
+            debug!("sending missing logs at idx: {}", req_gen.next_idx);
+            req_gen.append()
         } else {
             trace!("sending heartbeat");
             req_gen.heartbeat()
@@ -141,7 +131,7 @@ async fn replicate_orders(
         }
 
         // recieve for as long as possible,
-        match timeout_at(next_hb, recieve_reply(stream, next_idx, req_gen, appended)).await {
+        match timeout_at(next_hb, recieve_reply(stream, req_gen, appended)).await {
             Err(..) => (), // not a problem reply can arrive later
             Ok(Ok(..)) => unreachable!("we always keep recieving"),
             Ok(Err(e)) => {
@@ -162,24 +152,20 @@ pub async fn instruct(
     state: State,
     term: Term,
 ) {
-    let commit_idx = state.commit_index();
-    let mut commit_idx = Commited::new(commit_idx, notify_rx);
-    let base_msg = RequestGen::new(&state, &commit_idx, term, chart);
+    let mut commit_idx = Commited::new(notify_rx, &state);
+    let base_msg = RequestGen::new(state.clone(), term, chart);
 
     let mut subjects = JoinSet::new();
     let mut add_subject = |id, addr, commit_idx: &mut Commited| {
         let broadcast_rx = orders.subscribe();
         let append_updates = commit_idx.track_subject();
 
-        let next_idx = state.last_applied() + 1;
         let manage = manage_subject(
             id,
             addr,
             broadcast_rx,
             append_updates,
-            next_idx,
             base_msg.clone(),
-            state.clone(),
         );
         subjects.spawn(manage);
     };

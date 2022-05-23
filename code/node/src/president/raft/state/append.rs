@@ -50,16 +50,19 @@ impl State {
             }
         } // end lock scope
 
-        // safely runs concurrently; TODO proof
-        let last_applied = self.last_applied();
-        if self.commit_index() > last_applied {
-            let to_apply = self.increment_last_applied();
-            self.apply_log(to_apply).await;
-        }
+        self.apply_comitted().await;
 
         match nothing_to_append {
             true => Reply::HeartBeatOk,
             false => Reply::AppendOk,
+        }
+    }
+
+    pub async fn apply_comitted(&self) {
+        let last_applied = self.last_applied();
+        if self.commit_index() > last_applied {
+            let to_apply = self.increment_last_applied();
+            self.apply_log(to_apply).await;
         }
     }
 }
@@ -134,7 +137,7 @@ impl State {
 
 impl State {
     /// Sets a new higher commit index
-    fn set_commit_index(&self, new: Idx) {
+    pub(crate) fn set_commit_index(&self, new: Idx) {
         self.vars.commit_index.fetch_max(new, Ordering::SeqCst);
     }
 
@@ -142,7 +145,7 @@ impl State {
         self.vars.commit_index.load(Ordering::SeqCst)
     }
 
-    fn increment_last_applied(&self) -> Idx {
+    pub(super) fn increment_last_applied(&self) -> Idx {
         self.vars.last_applied.fetch_add(1, Ordering::SeqCst) + 1
     }
 

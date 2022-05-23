@@ -5,6 +5,7 @@ use tokio::net::TcpStream;
 use tokio::sync::broadcast;
 use tokio::sync::mpsc;
 use tokio::task::JoinSet;
+use tracing::debug;
 use tracing::info;
 
 use crate::president::messages;
@@ -123,21 +124,30 @@ pub async fn president(
         let (broadcast, _) = broadcast::channel(16);
         let (tx, notify_rx) = mpsc::channel(16);
         let log_writer = LogWriter {
+            term,
             state: state.clone(),
             broadcast: broadcast.clone(),
             notify_tx: tx,
         };
 
+        async fn keep_log_update(orders: &mut mpsc::Receiver<Order>) {
+            loop {
+                match orders.recv().await {
+                    Some(Order::ResignPres) => (),
+                    Some(other) => debug!("order added: {other:?}"),
+                    None => panic!(
+                        "channel was dropped,
+                           this means another thread panicked. Joining the panic"
+                    ),
+                }
+            }
+        }
+
         tokio::select! {
             () = subjects::instruct(&mut chart, broadcast.clone(), notify_rx, state.clone(), term) => unreachable!(),
             () = messages::handle_incoming(&mut listener, log_writer) => unreachable!(),
-            usurper = orders.recv() => match usurper {
-                Some(Order::ResignPres) => info!("president {} resigned", chart.our_id()),
-                Some(_other) => unreachable!("The president should never recieve
-                                             an order expect resign, recieved: {_other:?}"),
-                None => panic!("channel was dropped,
-                               this means another thread panicked. Joining the panic"),
-            },
+            () = keep_log_update(&mut orders) => (), // killed during test, will not come back
+                                                     // alive
         }
     }
 }
@@ -209,7 +219,7 @@ pub struct IncompleteOrder {
 }
 
 impl IncompleteOrder {
-    pub async fn completed(mut self) -> Result<(), &'static str> {
+    pub async fn completed(&mut self) -> Result<(), &'static str> {
         let res = self
             .stream
             .next()
@@ -224,7 +234,11 @@ impl IncompleteOrder {
 }
 
 impl TestAppendNode {
-    pub async fn order(&mut self, order: Order) -> Result<IncompleteOrder, &'static str> {
+    pub async fn order(
+        &mut self,
+        order: Order,
+        partial: Option<Idx>,
+    ) -> Result<IncompleteOrder, &'static str> {
         use futures::SinkExt;
 
         let stream = TcpStream::connect(("127.0.0.1", self.req_port))
@@ -236,7 +250,13 @@ impl TestAppendNode {
         };
 
         let mut stream: connection::MsgStream<Reply, Msg> = connection::wrap(stream);
-        stream.send(Msg::Test(i)).await.unwrap();
+        stream
+            .send(Msg::Test {
+                n: i,
+                follow_up: partial,
+            })
+            .await
+            .unwrap();
         let reply = stream
             .next()
             .await

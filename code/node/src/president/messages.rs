@@ -14,7 +14,10 @@ use super::LogWriter;
 pub enum Msg {
     ClientReq(protocol::Request),
     #[cfg(test)]
-    Test(u8),
+    Test {
+        n: u8,
+        follow_up: Option<Idx>,
+    },
     // LoadReport,
     // MinisterReq,
 }
@@ -29,10 +32,19 @@ pub enum Reply {
 }
 
 #[cfg(test)]
-async fn test_req(n: u8, log: &mut LogWriter, stream: &mut MsgStream<Msg, Reply>) -> Option<Reply> {
+async fn test_req(
+    n: u8,
+    partial: Option<Idx>,
+    log: &mut LogWriter,
+    stream: &mut MsgStream<Msg, Reply>,
+) -> Option<Reply> {
     use super::Order;
+
     debug!("appending Test({n}) to log");
-    let ticket = log.append(Order::Test(n)).await;
+    let ticket = match partial {
+        Some(idx) => log.re_append(Order::Test(n), idx).await,
+        None => log.append(Order::Test(n)).await,
+    };
     stream.send(Reply::Waiting(ticket.idx)).await.ok()?;
     ticket.notify.notified().await;
     Some(Reply::Done)
@@ -48,7 +60,7 @@ async fn handle_conn(stream: TcpStream, mut log: LogWriter) {
         let final_reply = match msg {
             ClientReq(_) => Some(GoAway),
             #[cfg(test)]
-            Test(n) => test_req(n, &mut log, &mut stream).await,
+            Test { n, follow_up: partial } => test_req(n, partial, &mut log, &mut stream).await,
         };
 
         if let Some(reply) = final_reply {
