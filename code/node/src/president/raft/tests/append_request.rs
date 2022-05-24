@@ -78,7 +78,7 @@ impl RequestGen {
             })
             .unwrap() as u32;
         let log_idx = vec_idx + 1;
-        self.leader_commit = dbg!(self.leader_commit.max(log_idx));
+        self.leader_commit = self.leader_commit.max(log_idx);
     }
 }
 
@@ -158,13 +158,13 @@ async fn some_incorrect_entries() {
     assert_eq!(order, Order::Test(21));
 }
 
-async fn append_correct(mut gen: RequestGen, state: State, barrier: Arc<Barrier>) -> RequestGen {
+async fn append_correct(mut gen: RequestGen, state: State, barrier: Arc<Barrier>, nums: u8) -> RequestGen {
     barrier.wait().await;
-    for n in 0..10 {
+    for n in 0..nums {
         let req = gen.correct(n);
 
         let reply = state.append_req(req).await;
-        assert_eq!(reply, Reply::AppendOk);
+        assert!(reply == Reply::AppendOk || reply == Reply::InconsistentLog);
     }
     gen
 }
@@ -175,11 +175,12 @@ async fn append_multiple_simultaneous() {
     util::setup_test_tracing("node=trace,node::util::db=warn");
     let (gen, state, mut order_rx) = setup();
 
-    let runs = 200;
+    let runs = 20;
+    let nums = 10;
     let barrier = Arc::new(Barrier::new(runs));
     let mut tasks = JoinSet::new();
     for _ in 0..runs {
-        tasks.spawn(append_correct(gen.clone(), state.clone(), barrier.clone()));
+        tasks.spawn(append_correct(gen.clone(), state.clone(), barrier.clone(), nums));
     }
 
     let mut new_gen = None;
@@ -188,12 +189,12 @@ async fn append_multiple_simultaneous() {
     }
     let mut gen = new_gen.expect("task set is empty, it should not be");
 
-    for n in 0..10 {
-        gen.commit(n);
+    for n in 0..nums {
+        gen.commit(n as u8);
         let reply = state.append_req(gen.heartbeat()).await;
         assert_eq!(reply, Reply::HeartBeatOk);
 
         let order = order_rx.recv().await.unwrap();
-        assert_eq!(order, Order::Test(n));
+        assert_eq!(order, Order::Test(n as u8));
     }
 }

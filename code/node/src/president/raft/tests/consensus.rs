@@ -103,8 +103,8 @@ async fn spread_order() -> Result<()> {
 #[tokio::test]
 async fn kill_president_mid_order() -> Result<()> {
     // util::setup_test_tracing("node=warn,node::president=trace,node::president::raft::subjects=trace,node::president::raft=info");
-    util::setup_test_tracing("node=trace,node::util=warn");
     // util::setup_test_tracing("node=warn,node::president::raft::test::consensus=trace,node::president::raft::state::append=info");
+    util::setup_test_tracing("node=trace,node::util=warn");
     const N: u64 = 4;
 
     let (_guard, discovery_port) = util::free_udp_port()?;

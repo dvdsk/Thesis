@@ -27,6 +27,7 @@ async fn test_loop() -> Result<()> {
 async fn test() -> Result<()> {
     // util::setup_test_tracing("node=trace");
     util::setup_test_tracing("node::president::raft=info,node::president::succession=trace");
+    color_eyre::install().unwrap();
     // util::setup_test_tracing("");
     const N: u64 = 4;
 
