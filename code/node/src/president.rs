@@ -59,10 +59,10 @@ impl LogWriter {
     }
 }
 
-async fn keep_log_update(orders: &mut mpsc::Receiver<Order>) {
+async fn recieve_own_order(orders: &mut mpsc::Receiver<Order>) {
     loop {
         match orders.recv().await {
-            Some(Order::ResignPres) => (),
+            Some(Order::ResignPres) => break,
             Some(other) => debug!("order added: {other:?}"),
             None => panic!(
                 "channel was dropped,
@@ -78,7 +78,9 @@ pub(super) async fn work(
     listener: &mut TcpListener,
     term: Term,
 ) -> crate::Role {
-    info!("started work as president: {}", chart.our_id());
+    let id = chart.our_id();
+
+    info!("started work as president: {id}");
     let Log { orders, state, .. } = log;
     let (broadcast, _) = broadcast::channel(16);
     let (tx, notify_rx) = mpsc::channel(16);
@@ -93,6 +95,9 @@ pub(super) async fn work(
     tokio::select! {
         () = subjects::instruct(chart, broadcast.clone(), notify_rx, state.clone(), term) => unreachable!(),
         () = messages::handle_incoming(listener, log_writer) => unreachable!(),
-        () = keep_log_update(orders) => crate::Role::Idle,
+        () = recieve_own_order(orders) => {
+            info!("President {id} resigned");
+            crate::Role::Idle
+        }
     }
 }
