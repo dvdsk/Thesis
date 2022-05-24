@@ -73,9 +73,6 @@ async fn manage_subject(
     }
 }
 
-fn missing_logs(state: &State, next_idx: u32) -> bool {
-    state.last_log_meta().idx >= next_idx
-}
 
 async fn recieve_reply(
     stream: &mut MsgStream<Reply, Msg>,
@@ -144,7 +141,7 @@ async fn replicate_orders(
 
 
 /// look for new subjects in the chart and register them
-#[instrument(skip_all, fields(id = state.id))]
+#[instrument(skip_all, fields(president_id = state.id))]
 pub async fn instruct(
     chart: &mut Chart,
     orders: broadcast::Sender<Order>,

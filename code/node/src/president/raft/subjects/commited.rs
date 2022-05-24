@@ -1,11 +1,10 @@
 use futures::stream;
-use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 use tokio::sync::{mpsc, Notify};
-use tracing::debug;
+use tracing::{debug, instrument};
 
-use crate::Idx;
 use crate::president::raft::State;
+use crate::Idx;
 
 struct Waiters {
     new: mpsc::Receiver<(Idx, Arc<Notify>)>,
@@ -13,9 +12,10 @@ struct Waiters {
 }
 
 impl Waiters {
+    #[instrument(skip_all)]
     async fn maintain(&mut self) {
         loop {
-            let (idx, notify) = self.new.recv().await.unwrap();
+            let (idx, notify) = self.new.recv().await.expect("channel has been closed");
             let sorted_insert_pos = self
                 .list
                 .binary_search_by_key(&idx, |(idx, _)| *idx)
@@ -46,7 +46,7 @@ pub struct Commited<'a> {
     streams: stream::SelectAll<stream::BoxStream<'a, Update>>,
     highest: Vec<u32>, // index = stream_id
     waiters: Waiters,
-    state: &'a State
+    state: &'a State,
 }
 
 impl<'a> Commited<'a> {
@@ -94,6 +94,7 @@ impl<'a> Commited<'a> {
             .unwrap()
     }
 
+    #[instrument(skip_all)]
     pub async fn maintain(&mut self) {
         use stream::StreamExt;
         loop {
