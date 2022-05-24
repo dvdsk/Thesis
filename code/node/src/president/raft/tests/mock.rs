@@ -34,12 +34,12 @@ async fn heartbeat_while_pres(
         let term = wait_till_pres(&mut orders, &mut tx).await;
         let _drop_guard = curr_pres.set(chart.our_id());
 
-        let (fake_b, _) = tokio::sync::broadcast::channel(16);
-        let (_, fake_rx) = mpsc::channel(16);
+        let (order_tx, _order_rx) = tokio::sync::broadcast::channel(16);
+        let (_notify_tx, notify_rx) = mpsc::channel(16);
         info!("id: {} became president, term: {term}", chart.our_id());
 
         tokio::select! {
-            () = subjects::instruct(&mut chart, fake_b, fake_rx, state.clone(), term) => unreachable!(),
+            () = subjects::instruct(&mut chart, order_tx, notify_rx, state.clone(), term) => unreachable!(),
             usurper = orders.recv() => match usurper {
                 Some(Order::ResignPres) => info!("president {} resigned", chart.our_id()),
                 Some(_other) => unreachable!("The president should never recieve
@@ -133,7 +133,7 @@ pub async fn president(
         async fn keep_log_update(orders: &mut mpsc::Receiver<Order>) {
             loop {
                 match orders.recv().await {
-                    Some(Order::ResignPres) => (),
+                    Some(Order::ResignPres) => break,
                     Some(other) => debug!("order added: {other:?}"),
                     None => panic!(
                         "channel was dropped,
@@ -146,8 +146,7 @@ pub async fn president(
         tokio::select! {
             () = subjects::instruct(&mut chart, broadcast.clone(), notify_rx, state.clone(), term) => unreachable!(),
             () = messages::handle_incoming(&mut listener, log_writer) => unreachable!(),
-            () = keep_log_update(&mut orders) => (), // killed during test, will not come back
-                                                     // alive
+            () = keep_log_update(&mut orders) => (), // resigned as president
         }
     }
 }
