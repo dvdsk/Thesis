@@ -1,6 +1,7 @@
 use tokio::net::TcpStream;
 use tokio_serde::formats::Bincode;
 use tokio_util::codec::{Framed, LengthDelimitedCodec};
+use tokio::io::{AsyncRead, AsyncWrite};
 
 type FrameType = Framed<TcpStream, LengthDelimitedCodec>;
 type Codec<I, O> = Bincode<I, O>;
