@@ -191,7 +191,7 @@ impl TestAppendNode {
         tasks.spawn(raft::handle_incoming(pres_listener, state.clone()));
         tasks.spawn(raft::succession(chart.clone(), cluster_size, state.clone()));
         tasks.spawn(president(
-            chart.clone(),
+            chart,
             state,
             order_rx,
             debug_tx,

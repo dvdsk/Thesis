@@ -165,6 +165,8 @@ impl State {
     }
 
     pub(super) async fn order(&self, ord: Order) {
+        dbg!("gonna send ord");
         self.tx.send(ord).await.unwrap();
+        dbg!("send ord");
     }
 }

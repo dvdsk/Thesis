@@ -17,14 +17,15 @@ pub async fn wait_till_pres(
     tx: &mut mpsc::Sender<Order>,
 ) -> Term {
     loop {
-        match orders.recv().await {
+        dbg!("loopyyy");
+        match dbg!(orders.recv().await) {
             Some(order) => {
-                tx.send(order.clone()).await.unwrap();
+                tx.send(dbg!(&order).clone()).await.unwrap();
                 if let Order::BecomePres { term } = order {
                     break term;
                 }
             }
-            None => panic!("testnode dropped mpsc"),
+            None => unreachable!("testnode dropped mpsc"),
         }
     }
 }

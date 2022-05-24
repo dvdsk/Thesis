@@ -108,7 +108,10 @@ async fn succession(chart: Chart, cluster_size: u16, state: State) {
             }
             res = get_elected => match res {
                 ElectionResult::Lost => continue,
-                ElectionResult::Won => state.order(Order::BecomePres{term: our_term}).await,
+                ElectionResult::Won => {
+                    dbg!("ordering victory");
+                    state.order(Order::BecomePres{term: our_term}).await
+                }
             }
         }
 

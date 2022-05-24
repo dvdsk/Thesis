@@ -96,6 +96,7 @@ async fn recieve_reply(
             Ok(Some(Reply::AppendEntries(append::Reply::InconsistentLog))) => req_gen.decrement_idx(),
             Ok(Some(Reply::AppendEntries(append::Reply::ExPresident(new_term)))) => {
                 warn!("we are not the current president, new president has term: {new_term}")
+                // TODO/OPT take president down from here....
             }
         }
     }

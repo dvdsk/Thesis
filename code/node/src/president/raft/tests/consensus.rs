@@ -100,7 +100,7 @@ async fn spread_order() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 16)]
 async fn kill_president_mid_order() -> Result<()> {
     // util::setup_test_tracing("node=warn,node::president=trace,node::president::raft::subjects=trace,node::president::raft=info");
     // util::setup_test_tracing("node=warn,node::president::raft::test::consensus=trace,node::president::raft::state::append=info");
