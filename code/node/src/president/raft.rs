@@ -96,10 +96,14 @@ async fn succession(chart: Chart, cluster_size: u16, state: State) {
         let get_elected = succession::run_for_office(&chart, cluster_size, campaign);
         let election_timeout = sleep(ELECTION_TIMEOUT);
         let term_increased = state.watch_term();
-        pin_mut!(term_increased);
+        // at this point we can safely use the 
+        // heartbeat Notify as the president_died is not using it
+        let term_matched = state.heartbeat().notified();
+        pin_mut!(term_matched);
+
         tokio::select! {
-            () = (&mut term_increased) => {
-                debug!("abort election, recieved higher term");
+            () = (&mut term_matched) => {
+                debug!("abort election, valid leader encounterd");
                 continue
             }
             () = election_timeout => {
@@ -109,13 +113,12 @@ async fn succession(chart: Chart, cluster_size: u16, state: State) {
             res = get_elected => match res {
                 ElectionResult::Lost => continue,
                 ElectionResult::Won => {
-                    dbg!("ordering victory");
                     state.order(Order::BecomePres{term: our_term}).await
                 }
             }
         }
 
-        term_increased.await; // if we get here we are the
+        term_increased.await;
         debug!("President saw higher term, resigning");
         state.order(Order::ResignPres).await
     }
