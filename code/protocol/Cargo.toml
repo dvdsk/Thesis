@@ -12,8 +12,6 @@ serde = { version = "1", features = ["derive"] }
 futures = "0.3"
 
 tokio = { git = "https://github.com/tokio-rs/tokio", branch = "eliza/joinset-builder", version = "1.0", features = ["macros", "net", "rt-multi-thread", "io-util"] }
-tokio-util = { git = "https://github.com/tokio-rs/tokio", version = "0.7", features = ["codec"] }
+tokio-util = { git = "https://github.com/tokio-rs/tokio", branch = "eliza/joinset-builder", version = "0.7", features = ["codec"] }
 
-# tokio = { version = "1.0", features = ["macros", "net", "rt-multi-thread", "io-util"] }
-# tokio-util = { version = "0.7", features = ["codec"] }
 tokio-serde = { version = "0.8", features = ["bincode"] }

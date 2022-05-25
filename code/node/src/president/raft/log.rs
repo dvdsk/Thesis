@@ -26,7 +26,9 @@ pub enum Order {
     /// used as placeholder for the first entry in the log
     None,
     Assigned(Role),
-    BecomePres { term: Term },
+    BecomePres {
+        term: Term,
+    },
     ResignPres,
     #[cfg(test)]
     Test(u8),
@@ -49,8 +51,12 @@ impl Log {
         Ok(Self {
             state: state.clone(),
             orders,
-            _handle_incoming: task::spawn(handle_incoming(listener, state.clone())),
-            _succession: task::spawn(succession(chart, cluster_size, state)),
+            _handle_incoming: task::Builder::new()
+                .name("log_handle_incoming")
+                .spawn(handle_incoming(listener, state.clone())),
+            _succession: task::Builder::new()
+                .name("succesion")
+                .spawn(succession(chart, cluster_size, state)),
         })
     }
 

@@ -80,16 +80,16 @@ impl TestVoteNode {
         let (signal, found_majority) = mpsc::channel(1);
 
         let mut tasks = JoinSet::new();
-        tasks.spawn(test_util::discoverd_majority(
+        tasks.build_task().name("discoverd_majority").spawn(test_util::discoverd_majority(
             signal,
             chart.clone(),
             cluster_size,
         ));
-        tasks.spawn(discovery::maintain(chart.clone()));
+        tasks.build_task().name("discovery").spawn(discovery::maintain(chart.clone()));
 
-        tasks.spawn(raft::handle_incoming(listener, state.clone()));
-        tasks.spawn(raft::succession(chart.clone(), cluster_size, state.clone()));
-        tasks.spawn(heartbeat_while_pres(
+        tasks.build_task().name("incoming").spawn(raft::handle_incoming(listener, state.clone()));
+        tasks.build_task().name("succession").spawn(raft::succession(chart.clone(), cluster_size, state.clone()));
+        tasks.build_task().name("president").spawn(heartbeat_while_pres(
             chart.clone(),
             state,
             order_rx,
@@ -166,6 +166,7 @@ impl TestAppendNode {
     ) -> Result<(Self, mpsc::Receiver<Order>)> {
         let (pres_listener, pres_port) = util::open_socket(None).await?;
         let (req_listener, req_port) = util::open_socket(None).await?;
+
         let chart = ChartBuilder::new()
             .with_id(id)
             .with_service_ports([pres_port, 0, req_port])
@@ -182,15 +183,28 @@ impl TestAppendNode {
         let (signal, found_majority) = mpsc::channel(1);
 
         let mut tasks = JoinSet::new();
-        tasks.spawn(test_util::discoverd_majority(
-            signal,
+        tasks
+            .build_task()
+            .name("discoverd_majority")
+            .spawn(test_util::discoverd_majority(
+                signal,
+                chart.clone(),
+                cluster_size,
+            ));
+        tasks
+            .build_task()
+            .name("discovery")
+            .spawn(discovery::maintain(chart.clone()));
+        tasks
+            .build_task()
+            .name("incoming")
+            .spawn(raft::handle_incoming(pres_listener, state.clone()));
+        tasks.build_task().name("succesion").spawn(raft::succession(
             chart.clone(),
             cluster_size,
+            state.clone(),
         ));
-        tasks.spawn(discovery::maintain(chart.clone()));
-        tasks.spawn(raft::handle_incoming(pres_listener, state.clone()));
-        tasks.spawn(raft::succession(chart.clone(), cluster_size, state.clone()));
-        tasks.spawn(president(
+        tasks.build_task().name("president").spawn(president(
             chart,
             state,
             order_rx,

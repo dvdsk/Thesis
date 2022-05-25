@@ -66,8 +66,10 @@ pub fn setup_integration_tracing(instance: String, endpoint: IpAddr, run: u16) {
         .with_line_number(true)
         .with_test_writer();
 
+    let console_layer = console_subscriber::spawn();
     let _ignore_err = tracing_subscriber::registry()
         .with(ErrorLayer::default())
+        .with(console_layer)
         .with(filter)
         .with(telemetry)
         .with(fmt)
@@ -80,7 +82,7 @@ pub fn setup_test_tracing(additional_filter: &str) {
     let filter = filter::EnvFilter::builder()
         .parse(dbg!(format!("{base_filter},{additional_filter}")))
         .unwrap();
-
+    console_subscriber::init();
     let fmt = tracing_subscriber::fmt::layer()
         .pretty()
         .with_line_number(true)

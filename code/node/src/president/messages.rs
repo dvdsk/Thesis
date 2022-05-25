@@ -77,6 +77,6 @@ pub async fn handle_incoming(listener: &mut TcpListener, log: LogWriter) {
     loop {
         let (conn, _addr) = listener.accept().await.unwrap();
         let handle = handle_conn(conn, log.clone());
-        request_handlers.spawn(handle);
+        request_handlers.build_task().name("president msg conn").spawn(handle);
     }
 }

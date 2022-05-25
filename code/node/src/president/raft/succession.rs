@@ -79,7 +79,7 @@ pub(super) async fn run_for_office(
         .map(|(_, addr)| addr)
         .map(|addr| request_vote(addr, campaign.clone(), chart.our_id()))
         .fold(JoinSet::new(), |mut set, fut| {
-            set.spawn(fut);
+            set.build_task().name("request_vote").spawn(fut);
             set
         });
 

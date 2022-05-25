@@ -86,6 +86,7 @@ use tokio::task;
 
 /// Spawn a new tokio Task and cancel it on drop.
 #[allow(dead_code)]
+#[track_caller]
 pub fn spawn<T>(future: T) -> Wrapper<T::Output>
 where
     T: Future + Send + 'static,

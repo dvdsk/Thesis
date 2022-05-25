@@ -72,7 +72,7 @@ async fn handle_incoming(listener: TcpListener, state: State) {
             continue;
         }
         let fut = handle_conn(res.unwrap(), state.clone());
-        tasks.spawn(fut);
+        tasks.build_task().name("handle connection").spawn(fut);
     }
 }
 

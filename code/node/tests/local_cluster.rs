@@ -39,7 +39,7 @@ async fn local_cluster() -> Result<()> {
         .map(node::run)
         .map(|fut| fut.instrument(tracing::info_span!("test")))
         .fold(JoinSet::new(), |mut set, fut| {
-            set.spawn(fut);
+            set.build_task().name("node").spawn(fut);
             set
         })
         .join_one()

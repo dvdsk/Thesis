@@ -158,7 +158,12 @@ async fn some_incorrect_entries() {
     assert_eq!(order, Order::Test(21));
 }
 
-async fn append_correct(mut gen: RequestGen, state: State, barrier: Arc<Barrier>, nums: u8) -> RequestGen {
+async fn append_correct(
+    mut gen: RequestGen,
+    state: State,
+    barrier: Arc<Barrier>,
+    nums: u8,
+) -> RequestGen {
     barrier.wait().await;
     for n in 0..nums {
         let req = gen.correct(n);
@@ -180,7 +185,15 @@ async fn append_multiple_simultaneous() {
     let barrier = Arc::new(Barrier::new(runs));
     let mut tasks = JoinSet::new();
     for _ in 0..runs {
-        tasks.spawn(append_correct(gen.clone(), state.clone(), barrier.clone(), nums));
+        tasks
+            .build_task()
+            .name("append_correct")
+            .spawn(append_correct(
+                gen.clone(),
+                state.clone(),
+                barrier.clone(),
+                nums,
+            ));
     }
 
     let mut new_gen = None;

@@ -79,7 +79,7 @@ pub async fn run(conf: Config) -> Result<()> {
         .with_service_ports([pres_port, node_port, req_port])
         .local_discovery(conf.local_instances)
         .finish()?;
-    tokio::spawn(discovery::maintain(chart.clone()));
+    tokio::task::Builder::new().name("maintain discovery").spawn(discovery::maintain(chart.clone()));
     discovery::found_majority(&chart, conf.cluster_size).await;
 
     info!("opening on disk db at: {:?}", conf.database);

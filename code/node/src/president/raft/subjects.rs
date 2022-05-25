@@ -165,7 +165,7 @@ pub async fn instruct(
             append_updates,
             base_msg.clone(),
         );
-        subjects.spawn(manage);
+        subjects.build_task().name("manage_subject").spawn(manage);
     };
 
     let mut notify = chart.notify();
