@@ -27,9 +27,10 @@ async fn test_loop() -> Result<()> {
 async fn test() -> Result<()> {
     // util::setup_test_tracing("node=trace");
     util::setup_test_tracing("node::president::raft=info,node::president::succession=trace");
-    color_eyre::install().unwrap();
+    // color_eyre::install().unwrap();
     // util::setup_test_tracing("");
-    const N: u64 = 4;
+    const N: u64 = 10; // must be even
+    assert_eq!(N % 2, 0);
 
     let (_guard, discovery_port) = util::free_udp_port()?;
     let mut curr_pres = CurrPres::default();
@@ -50,10 +51,12 @@ async fn test() -> Result<()> {
     }
 
     // kill another node
-    // N - 2 nodes left
-    let unlucky = *nodes.keys().next().unwrap();
-    mem::drop(nodes.remove(&unlucky).unwrap());
-    info!("############### KILLED RANDOM NODE, ID: {unlucky}");
+    // N / 2 nodes left // TODO adjust test for N nodes
+    for _ in 0..(N / 2 - 1) {
+        let unlucky = *nodes.keys().next().unwrap();
+        mem::drop(nodes.remove(&unlucky).unwrap());
+        info!("############### KILLED RANDOM NODE, ID: {unlucky}");
+    }
     sleep(TIMEOUT).await;
 
     // find president
@@ -63,7 +66,7 @@ async fn test() -> Result<()> {
     };
 
     // kill president (on drop tasks abort)
-    // N - 1 nodes left
+    // < N / 2 nodes left
     mem::drop(nodes.remove(&president).unwrap());
     info!("############### KILLED PRESIDENT, ID: {president}");
     sleep(TIMEOUT).await;

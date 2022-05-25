@@ -137,7 +137,6 @@ async fn kill_president_mid_order() -> Result<()> {
     let mut order_stream = stream::select_all(order_stream);
 
     for i in 1..u8::MAX {
-        dbg!(i);
         order_cluster(&mut curr_pres, &mut nodes, i).await;
 
         let mut n_recieved = 0;

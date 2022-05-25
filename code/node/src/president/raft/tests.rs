@@ -5,5 +5,5 @@ mod election;
 mod consensus;
 mod append_request;
 
-const TIMEOUT: Duration = Duration::from_millis(500);
+const TIMEOUT: Duration = Duration::from_millis(2000);
 

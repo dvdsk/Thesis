@@ -274,7 +274,7 @@ impl TestAppendNode {
             .next()
             .await
             .unwrap()
-            .map_err(|e| "Connection was reset, president probably resigned")?;
+            .map_err(|_| "Connection was reset, president probably resigned")?;
 
         match reply {
             Reply::Waiting(idx) => Ok(IncompleteOrder { idx, stream }),

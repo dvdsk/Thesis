@@ -92,6 +92,7 @@ impl State {
         state
     }
 
+    /// returns if term increased
     #[instrument(skip_all)]
     pub(crate) async fn watch_term(&self) {
         let mut sub = self.db.watch_prefix(db::ELECTION_DATA);
@@ -165,8 +166,6 @@ impl State {
     }
 
     pub(super) async fn order(&self, ord: Order) {
-        dbg!("gonna send ord");
         self.tx.send(ord).await.unwrap();
-        dbg!("send ord");
     }
 }
