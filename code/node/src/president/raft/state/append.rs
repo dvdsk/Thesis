@@ -12,7 +12,7 @@ impl State {
         let nothing_to_append;
         {
             // lock scope of election_office
-            let mut election_office = self.election_office.lock().unwrap();
+            let mut election_office = self.election_office.lock().await;
             let election_data = election_office.data();
             let mut term = election_data.term();
 

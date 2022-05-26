@@ -25,7 +25,7 @@ pub(super) async fn president_died(state: &State) {
         let hb_deadline = Instant::now() + HB_TIMEOUT + random_dur;
         match timeout_at(hb_deadline, heartbeat.notified()).await {
             Err(_) => {
-                let election_office = state.election_office.lock().unwrap();
+                let election_office = state.election_office.lock().await;
                 let data = election_office.data();
                 warn!("heartbeat timed out, term is now: {}", data.term());
                 return;

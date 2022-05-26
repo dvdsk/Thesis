@@ -46,7 +46,7 @@ async fn handle_conn((stream, _source): (TcpStream, SocketAddr), state: State) {
     while let Ok(msg) = stream.try_next().await {
         let reply = match msg {
             None => continue,
-            Some(RequestVote(req)) => state.vote_req(req).map(Reply::RequestVote),
+            Some(RequestVote(req)) => state.vote_req(req).await.map(Reply::RequestVote),
             Some(AppendEntries(req)) => {
                 let append_reply = state.append_req(req).await;
                 Some(Reply::AppendEntries(append_reply))
@@ -84,7 +84,7 @@ pub(super) const ELECTION_TIMEOUT: Duration = Duration::from_millis(200);
 async fn succession(chart: Chart, cluster_size: u16, state: State) {
     loop {
         succession::president_died(&state).await;
-        let our_term = state.increment_term();
+        let our_term = state.increment_term().await;
 
         let meta = state.last_log_meta();
         let campaign = vote::RequestVote {

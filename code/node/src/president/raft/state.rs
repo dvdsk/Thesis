@@ -1,5 +1,6 @@
 use std::sync::atomic::AtomicU32;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 use tokio::sync::{mpsc, Notify};
 use tracing::{debug, instrument};
@@ -109,8 +110,8 @@ impl State {
         unreachable!("db subscriber should never be dropped")
     }
 
-    pub(super) fn increment_term(&self) -> u32 {
-        self.election_office.lock().unwrap().increment_term()
+    pub(super) async fn increment_term(&self) -> u32 {
+        self.election_office.lock().await.increment_term()
     }
 
     pub fn heartbeat(&self) -> &Notify {
