@@ -21,10 +21,13 @@ pub use state::State;
 pub use state::LogEntry;
 
 use succession::ElectionResult;
-
 use self::state::{append, vote};
-
 use super::Chart;
+
+pub(super) const CONN_RETRY_PERIOD: Duration = Duration::from_millis(2000);
+pub(super) const HB_TIMEOUT: Duration = Duration::from_millis(2000);
+pub(super) const HB_PERIOD: Duration = Duration::from_millis(1500);
+pub(super) const ELECTION_TIMEOUT: Duration = Duration::from_millis(2000);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 enum Msg {
@@ -75,10 +78,6 @@ async fn handle_incoming(listener: TcpListener, state: State) {
         tasks.build_task().name("handle connection").spawn(fut);
     }
 }
-
-pub(super) const HB_TIMEOUT: Duration = Duration::from_millis(200);
-pub(super) const HB_PERIOD: Duration = Duration::from_millis(150);
-pub(super) const ELECTION_TIMEOUT: Duration = Duration::from_millis(200);
 
 #[instrument(skip_all, fields(id = chart.our_id()))]
 async fn succession(chart: Chart, cluster_size: u16, state: State) {

@@ -12,7 +12,7 @@ use super::*;
 
 async fn order_cluster(curr_pres: &mut CurrPres, nodes: &mut HashMap<u64, TestAppendNode>, n: u8) {
     let mut incomplete_order = loop { // first try
-        let pres_id = match timeout(TIMEOUT, curr_pres.wait_for()).await {
+        let pres_id = match timeout(TEST_TIMEOUT, curr_pres.wait_for()).await {
             Ok(pres) => pres,
             Err(_) => panic!("timed out waiting for president to be elected"),
         };
@@ -35,7 +35,7 @@ async fn order_cluster(curr_pres: &mut CurrPres, nodes: &mut HashMap<u64, TestAp
     loop {
         warn!("order incomplete trying to finish");
         // president can fail before change is comitted therefore keep retrying
-        let pres_id = match timeout(TIMEOUT, curr_pres.wait_for()).await {
+        let pres_id = match timeout(TEST_TIMEOUT, curr_pres.wait_for()).await {
             Ok(pres) => pres,
             Err(_) => panic!("timed out waiting for president to be elected"),
         };

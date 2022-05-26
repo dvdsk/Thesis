@@ -57,10 +57,10 @@ async fn test() -> Result<()> {
         mem::drop(nodes.remove(&unlucky).unwrap());
         info!("############### KILLED RANDOM NODE, ID: {unlucky}");
     }
-    sleep(TIMEOUT).await;
+    sleep(TEST_TIMEOUT).await;
 
     // find president
-    let president = match timeout(TIMEOUT, curr_pres.wait_for()).await {
+    let president = match timeout(TEST_TIMEOUT, curr_pres.wait_for()).await {
         Ok(pres) => pres,
         Err(_) => panic!("timed out waiting for president to be elected"),
     };
@@ -69,7 +69,7 @@ async fn test() -> Result<()> {
     // < N / 2 nodes left
     mem::drop(nodes.remove(&president).unwrap());
     info!("############### KILLED PRESIDENT, ID: {president}");
-    sleep(TIMEOUT).await;
+    sleep(TEST_TIMEOUT).await;
 
     // check there is no president
     // need to first kill random nodes till the cluster is smaller
@@ -91,8 +91,8 @@ async fn test() -> Result<()> {
     orders.push((id, queue));
     info!("############### ADDED BACK ONE NODE, ID: {id}");
 
-    sleep(TIMEOUT).await; // allows some time for the new node to come online
-    match timeout(TIMEOUT, curr_pres.wait_for()).await {
+    sleep(TEST_TIMEOUT).await; // allows some time for the new node to come online
+    match timeout(TEST_TIMEOUT, curr_pres.wait_for()).await {
         Err(_) => panic!("timed out waiting for president to be elected"),
         Ok(..) => (),
     };

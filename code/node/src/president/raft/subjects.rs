@@ -4,6 +4,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use crate::president::Chart;
+use crate::president::raft::CONN_RETRY_PERIOD;
 use crate::{Id, Term, Idx};
 use color_eyre::eyre::eyre;
 use futures::{SinkExt, TryStreamExt};
@@ -35,7 +36,7 @@ async fn connect(address: &SocketAddr) -> MsgStream<Reply, Msg> {
                 ErrorKind::ConnectionReset
                 | ErrorKind::ConnectionRefused
                 | ErrorKind::ConnectionAborted => {
-                    sleep(Duration::from_millis(20)).await;
+                    sleep(CONN_RETRY_PERIOD).await;
                     continue;
                 }
                 _ => panic!("unrecoverable error while connecting to subject: {e:?}"),
