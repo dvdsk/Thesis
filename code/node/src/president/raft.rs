@@ -41,7 +41,7 @@ enum Reply {
     AppendEntries(append::Reply),
 }
 
-#[instrument(skip(state, stream))]
+#[instrument(skip(state, stream), fields(id=state.id))]
 async fn handle_conn((stream, _source): (TcpStream, SocketAddr), state: State) {
     use Msg::*;
 
@@ -65,7 +65,7 @@ async fn handle_conn((stream, _source): (TcpStream, SocketAddr), state: State) {
     }
 }
 
-#[instrument(skip_all, fields(id))]
+#[instrument(skip_all, fields(id=state.id))]
 async fn handle_incoming(listener: TcpListener, state: State) {
     let mut tasks = JoinSet::new();
     loop {
