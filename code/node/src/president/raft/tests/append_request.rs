@@ -105,20 +105,20 @@ async fn only_correct_entries() {
     util::setup_test_tracing("node=trace,node::util::db=warn");
     let (mut gen, state, mut order_rx) = setup();
 
-    let reply = state.append_req(gen.correct(1)).await;
+    let reply = state.append_req(gen.correct(1)).await.unwrap();
     assert_eq!(reply, Reply::AppendOk);
 
     gen.commit(1);
-    let reply = state.append_req(gen.heartbeat()).await;
+    let reply = state.append_req(gen.heartbeat()).await.unwrap();
     assert_eq!(reply, Reply::HeartBeatOk);
     let order = order_rx.recv().await.unwrap();
     assert_eq!(order, Order::Test(1));
 
-    let reply = state.append_req(gen.correct(2)).await;
+    let reply = state.append_req(gen.correct(2)).await.unwrap();
     assert_eq!(reply, Reply::AppendOk);
 
     gen.commit(2);
-    let reply = state.append_req(gen.correct(3)).await;
+    let reply = state.append_req(gen.correct(3)).await.unwrap();
     assert_eq!(reply, Reply::AppendOk);
     let order = order_rx.recv().await.unwrap();
     assert_eq!(order, Order::Test(2));
@@ -130,28 +130,28 @@ async fn some_incorrect_entries() {
     let (mut gen, state, mut order_rx) = setup();
 
     for n in 10..13 {
-        let reply = state.append_req(gen.correct(n)).await;
+        let reply = state.append_req(gen.correct(n)).await.unwrap();
         assert_eq!(reply, Reply::AppendOk);
     }
     gen.commit(10);
-    let reply = state.append_req(gen.heartbeat()).await;
+    let reply = state.append_req(gen.heartbeat()).await.unwrap();
     assert_eq!(reply, Reply::HeartBeatOk);
 
     // simulate a newly elected leader
     let mut zombi_gen = gen;
     let mut gen = zombi_gen.new_leader(2);
-    let reply = state.append_req(gen.correct(21)).await;
+    let reply = state.append_req(gen.correct(21)).await.unwrap();
     assert_eq!(reply, Reply::AppendOk);
 
     let order = order_rx.recv().await.unwrap();
     assert_eq!(order, Order::Test(10));
 
     // zombi leader sends an order
-    let reply = state.append_req(zombi_gen.correct(14)).await;
+    let reply = state.append_req(zombi_gen.correct(14)).await.unwrap();
     assert_eq!(reply, Reply::ExPresident(gen.term));
 
     gen.commit(21);
-    let reply = state.append_req(gen.heartbeat()).await;
+    let reply = state.append_req(gen.heartbeat()).await.unwrap();
     assert_eq!(reply, Reply::HeartBeatOk);
 
     let order = order_rx.recv().await.unwrap();
@@ -168,7 +168,7 @@ async fn append_correct(
     for n in 0..nums {
         let req = gen.correct(n);
 
-        let reply = state.append_req(req).await;
+        let reply = state.append_req(req).await.unwrap();
         assert!(reply == Reply::AppendOk || reply == Reply::InconsistentLog);
     }
     gen
@@ -204,10 +204,42 @@ async fn append_multiple_simultaneous() {
 
     for n in 0..nums {
         gen.commit(n as u8);
-        let reply = state.append_req(gen.heartbeat()).await;
+        let reply = state.append_req(gen.heartbeat()).await.unwrap();
         assert_eq!(reply, Reply::HeartBeatOk);
 
         let order = order_rx.recv().await.unwrap();
         assert_eq!(order, Order::Test(n as u8));
     }
+}
+
+#[tokio::test]
+async fn mpsc_full() {
+    util::setup_test_tracing("node=trace,node::util::db=warn");
+    const ID: u64 = 2;
+    let mut gen = RequestGen::new(ID);
+
+    let db = sled::Config::new().temporary(true).open().unwrap();
+    let tree = db.open_tree("pres").unwrap();
+    let (order_tx, _order_rx) = mpsc::channel(16);
+    let state = State::new(order_tx, tree.clone(), ID);
+
+    // get some entries rdy to be committed
+    for n in 0..16 {
+        let req = gen.correct(n);
+
+        let reply = state.append_req(req).await.unwrap();
+        assert_eq!(reply, Reply::AppendOk);
+        gen.commit(n as u8); // "commit" entry
+    }
+    // ensure last entry is committed
+    let reply = state.append_req(gen.heartbeat()).await.unwrap();
+    assert_eq!(reply, Reply::HeartBeatOk);
+
+    // next entry will cause order_mpsc to be full
+    let req = gen.correct(16); // 17th entry
+    gen.commit(16); // "commit" entry
+    let reply = state.append_req(req).await.unwrap();
+    assert_eq!(reply, Reply::AppendOk);
+    let res = state.append_req(gen.heartbeat()).await;
+    assert!(res.is_err());
 }
