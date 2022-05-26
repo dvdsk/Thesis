@@ -93,11 +93,10 @@ async fn recieve_reply(
                 appended.send(req_gen.next_idx).await.unwrap();
                 req_gen.increment_idx();
             }
-
             Ok(Some(Reply::AppendEntries(append::Reply::InconsistentLog))) => req_gen.decrement_idx(),
             Ok(Some(Reply::AppendEntries(append::Reply::ExPresident(new_term)))) => {
                 warn!("we are not the current president, new president has term: {new_term}")
-                // TODO/OPT take president down from here....
+                // president will be taken down by the term watcher it is selected on
             }
         }
     }

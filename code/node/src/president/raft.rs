@@ -1,6 +1,7 @@
 use std::net::SocketAddr;
 use std::time::Duration;
 
+use color_eyre::{Result, eyre};
 use futures::{pin_mut, SinkExt, TryStreamExt};
 pub use log::{Log, Order};
 use protocol::connection;
@@ -17,12 +18,12 @@ mod succession;
 #[cfg(test)]
 mod tests;
 
-pub use state::State;
 pub use state::LogEntry;
+pub use state::State;
 
-use succession::ElectionResult;
 use self::state::{append, vote};
 use super::Chart;
+use succession::ElectionResult;
 
 pub(super) const CONN_RETRY_PERIOD: Duration = Duration::from_millis(2000);
 pub(super) const HB_TIMEOUT: Duration = Duration::from_millis(2000);
@@ -33,6 +34,7 @@ pub(super) const ELECTION_TIMEOUT: Duration = Duration::from_millis(2000);
 enum Msg {
     RequestVote(vote::RequestVote),
     AppendEntries(append::Request),
+    CriticalError(()),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -42,16 +44,21 @@ enum Reply {
 }
 
 #[instrument(skip(state, stream), fields(id=state.id))]
-async fn handle_conn((stream, _source): (TcpStream, SocketAddr), state: State) {
+async fn handle_conn((stream, _source): (TcpStream, SocketAddr), state: State) -> Result<()> {
     use Msg::*;
 
     let mut stream: connection::MsgStream<Msg, Reply> = connection::wrap(stream);
     while let Ok(msg) = stream.try_next().await {
         let reply = match msg {
             None => continue,
+            Some(CriticalError(err)) => {
+                return Err(eyre::eyre!(
+                    "critical error happend elsewhere in the cluster: {err:?}"
+                ))
+            }
             Some(RequestVote(req)) => state.vote_req(req).await.map(Reply::RequestVote),
             Some(AppendEntries(req)) => {
-                let append_reply = state.append_req(req).await;
+                let append_reply = state.append_req(req).await?;
                 Some(Reply::AppendEntries(append_reply))
             }
         };
@@ -59,17 +66,28 @@ async fn handle_conn((stream, _source): (TcpStream, SocketAddr), state: State) {
         if let Some(reply) = reply {
             if let Err(e) = stream.send(reply).await {
                 warn!("error replying to presidential request: {e:?}");
-                return;
+                return Ok(());
             }
         }
     }
+    Ok(())
 }
 
 #[instrument(skip_all, fields(id=state.id))]
 async fn handle_incoming(listener: TcpListener, state: State) {
     let mut tasks = JoinSet::new();
     loop {
-        let res = listener.accept().await;
+        // make sure to panic this task if any error
+        // occurs in the handlers
+        let res = tokio::select! {
+            res = listener.accept() => res,
+            res = tasks.join_one() => match res {
+                Err(err) => panic!("{err:?}"),
+                Ok(Some(Err(err))) => panic!("{err:?}"),
+                Ok(..) => continue,
+            }
+        };
+
         if let Err(e) = res {
             warn!("error accepting presidential connection: {e}");
             continue;
@@ -95,7 +113,7 @@ async fn succession(chart: Chart, cluster_size: u16, state: State) {
         let get_elected = succession::run_for_office(&chart, cluster_size, campaign);
         let election_timeout = sleep(ELECTION_TIMEOUT);
         let term_increased = state.watch_term();
-        // at this point we can safely use the 
+        // at this point we can safely use the
         // heartbeat Notify as the president_died is not using it
         let term_matched = state.heartbeat().notified();
         pin_mut!(term_matched);

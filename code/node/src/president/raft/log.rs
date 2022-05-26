@@ -45,7 +45,7 @@ impl Log {
         let db = db
             .open_tree("president log")
             .wrap_err("Could not open db tree: \"president log\"")?;
-        let (tx, orders) = mpsc::channel(100);
+        let (tx, orders) = mpsc::channel(8);
         let state = State::new(tx, db, chart.our_id());
 
         Ok(Self {

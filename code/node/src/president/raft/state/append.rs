@@ -1,6 +1,9 @@
 use serde::{Deserialize, Serialize};
+use tokio::sync::mpsc::error::TrySendError;
 use std::sync::atomic::Ordering;
 use tracing::{instrument, warn};
+use color_eyre::Result;
+use color_eyre::eyre::eyre;
 
 use super::{db, LogIdx, Order, State};
 use crate::util::TypedSled;
@@ -8,7 +11,7 @@ use crate::{Id, Term, Idx};
 
 impl State {
     #[instrument(skip(self), fields(id = self.id), ret)]
-    pub async fn append_req(&self, req: Request) -> Reply {
+    pub async fn append_req(&self, req: Request) -> Result<Reply> {
         let nothing_to_append;
         {
             // lock scope of election_office
@@ -22,16 +25,16 @@ impl State {
             }
 
             if req.term < *term {
-                return Reply::ExPresident(*term);
+                return Ok(Reply::ExPresident(*term));
             }
 
             // at this point the request can only be from
             // (as seen from this node) a valid leader
             self.vars.heartbeat.notify_one();
 
-            // From here on we need to be locked , are locked by the election_office
+            // From here on we need to be locked, are locked by the election_office
             if !self.log_contains(req.prev_log_idx, req.prev_log_term) {
-                return Reply::InconsistentLog;
+                return Ok(Reply::InconsistentLog);
             }
 
             let n_entries = req.entries.len() as u32;
@@ -50,20 +53,21 @@ impl State {
             }
         } // end lock scope
 
-        self.apply_comitted().await;
+        self.apply_comitted()?;
 
-        match nothing_to_append {
+        Ok(match nothing_to_append {
             true => Reply::HeartBeatOk,
             false => Reply::AppendOk,
-        }
+        })
     }
 
-    pub async fn apply_comitted(&self) {
+    pub fn apply_comitted(&self) -> Result<()> {
         let last_applied = self.last_applied();
         if self.commit_index() > last_applied {
             let to_apply = self.increment_last_applied();
-            self.apply_log(to_apply).await;
+            self.apply_log(to_apply)?;
         }
+        Ok(())
     }
 }
 
@@ -126,12 +130,18 @@ impl State {
     }
 
     #[instrument(skip(self))]
-    pub(super) async fn apply_log(&self, idx: Idx) {
+    pub(super) fn apply_log(&self, idx: Idx) -> Result<()> {
         let LogEntry { order, .. } = self
             .db
             .get_val(db::log_key(idx))
             .expect("there should be an item in the log");
-        self.tx.send(order).await.unwrap(); // TODO add backpressure?
+        match self.tx.try_send(order) {
+            Ok(..) => Ok(()),
+            Err(TrySendError::Full(..)) => {
+                Err(eyre!("Orders are not consumed (fast) enough"))
+            }
+            Err(TrySendError::Closed(..)) => unreachable!("Log closed the recieving mpsc"),
+        }
     }
 }
 

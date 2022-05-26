@@ -110,7 +110,7 @@ impl<'a> Commited<'a> {
                         debug!("commit index increased: {old} -> {new}");
                     }
                     self.state.set_commit_index(new);
-                    self.state.apply_comitted().await;
+                    self.state.apply_comitted();
                 }
                 () = self.waiters.maintain() => (),
             }
