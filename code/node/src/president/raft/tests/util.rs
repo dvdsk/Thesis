@@ -1,5 +1,6 @@
 use std::sync::{Arc, Mutex};
 use tokio::sync::{mpsc, Notify};
+use tracing::trace;
 
 use crate::Term;
 
@@ -12,14 +13,16 @@ pub async fn discoverd_majority(signal: mpsc::Sender<()>, chart: Chart, cluster_
     signal.send(()).await.unwrap();
 }
 
+#[instrument(skip_all)]
 pub async fn wait_till_pres(
     orders: &mut mpsc::Receiver<Order>,
-    tx: &mut mpsc::Sender<Order>,
+    debug_tx: &mut mpsc::Sender<Order>,
 ) -> Term {
     loop {
         match orders.recv().await {
             Some(order) => {
-                tx.send(order.clone()).await.unwrap();
+                trace!("got applied order: {order:?}");
+                debug_tx.try_send(order.clone()).unwrap();
                 if let Order::BecomePres { term } = order {
                     break term;
                 }

@@ -135,6 +135,7 @@ impl State {
             .db
             .get_val(db::log_key(idx))
             .expect("there should be an item in the log");
+        tracing::trace!("applied log: {idx}");
         match self.tx.try_send(order) {
             Ok(..) => Ok(()),
             Err(TrySendError::Full(..)) => {

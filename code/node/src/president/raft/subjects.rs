@@ -90,7 +90,7 @@ async fn recieve_reply(
 
             Ok(Some(Reply::AppendEntries(append::Reply::HeartBeatOk))) => (),
             Ok(Some(Reply::AppendEntries(append::Reply::AppendOk))) => {
-                appended.send(req_gen.next_idx).await.unwrap();
+                appended.try_send(req_gen.next_idx).unwrap();
                 req_gen.increment_idx();
             }
             Ok(Some(Reply::AppendEntries(append::Reply::InconsistentLog))) => req_gen.decrement_idx(),

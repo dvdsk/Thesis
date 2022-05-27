@@ -1,7 +1,7 @@
 use std::net::SocketAddr;
 use std::time::Duration;
 
-use color_eyre::{Result, eyre};
+use color_eyre::{eyre, Result};
 use futures::{pin_mut, SinkExt, TryStreamExt};
 pub use log::{Log, Order};
 use protocol::connection;
@@ -25,10 +25,11 @@ use self::state::{append, vote};
 use super::Chart;
 use succession::ElectionResult;
 
-pub(super) const CONN_RETRY_PERIOD: Duration = Duration::from_millis(2000);
-pub(super) const HB_TIMEOUT: Duration = Duration::from_millis(2000);
-pub(super) const HB_PERIOD: Duration = Duration::from_millis(1500);
-pub(super) const ELECTION_TIMEOUT: Duration = Duration::from_millis(2000);
+const MUL: u64 = 5;
+pub(super) const CONN_RETRY_PERIOD: Duration = Duration::from_millis(20 * MUL);
+pub(super) const HB_TIMEOUT: Duration = Duration::from_millis(20 * MUL);
+pub(super) const HB_PERIOD: Duration = Duration::from_millis(15 * MUL);
+pub(super) const ELECTION_TIMEOUT: Duration = Duration::from_millis(20 * MUL);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 enum Msg {

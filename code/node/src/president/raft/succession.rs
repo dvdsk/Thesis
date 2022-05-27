@@ -46,7 +46,7 @@ pub(super) async fn president_died(state: &State) {
 async fn request_vote(
     addr: SocketAddr,
     vote_req: vote::RequestVote,
-    id: instance_chart::Id,
+    voter_id: instance_chart::Id,
 ) -> Result<()> {
     let stream = TcpStream::connect(addr).await?;
     let mut stream: connection::MsgStream<Reply, Msg> = connection::wrap(stream);
@@ -76,8 +76,7 @@ pub(super) async fn run_for_office(
     let mut requests: JoinSet<_> = chart
         .nth_addr_vec::<0>()
         .into_iter()
-        .map(|(_, addr)| addr)
-        .map(|addr| request_vote(addr, campaign.clone(), chart.our_id()))
+        .map(|(voter_id, addr)| request_vote(addr, campaign.clone(), voter_id))
         .fold(JoinSet::new(), |mut set, fut| {
             set.build_task().name("request_vote").spawn(fut);
             set

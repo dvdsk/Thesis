@@ -7,6 +7,7 @@ use tokio::sync::mpsc;
 use tokio::task::JoinSet;
 use tracing::debug;
 use tracing::info;
+use tracing::instrument;
 
 use crate::president::messages;
 use crate::president::raft;
@@ -107,6 +108,7 @@ impl TestVoteNode {
     }
 }
 
+#[instrument(skip_all, fields(id = state.id))]
 pub async fn president(
     mut chart: Chart,
     state: State,
@@ -158,6 +160,7 @@ pub struct TestAppendNode {
 }
 
 impl TestAppendNode {
+    /// the returned mpsc::tx must be recv-ed from actively
     pub async fn new(
         id: u64,
         cluster_size: u16,
