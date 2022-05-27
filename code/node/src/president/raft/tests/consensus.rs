@@ -11,7 +11,8 @@ use super::util::CurrPres;
 use super::*;
 
 async fn order_cluster(curr_pres: &mut CurrPres, nodes: &mut HashMap<u64, TestAppendNode>, n: u8) {
-    let mut incomplete_order = loop { // first try
+    let mut incomplete_order = loop {
+        // first try
         let pres_id = match timeout(TEST_TIMEOUT, curr_pres.wait_for()).await {
             Ok(pres) => pres,
             Err(_) => panic!("timed out waiting for president to be elected"),
@@ -104,7 +105,7 @@ async fn spread_order() -> Result<()> {
 async fn kill_president_mid_order() -> Result<()> {
     // util::setup_test_tracing("node=warn,node::president=trace,node::president::raft::subjects=trace,node::president::raft=info");
     // util::setup_test_tracing("node=warn,node::president::raft::test::consensus=trace,node::president::raft::state::append=info");
-    util::setup_test_tracing("node=trace,node::util=warn");
+    // util::setup_test_tracing("node=trace,node::util=warn");
     const N: u64 = 4;
 
     let (_guard, discovery_port) = util::free_udp_port()?;
@@ -136,22 +137,24 @@ async fn kill_president_mid_order() -> Result<()> {
         .map(Box::pin);
     let mut order_stream = stream::select_all(order_stream);
 
-    for i in 1..u8::MAX {
+    for i in 1..=u8::MAX {
         order_cluster(&mut curr_pres, &mut nodes, i).await;
 
-        let mut n_recieved = 0;
-        for order in order_stream.next().await {
+        let mut n_up_to_date = 0;
+        loop {
+            let order = order_stream.next().await.unwrap();
             match order {
                 Order::ResignPres | Order::BecomePres { .. } => continue,
                 Order::Test(j) if j < i => continue,
-                Order::Test(j) if j == i => n_recieved += 1,
+                Order::Test(j) if j == i => n_up_to_date += 1,
                 _ => panic!("recieved unhandled order: {order:?}"),
             }
-            let majority = util::div_ceil(N as usize, 2);
-            if n_recieved >= majority {
+            if n_up_to_date == N - 1 {
+                dbg!();
                 break;
             }
         }
     }
+    std::mem::drop(nodes); // cant return without this for some reason
     Ok(())
 }
