@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::task::JoinSet;
 use tokio::time::sleep;
-use tracing::{debug, instrument, warn};
+use tracing::{debug, instrument, trace, warn};
 
 mod log;
 mod state;
@@ -50,7 +50,7 @@ async fn handle_conn((stream, _source): (TcpStream, SocketAddr), state: State) -
 
     let mut stream: connection::MsgStream<Msg, Reply> = connection::wrap(stream);
     while let Ok(msg) = stream.try_next().await {
-        let reply = match msg {
+        let reply = match msg.clone() {
             None => continue,
             Some(CriticalError(err)) => {
                 return Err(eyre::eyre!(
@@ -66,7 +66,12 @@ async fn handle_conn((stream, _source): (TcpStream, SocketAddr), state: State) -
 
         if let Some(reply) = reply {
             if let Err(e) = stream.send(reply).await {
-                warn!("error replying to presidential request: {e:?}");
+                // usually this is not a big problem, a president could have
+                // resigned, closing the connection
+                warn!(
+                    "error sending reply to presidents request: \n{req:?}, \n{e:?}",
+                    req = msg.unwrap()
+                );
                 return Ok(());
             }
         }

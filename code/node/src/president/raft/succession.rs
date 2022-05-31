@@ -42,7 +42,7 @@ pub(super) async fn president_died(state: &State) {
     }
 }
 
-#[instrument(level = "debug", ret)]
+#[instrument(level = "trace", ret)]
 async fn request_vote(
     addr: SocketAddr,
     vote_req: vote::RequestVote,
@@ -66,8 +66,8 @@ pub enum ElectionResult {
 
 /// only returns when this node has been elected
 /// election timeout is implemented by selecting on this
-/// with a timeout
-#[instrument(skip_all, fields(id = chart.our_id()))]
+/// with a timeout. This returns as soon as a majority is reached
+#[instrument(skip_all, fields(id = chart.our_id(), term = campaign.term))]
 pub(super) async fn run_for_office(
     chart: &Chart,
     cluster_size: u16,

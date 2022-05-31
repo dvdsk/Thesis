@@ -101,7 +101,7 @@ impl State {
             match event {
                 sled::Event::Insert { key, value } if key == db::ELECTION_DATA => {
                     let data: vote::ElectionData = bincode::deserialize(&value).unwrap();
-                    debug!("term increased, new term is: {}", data.term());
+                    debug!("saw term increase, it is now: {}", data.term());
                     return;
                 }
                 _ => panic!("term key should never be removed"),
