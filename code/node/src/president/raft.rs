@@ -83,14 +83,21 @@ async fn handle_conn((stream, _source): (TcpStream, SocketAddr), state: State) -
 async fn handle_incoming(listener: TcpListener, state: State) {
     let mut tasks = JoinSet::new();
     loop {
-        // make sure to panic this task if any error
-        // occurs in the handlers
-        let res = tokio::select! {
-            res = listener.accept() => res,
-            res = tasks.join_one() => match res {
-                Err(err) => panic!("{err:?}"),
-                Ok(Some(Err(err))) => panic!("{err:?}"),
-                Ok(..) => continue,
+        let res = if tasks.is_empty() {
+            listener.accept().await
+        } else {
+            // make sure to panic this task if any error
+            // occurs in the handlers
+            tokio::select! {
+                res = listener.accept() => res,
+                res = tasks.join_one() => match res {
+                    Err(err) => panic!("{err:?}"),
+                    Ok(Some(Err(err))) => panic!("{err:?}"),
+                    Ok(..) => {
+                        trace!("task joined");
+                        continue
+                    }
+                }
             }
         };
 
