@@ -5,6 +5,7 @@ use color_eyre::{eyre, Result};
 use futures::{pin_mut, SinkExt, TryStreamExt};
 pub use log::{Log, Order};
 use protocol::connection;
+use rand::{Rng, SeedableRng};
 use serde::{Deserialize, Serialize};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::task::JoinSet;
@@ -25,11 +26,16 @@ use self::state::{append, vote};
 use super::Chart;
 use succession::ElectionResult;
 
-const MUL: u64 = 5;
+const MUL: u64 = 5; // goverens duration of most timings, five seems to be the minimum
 pub(super) const CONN_RETRY_PERIOD: Duration = Duration::from_millis(20 * MUL);
+/// heartbeat timeout
 pub(super) const HB_TIMEOUT: Duration = Duration::from_millis(20 * MUL);
 pub(super) const HB_PERIOD: Duration = Duration::from_millis(15 * MUL);
-pub(super) const ELECTION_TIMEOUT: Duration = Duration::from_millis(20 * MUL);
+
+pub(super) const ELECTION_TIMEOUT: Duration = Duration::from_millis(40 * MUL);
+/// elections are only started after after 0 .. SETUP_TIME
+pub(super) const MIN_ELECTION_SETUP: Duration = Duration::from_millis(40 * MUL);
+pub(super) const MAX_ELECTION_SETUP: Duration = Duration::from_secs(8);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 enum Msg {
@@ -110,43 +116,74 @@ async fn handle_incoming(listener: TcpListener, state: State) {
     }
 }
 
+// TODO increase election setup time for each consecutive failed election
 #[instrument(skip_all, fields(id = chart.our_id()))]
 async fn succession(chart: Chart, cluster_size: u16, state: State) {
-    loop {
+    let mut rng = rand::rngs::StdRng::from_entropy();
+    'outer: loop {
         succession::president_died(&state).await;
-        let our_term = state.increment_term().await;
+        let mut setup_time = Duration::from_secs(0)..MIN_ELECTION_SETUP;
 
-        let meta = state.last_log_meta();
-        let campaign = vote::RequestVote {
-            term: our_term,
-            candidate_id: chart.our_id(),
-            last_log_term: meta.term,
-            last_log_idx: meta.idx,
-        };
-        let get_elected = succession::run_for_office(&chart, cluster_size, campaign);
-        let election_timeout = sleep(ELECTION_TIMEOUT);
-        let term_increased = state.watch_term();
-        // at this point we can safely use the
-        // heartbeat Notify as the president_died is not using it
-        let term_matched = state.heartbeat().notified();
-        pin_mut!(term_matched);
+        let term_increased = loop {
+            let our_term = state.increment_term().await;
+            // watch out for a valid leader indicated by a valid heartbeat
+            // we can safely use the heartbeat Notify as the `president_died` is not using it
+            let valid_leader_found = state.heartbeat().notified();
+            pin_mut!(valid_leader_found);
 
-        tokio::select! {
-            () = (&mut term_matched) => {
-                debug!("abort election, valid leader encounterd");
-                continue
-            }
-            () = election_timeout => {
-                debug!("abort election, timeout reached");
-                continue
-            }
-            res = get_elected => match res {
-                ElectionResult::Lost => continue,
-                ElectionResult::Won => {
-                    state.order(Order::BecomePres{term: our_term}).await
+            // wait a bit to see if another leader pops up
+            setup_time.end = Duration::min(setup_time.end.mul_f32(1.5), MAX_ELECTION_SETUP);
+            let setup_time = rng.gen_range(setup_time.clone());
+            tokio::select! {
+                () = sleep(setup_time) => (),
+                () = (&mut valid_leader_found) => {
+                    debug!("do not start election, valid leader encounterd, our_term: {our_term}");
+                    continue 'outer
                 }
             }
-        }
+
+            {
+                let election_office = state.election_office.lock().await;
+                let ok = election_office.set_voted_for(our_term, chart.our_id());
+                if !ok {
+                    sleep(ELECTION_TIMEOUT).await;
+                    continue 'outer;
+                }
+            }
+
+            let meta = state.last_log_meta();
+            let campaign = vote::RequestVote {
+                term: our_term,
+                candidate_id: chart.our_id(),
+                last_log_term: meta.term,
+                last_log_idx: meta.idx,
+            };
+
+            let get_elected = succession::run_for_office(&chart, cluster_size, campaign);
+            let election_timeout = sleep(ELECTION_TIMEOUT);
+
+            // if we are elected president below we want to resign as soon
+            // as the term is increased
+            let term_increased = state.watch_term();
+
+            tokio::select! {
+                () = (&mut valid_leader_found) => {
+                    debug!("abort election, valid leader encounterd");
+                    continue 'outer
+                }
+                () = election_timeout => {
+                    debug!("abort election, timeout reached");
+                    continue
+                }
+                res = get_elected => match res {
+                    ElectionResult::Lost => continue,
+                    ElectionResult::Won => {
+                        state.order(Order::BecomePres{term: our_term}).await;
+                        break term_increased;
+                    }
+                }
+            }
+        };
 
         term_increased.await;
         debug!("President saw higher term, resigning");

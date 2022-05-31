@@ -117,9 +117,9 @@ impl ElectionOffice {
         self.db.set_val(db::ELECTION_DATA, data);
     }
 
-    /// sets voted_for if the term did not change and it was not
+    /// sets voted_for if the term did not change and voted for was not set
     #[instrument(ret, skip(self), level = "trace")]
-    fn set_voted_for(&self, term: u32, candidate_id: u64) -> bool {
+    pub fn set_voted_for(&self, term: u32, candidate_id: u64) -> bool {
         let old = ElectionData {
             term,
             voted_for: None,

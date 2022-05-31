@@ -2,7 +2,6 @@ use color_eyre::Result;
 use futures::{SinkExt, TryStreamExt};
 use protocol::connection;
 use std::net::SocketAddr;
-use std::time::Duration;
 use tokio::net::TcpStream;
 use tokio::task::JoinSet;
 use tokio::time::{timeout_at, Instant};
@@ -14,20 +13,17 @@ use super::{Chart, State};
 use super::state::vote;
 use super::{Msg, Reply};
 
-#[instrument(skip(state))]
+#[instrument(skip_all)]
 pub(super) async fn president_died(state: &State) {
-    use rand::{Rng, SeedableRng};
-    let mut rng = rand::rngs::SmallRng::from_entropy();
     let heartbeat = state.heartbeat();
 
     loop {
-        let random_dur = rng.gen_range(Duration::from_secs(0)..HB_TIMEOUT);
-        let hb_deadline = Instant::now() + HB_TIMEOUT + random_dur;
+        let hb_deadline = Instant::now() + HB_TIMEOUT;
         match timeout_at(hb_deadline, heartbeat.notified()).await {
             Err(_) => {
                 let election_office = state.election_office.lock().await;
                 let data = election_office.data();
-                warn!("heartbeat timed out, term is now: {}", data.term());
+                warn!("heartbeat for term {} timed out", data.term());
                 return;
             }
             Ok(_) => {
@@ -75,7 +71,7 @@ pub(super) async fn run_for_office(
 ) -> ElectionResult {
     let mut requests: JoinSet<_> = chart
         .nth_addr_vec::<0>()
-        .into_iter()
+        .into_iter() 
         .map(|(voter_id, addr)| request_vote(addr, campaign.clone(), voter_id))
         .fold(JoinSet::new(), |mut set, fut| {
             set.build_task().name("request_vote").spawn(fut);
