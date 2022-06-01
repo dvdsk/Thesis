@@ -59,16 +59,10 @@ async fn test() -> Result<()> {
     }
     sleep(TEST_TIMEOUT).await;
 
-    // find president
-    let president = match timeout(TEST_TIMEOUT, curr_pres.wait_for()).await {
-        Ok(pres) => pres,
-        Err(_) => panic!("timed out waiting for president to be elected"),
-    };
-
     // kill president (on drop tasks abort)
     // < N / 2 nodes left
-    mem::drop(nodes.remove(&president).unwrap());
-    info!("############### KILLED PRESIDENT, ID: {president}");
+    let id = curr_pres.kill(&mut nodes).await;
+    info!("############### KILLED PRESIDENT, ID: {id}");
     sleep(TEST_TIMEOUT).await;
 
     // check there is no president

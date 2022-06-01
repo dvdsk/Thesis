@@ -1,12 +1,13 @@
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use tokio::sync::{mpsc, Notify};
 use tracing::trace;
 
-use crate::Term;
+use crate::{Term, Id};
 
 use super::*;
 use crate::president::Chart;
-use instance_chart::{discovery, Id};
+use instance_chart::discovery;
 
 pub async fn discoverd_majority(signal: mpsc::Sender<()>, chart: Chart, cluster_size: u16) {
     discovery::found_majority(&chart, cluster_size).await;
@@ -72,6 +73,15 @@ impl CurrPres {
                 Some(id) => return id,
             }
         }
+    }
+
+    pub async fn kill<T>(&mut self, nodes: &mut HashMap<Id, T>) -> Id {
+        let president = match tokio::time::timeout(TEST_TIMEOUT, self.wait_for()).await {
+            Ok(pres) => pres,
+            Err(_) => panic!("timed out waiting for president to be elected"),
+        };
+        std::mem::drop(nodes.remove(&president).unwrap());
+        president
     }
 
     pub fn get(&mut self) -> Option<Id> {
