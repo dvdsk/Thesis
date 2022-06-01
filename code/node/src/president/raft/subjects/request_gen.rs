@@ -30,7 +30,6 @@ impl RequestGen {
         self.next_idx -= 1;
         let prev_entry = self.state.entry_at(self.next_idx - 1).unwrap();
         self.base.prev_log_term = prev_entry.term;
-        todo!("fix prev log term");
     }
 
     pub fn append(&mut self) -> Request {
