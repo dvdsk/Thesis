@@ -116,7 +116,6 @@ async fn handle_incoming(listener: TcpListener, state: State) {
     }
 }
 
-// TODO increase election setup time for each consecutive failed election
 #[instrument(skip_all, fields(id = chart.our_id()))]
 async fn succession(chart: Chart, cluster_size: u16, state: State) {
     let mut rng = rand::rngs::StdRng::from_entropy();
@@ -142,40 +141,27 @@ async fn succession(chart: Chart, cluster_size: u16, state: State) {
                 }
             }
 
-            {
-                let election_office = state.election_office.lock().await;
-                let ok = election_office.set_voted_for(our_term, chart.our_id());
-                if !ok {
-                    sleep(ELECTION_TIMEOUT).await;
-                    continue 'outer;
-                }
+            if state.vote_for_self(our_term, chart.our_id()).await {
+                sleep(ELECTION_TIMEOUT).await;
+                continue 'outer;
             }
 
-            let meta = state.last_log_meta();
-            let campaign = vote::RequestVote {
-                term: our_term,
-                candidate_id: chart.our_id(),
-                last_log_term: meta.term,
-                last_log_idx: meta.idx,
-            };
-
-            let get_elected = succession::run_for_office(&chart, cluster_size, campaign);
-            let election_timeout = sleep(ELECTION_TIMEOUT);
-
-            // if we are elected president below we want to resign as soon
-            // as the term is increased
+            // if we are elected president we want to resign as soon
+            // as the term is increased that means starting to watch the term
+            // before the election is done
             let term_increased = state.watch_term();
+            let run_for_office = succession::run_for_office(&state, &chart, cluster_size, our_term);
 
             tokio::select! {
                 () = (&mut valid_leader_found) => {
                     debug!("abort election, valid leader encounterd");
                     continue 'outer
                 }
-                () = election_timeout => {
+                () = sleep(ELECTION_TIMEOUT) => {
                     debug!("abort election, timeout reached");
                     continue
                 }
-                res = get_elected => match res {
+                res = run_for_office => match res {
                     ElectionResult::Lost => continue,
                     ElectionResult::Won => {
                         state.order(Order::BecomePres{term: our_term}).await;
@@ -188,5 +174,5 @@ async fn succession(chart: Chart, cluster_size: u16, state: State) {
         term_increased.await;
         debug!("President saw higher term, resigning");
         state.order(Order::ResignPres).await
-    }
+    } // outer loop
 }

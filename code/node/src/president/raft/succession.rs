@@ -7,6 +7,8 @@ use tokio::task::JoinSet;
 use tokio::time::{timeout_at, Instant};
 use tracing::{debug, instrument, trace, warn};
 
+use crate::Term;
+
 use super::HB_TIMEOUT;
 use super::{Chart, State};
 
@@ -63,12 +65,22 @@ pub enum ElectionResult {
 /// only returns when this node has been elected
 /// election timeout is implemented by selecting on this
 /// with a timeout. This returns as soon as a majority is reached
-#[instrument(skip_all, fields(id = chart.our_id(), term = campaign.term))]
+#[instrument(skip_all, fields(id = chart.our_id(), term))]
 pub(super) async fn run_for_office(
+    state: &State,
     chart: &Chart,
     cluster_size: u16,
-    campaign: vote::RequestVote,
+    term: Term,
 ) -> ElectionResult {
+
+    let meta = state.last_log_meta();
+    let campaign = vote::RequestVote {
+        term,
+        candidate_id: chart.our_id(),
+        last_log_term: meta.term,
+        last_log_idx: meta.idx,
+    };
+
     let mut requests: JoinSet<_> = chart
         .nth_addr_vec::<0>()
         .into_iter() 
