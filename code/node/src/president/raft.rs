@@ -134,14 +134,14 @@ async fn succession(chart: Chart, cluster_size: u16, state: State) {
             setup_time.end = Duration::min(setup_time.end.mul_f32(1.5), MAX_ELECTION_SETUP);
             let setup_time = rng.gen_range(setup_time.clone());
             tokio::select! {
-                () = sleep(setup_time) => (),
+                () = sleep(dbg!(setup_time)) => (),
                 () = (&mut valid_leader_found) => {
                     debug!("do not start election, valid leader encounterd, our_term: {our_term}");
                     continue 'outer
                 }
             }
 
-            if state.vote_for_self(our_term, chart.our_id()).await {
+            if !state.vote_for_self(our_term, chart.our_id()).await {
                 sleep(ELECTION_TIMEOUT).await;
                 continue 'outer;
             }

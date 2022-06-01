@@ -121,6 +121,7 @@ impl State {
 
     /// vote for self, returns false if 
     /// a vote was already cast for this term
+    #[instrument(skip(self), ret)]
     pub async fn vote_for_self(&self, term: Term, id: Id) -> bool {
         let election_office = self.election_office.lock().await;
         election_office.set_voted_for(term, id)
