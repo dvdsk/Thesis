@@ -2,8 +2,11 @@ use color_eyre::Result;
 use futures::stream;
 use std::collections::HashMap;
 use std::net;
+use std::pin::Pin;
+use std::sync::Arc;
 use stream::StreamExt;
 use tokio::sync::mpsc::Receiver;
+use tokio::sync::Mutex;
 use tokio::time::timeout;
 
 use crate::{util, Id};
@@ -103,11 +106,13 @@ async fn spread_order() -> Result<()> {
     Ok(())
 }
 
+type Queue = Arc<Mutex<Receiver<Order>>>;
+
 async fn setup(
     n: u64,
 ) -> (
     HashMap<Id, TestAppendNode>,
-    Vec<(Id, Receiver<Order>)>,
+    Vec<(Id, Queue)>,
     CurrPres,
     net::UdpSocket,
 ) {
@@ -120,6 +125,7 @@ async fn setup(
         let (node, queue) = TestAppendNode::new(id, n as u16, curr_pres.clone(), discovery_port)
             .await
             .unwrap();
+        let queue = Arc::new(Mutex::new(queue));
         orders.push((id, queue));
         nodes.insert(id, node);
     }
@@ -130,28 +136,60 @@ async fn setup(
     (nodes, orders, curr_pres, guard)
 }
 
+async fn add_new_node(
+    id: Id,
+    nodes: &mut HashMap<u64, TestAppendNode>,
+    orders: &mut Vec<(Id, Queue)>,
+    curr_pres: &mut CurrPres,
+    discovery_port: u16,
+    cluster_size: u16,
+) -> Queue {
+    let (node, queue) = TestAppendNode::new(id, cluster_size, curr_pres.clone(), discovery_port)
+        .await
+        .unwrap();
+    let queue = Arc::new(Mutex::new(queue));
+    orders.push((id, queue.clone()));
+    nodes.insert(id, node);
+    queue
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 16)]
 async fn kill_president_mid_order() -> Result<()> {
     // util::setup_test_tracing("node=warn,node::president=trace,node::president::raft::subjects=trace,node::president::raft=info");
     // util::setup_test_tracing("node=warn,node::president::raft::test::consensus=trace,node::president::raft::state::append=info");
-    // util::setup_test_tracing("node=trace,node::util=warn");
-    const N: u64 = 4;
-    let (mut nodes, orders, mut curr_pres, _guard) = setup(N).await;
+    util::setup_test_tracing("node=trace,node::util=warn,node::president::raft::succession=debug");
+    const CLUSTER_SIZE: u64 = 4;
+    let (mut nodes, mut orders, mut curr_pres, guard) = setup(CLUSTER_SIZE).await;
 
-    let order_stream = orders
-        .into_iter()
-        .map(|(_, queue)| queue)
-        .map(|queue| {
-            stream::unfold(queue, move |mut rx| async move {
-                let order = rx.recv().await.unwrap();
-                Some((order, rx))
-            })
-        })
-        .map(Box::pin);
-    let mut order_stream = stream::select_all(order_stream);
+    let to_stream = |queue: Queue| {
+        let stream = stream::unfold(queue, |rx: Queue| async move {
+            let order = rx.lock().await.recv().await;
+            order.map(|order| (order, rx))
+        });
+        Box::pin(stream)
+    };
 
-    for i in 1..=u8::MAX {
+    let mut order_stream = stream::SelectAll::new();
+    for queue in orders.iter().map(|(_, queue)| queue).cloned() {
+        order_stream.push(to_stream(queue));
+    }
+
+    for i in 1..=10 {
         order_cluster(&mut curr_pres, &mut nodes, i).await;
+
+        if i == 5 {
+            curr_pres.kill(&mut nodes).await;
+            let queue = add_new_node(
+                CLUSTER_SIZE,
+                &mut nodes,
+                &mut orders,
+                &mut curr_pres,
+                guard.local_addr().unwrap().port(),
+                CLUSTER_SIZE as u16,
+            )
+            .await;
+            order_stream.push(to_stream(queue));
+        }
 
         let mut n_up_to_date = 0;
         loop {
@@ -162,7 +200,7 @@ async fn kill_president_mid_order() -> Result<()> {
                 Order::Test(j) if j == i => n_up_to_date += 1,
                 _ => panic!("recieved unhandled order: {order:?}"),
             }
-            if n_up_to_date == N - 1 {
+            if n_up_to_date == CLUSTER_SIZE - 1 {
                 dbg!();
                 break;
             }

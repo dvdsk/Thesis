@@ -81,6 +81,7 @@ impl CurrPres {
             Err(_) => panic!("timed out waiting for president to be elected"),
         };
         std::mem::drop(nodes.remove(&president).unwrap());
+        tracing::info!("############### KILLED PRESIDENT, ID: {president}");
         president
     }
 
