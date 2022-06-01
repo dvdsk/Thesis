@@ -1,10 +1,12 @@
 use color_eyre::Result;
 use futures::stream;
 use std::collections::HashMap;
+use std::net;
 use stream::StreamExt;
+use tokio::sync::mpsc::Receiver;
 use tokio::time::timeout;
 
-use crate::util;
+use crate::{util, Id};
 
 use super::mock::TestAppendNode;
 use super::util::CurrPres;
@@ -101,20 +103,21 @@ async fn spread_order() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 16)]
-async fn kill_president_mid_order() -> Result<()> {
-    // util::setup_test_tracing("node=warn,node::president=trace,node::president::raft::subjects=trace,node::president::raft=info");
-    // util::setup_test_tracing("node=warn,node::president::raft::test::consensus=trace,node::president::raft::state::append=info");
-    // util::setup_test_tracing("node=trace,node::util=warn");
-    const N: u64 = 4;
-
-    let (_guard, discovery_port) = util::free_udp_port()?;
-    let mut curr_pres = CurrPres::default();
+async fn setup(
+    n: u64,
+) -> (
+    HashMap<Id, TestAppendNode>,
+    Vec<(Id, Receiver<Order>)>,
+    CurrPres,
+    net::UdpSocket,
+) {
+    let (guard, discovery_port) = util::free_udp_port().unwrap();
+    let curr_pres = CurrPres::default();
 
     let mut nodes = HashMap::new();
     let mut orders = Vec::new();
-    for id in 0..N {
-        let (node, queue) = TestAppendNode::new(id, N as u16, curr_pres.clone(), discovery_port)
+    for id in 0..n {
+        let (node, queue) = TestAppendNode::new(id, n as u16, curr_pres.clone(), discovery_port)
             .await
             .unwrap();
         orders.push((id, queue));
@@ -124,6 +127,16 @@ async fn kill_president_mid_order() -> Result<()> {
     for node in &mut nodes.values_mut() {
         node.found_majority.recv().await.unwrap();
     }
+    (nodes, orders, curr_pres, guard)
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 16)]
+async fn kill_president_mid_order() -> Result<()> {
+    // util::setup_test_tracing("node=warn,node::president=trace,node::president::raft::subjects=trace,node::president::raft=info");
+    // util::setup_test_tracing("node=warn,node::president::raft::test::consensus=trace,node::president::raft::state::append=info");
+    // util::setup_test_tracing("node=trace,node::util=warn");
+    const N: u64 = 4;
+    let (mut nodes, orders, mut curr_pres, _guard) = setup(N).await;
 
     let order_stream = orders
         .into_iter()
