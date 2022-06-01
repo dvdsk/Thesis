@@ -136,7 +136,7 @@ async fn succession(chart: Chart, cluster_size: u16, state: State) {
             tokio::select! {
                 () = sleep(dbg!(setup_time)) => (),
                 () = (&mut valid_leader_found) => {
-                    debug!("do not start election, valid leader encounterd, our_term: {our_term}");
+                    debug!("not starting election, valid leader encounterd, our_term: {our_term}");
                     continue 'outer
                 }
             }
@@ -154,11 +154,11 @@ async fn succession(chart: Chart, cluster_size: u16, state: State) {
 
             tokio::select! {
                 () = (&mut valid_leader_found) => {
-                    debug!("abort election, valid leader encounterd");
+                    debug!("aborting election, valid leader encounterd");
                     continue 'outer
                 }
                 () = sleep(ELECTION_TIMEOUT) => {
-                    debug!("abort election, timeout reached");
+                    debug!("aborting election, timeout reached");
                     continue
                 }
                 res = run_for_office => match res {
