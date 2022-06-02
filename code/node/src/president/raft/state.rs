@@ -1,6 +1,6 @@
+use instance_chart::Id;
 use std::sync::atomic::AtomicU32;
 use std::sync::Arc;
-use instance_chart::Id;
 use tokio::sync::Mutex;
 
 use tokio::sync::{mpsc, Notify};
@@ -119,7 +119,7 @@ impl State {
         &self.vars.heartbeat
     }
 
-    /// vote for self, returns false if 
+    /// vote for self, returns false if
     /// a vote was already cast for this term
     #[instrument(skip(self), ret)]
     pub async fn vote_for_self(&self, term: Term, id: Id) -> bool {
@@ -177,5 +177,16 @@ impl State {
 
     pub(super) async fn order(&self, ord: Order) {
         self.tx.send(ord).await.unwrap();
+    }
+
+    pub(crate) fn committed(&self) -> Vec<Order> {
+        let last = db::log_key(self.commit_index());
+        self.db
+            .range(db::log_key(0)..last)
+            .map(Result::unwrap)
+            .map(|(_, value)| value)
+            .map(|bytes| bincode::deserialize(&bytes))
+            .map(Result::unwrap)
+            .collect()
     }
 }

@@ -61,8 +61,7 @@ async fn test() -> Result<()> {
 
     // kill president (on drop tasks abort)
     // < N / 2 nodes left
-    let id = curr_pres.kill(&mut nodes).await;
-    info!("############### KILLED PRESIDENT, ID: {id}");
+    curr_pres.kill(&mut nodes).await;
     sleep(TEST_TIMEOUT).await;
 
     // check there is no president

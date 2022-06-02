@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use color_eyre::eyre::WrapErr;
 use color_eyre::Result;
 use serde::{Deserialize, Serialize};
@@ -6,6 +8,7 @@ use tokio::sync::mpsc::{self, Receiver};
 use tokio::task::{self, JoinHandle};
 use tracing::instrument;
 
+use crate::directory::Staff;
 use crate::president::Chart;
 use crate::{Role, Term};
 
@@ -25,6 +28,7 @@ pub struct Log {
 pub enum Order {
     /// used as placeholder for the first entry in the log
     None,
+    /// assigns a node a role
     Assigned(Role),
     BecomePres {
         term: Term,
@@ -32,6 +36,14 @@ pub enum Order {
     ResignPres,
     #[cfg(test)]
     Test(u8),
+
+    /// assigns a file tree a ministry, the load balancer
+    /// will try to uphold its policy that each ministry has
+    /// a minister and clecks
+    AssignMinistry {
+        subtree: PathBuf,
+        staff: Staff,
+    },
 }
 
 impl Log {
@@ -54,9 +66,11 @@ impl Log {
             _handle_incoming: task::Builder::new()
                 .name("log_handle_incoming")
                 .spawn(handle_incoming(listener, state.clone())),
-            _succession: task::Builder::new()
-                .name("succesion")
-                .spawn(succession(chart, cluster_size, state)),
+            _succession: task::Builder::new().name("succesion").spawn(succession(
+                chart,
+                cluster_size,
+                state,
+            )),
         })
     }
 

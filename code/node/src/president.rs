@@ -2,16 +2,20 @@ use std::sync::Arc;
 
 use tokio::net::TcpListener;
 use tokio::sync::{broadcast, mpsc, Notify};
-use tracing::{debug, info};
+use tracing::info;
 
 use instance_chart::Chart as mChart;
 type Chart = mChart<3, u16>;
 
+mod load_balancing;
 mod messages;
-mod raft;
+pub mod raft;
+use crate::president::load_balancing::LoadBalancer;
 use crate::{Idx, Term};
 pub use raft::subjects;
 pub use raft::{Log, Order};
+
+use self::load_balancing::LoadNotifier;
 
 /// interface to append an item to the clusters raft log and
 /// return once it is comitted
@@ -26,6 +30,12 @@ pub struct LogWriter {
 pub struct AppendTicket {
     idx: Idx,
     notify: Arc<Notify>,
+}
+
+impl AppendTicket {
+    async fn committed(self) {
+        self.notify.notified().await;
+    }
 }
 
 impl LogWriter {
@@ -59,11 +69,11 @@ impl LogWriter {
     }
 }
 
-async fn recieve_own_order(orders: &mut mpsc::Receiver<Order>) {
+async fn recieve_own_order(orders: &mut mpsc::Receiver<Order>, load_notifier: LoadNotifier) {
     loop {
         match orders.recv().await {
             Some(Order::ResignPres) => break,
-            Some(other) => debug!("order added: {other:?}"),
+            Some(other) => load_notifier.committed(other).await,
             None => panic!(
                 "channel was dropped,
                            this means another thread panicked. Joining the panic"
@@ -92,10 +102,21 @@ pub(super) async fn work(
         notify_tx: tx,
     };
 
+    let (load_balancer, load_notifier) = LoadBalancer::new(log_writer.clone());
+    let instruct_subjects = subjects::instruct(
+        chart,
+        broadcast.clone(),
+        notify_rx,
+        load_notifier.clone(),
+        state.clone(),
+        term,
+    );
+
     tokio::select! {
-        () = subjects::instruct(chart, broadcast.clone(), notify_rx, state.clone(), term) => unreachable!(),
+        () = load_balancer.run(&state) => unreachable!(),
+        () = instruct_subjects => unreachable!(),
         () = messages::handle_incoming(listener, log_writer) => unreachable!(),
-        () = recieve_own_order(orders) => {
+        () = recieve_own_order(orders, load_notifier) => {
             info!("President {id} resigned");
             crate::Role::Idle
         }

@@ -3,9 +3,10 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::president::Chart;
+use crate::president::load_balancing::LoadNotifier;
 use crate::president::raft::CONN_RETRY_PERIOD;
-use crate::{Id, Term, Idx};
+use crate::president::Chart;
+use crate::{Id, Idx, Term};
 use color_eyre::eyre::eyre;
 use futures::{SinkExt, TryStreamExt};
 use protocol::connection::{self, MsgStream};
@@ -52,28 +53,24 @@ async fn manage_subject(
     mut broadcast: broadcast::Receiver<Order>,
     mut appended: mpsc::Sender<u32>,
     mut req_gen: RequestGen,
+    load_balancer: LoadNotifier,
 ) {
     loop {
         let mut stream = connect(&address).await;
 
-        let next_msg = req_gen.heartbeat();
+        let init_msg = req_gen.heartbeat();
 
         // send empty msg aka heartbeat
-        if let Err(e) = stream.send(Msg::AppendEntries(next_msg)).await {
+        if let Err(e) = stream.send(Msg::AppendEntries(init_msg)).await {
             warn!("could not send to host, error: {e:?}");
             continue;
         }
 
-        replicate_orders(
-            &mut broadcast,
-            &mut appended,
-            &mut req_gen,
-            &mut stream,
-        )
-        .await;
+        load_balancer.subject_up(subject_id).await;
+        replicate_orders(&mut broadcast, &mut appended, &mut req_gen, &mut stream).await;
+        load_balancer.subject_down(subject_id).await;
     }
 }
-
 
 async fn recieve_reply(
     stream: &mut MsgStream<Reply, Msg>,
@@ -93,7 +90,9 @@ async fn recieve_reply(
                 appended.try_send(req_gen.next_idx).unwrap();
                 req_gen.increment_idx();
             }
-            Ok(Some(Reply::AppendEntries(append::Reply::InconsistentLog))) => req_gen.decrement_idx(),
+            Ok(Some(Reply::AppendEntries(append::Reply::InconsistentLog))) => {
+                req_gen.decrement_idx()
+            }
             Ok(Some(Reply::AppendEntries(append::Reply::ExPresident(new_term)))) => {
                 warn!("we are not the current president, new president has term: {new_term}")
                 // president will be taken down by the term watcher it is selected on
@@ -102,6 +101,7 @@ async fn recieve_reply(
     }
 }
 
+/// replicate orders untill connection is lost
 async fn replicate_orders(
     _broadcast: &mut broadcast::Receiver<Order>,
     appended: &mut mpsc::Sender<u32>,
@@ -140,13 +140,13 @@ async fn replicate_orders(
     }
 }
 
-
 /// look for new subjects in the chart and register them
 #[instrument(skip_all, fields(president_id = state.id))]
 pub async fn instruct(
     chart: &mut Chart,
     orders: broadcast::Sender<Order>,
     notify_rx: mpsc::Receiver<(Idx, Arc<Notify>)>,
+    load_balancer: LoadNotifier,
     state: State,
     term: Term,
 ) {
@@ -164,6 +164,7 @@ pub async fn instruct(
             broadcast_rx,
             append_updates,
             base_msg.clone(),
+            load_balancer.clone(),
         );
         subjects.build_task().name("manage_subject").spawn(manage);
     };

@@ -71,6 +71,3 @@ impl RequestGen {
         }
     }
 }
-
-// TODO make it so "raft client" also runs on president possibly by calling append_req with an
-// append req in the instruct funct, kinda instructing ourself. Might fit in LogWriter too 

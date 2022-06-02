@@ -15,6 +15,7 @@ mod clerk;
 mod idle;
 mod minister;
 mod president;
+mod directory;
 
 pub type Id = u64;
 pub type Term = u32; // raft term
