@@ -2,7 +2,6 @@ use color_eyre::Result;
 use futures::stream;
 use std::collections::HashMap;
 use std::net;
-use std::pin::Pin;
 use std::sync::Arc;
 use stream::StreamExt;
 use tokio::sync::mpsc::Receiver;

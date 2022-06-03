@@ -1,7 +1,6 @@
 use std::collections::HashSet;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use std::time::Duration;
 
 use crate::president::load_balancing::LoadNotifier;
 use crate::president::raft::CONN_RETRY_PERIOD;
@@ -145,12 +144,12 @@ async fn replicate_orders(
 pub async fn instruct(
     chart: &mut Chart,
     orders: broadcast::Sender<Order>,
-    notify_rx: mpsc::Receiver<(Idx, Arc<Notify>)>,
-    load_balancer: LoadNotifier,
+    commit_notify: mpsc::Receiver<(Idx, Arc<Notify>)>,
+    load_notify: LoadNotifier,
     state: State,
     term: Term,
 ) {
-    let mut commit_idx = Commited::new(notify_rx, &state);
+    let mut commit_idx = Commited::new(commit_notify, &state);
     let base_msg = RequestGen::new(state.clone(), term, chart);
 
     let mut subjects = JoinSet::new();
@@ -164,7 +163,7 @@ pub async fn instruct(
             broadcast_rx,
             append_updates,
             base_msg.clone(),
-            load_balancer.clone(),
+            load_notify.clone(),
         );
         subjects.build_task().name("manage_subject").spawn(manage);
     };

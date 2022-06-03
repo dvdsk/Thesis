@@ -18,7 +18,7 @@ pub struct Issues {
 
 impl Issues {
     pub fn add(&mut self, issue: Issue) {
-        self.by_priority.push(issue);
+        self.by_priority.push(issue.clone());
         self.active.insert(issue);
     }
     pub fn remove_worst(&mut self) -> Option<Issue> {
@@ -41,7 +41,7 @@ impl Issues {
     
 }
 
-#[derive(PartialEq, Eq, Hash)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub enum Issue {
     // lost a minister
     LeaderLess { subtree: PathBuf, id: Id },

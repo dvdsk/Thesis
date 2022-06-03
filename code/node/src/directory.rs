@@ -1,4 +1,4 @@
-use std::collections::{HashMap};
+use std::collections::HashMap;
 use std::path::PathBuf;
 
 use instance_chart::Id;
@@ -32,9 +32,9 @@ impl SubtreeAssignment {
     }
 
     pub fn from_committed(state: &State) -> Self {
-        let ministries = SubtreeAssignment::default();
+        let mut ministries = SubtreeAssignment::default();
         for order in state.committed() {
-            ministries.staff_order(order);
+            let _ig_other = ministries.staff_order(order);
         }
 
         ministries

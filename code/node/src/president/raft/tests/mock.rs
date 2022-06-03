@@ -9,6 +9,7 @@ use tracing::debug;
 use tracing::info;
 use tracing::instrument;
 
+use crate::president::load_balancing::LoadNotifier;
 use crate::president::messages;
 use crate::president::raft;
 use crate::president::raft::State;
@@ -36,11 +37,25 @@ async fn heartbeat_while_pres(
         let _drop_guard = curr_pres.set(chart.our_id());
 
         let (order_tx, _order_rx) = tokio::sync::broadcast::channel(16);
-        let (_notify_tx, notify_rx) = mpsc::channel(16);
+        let (_commit_notify_tx, commit_notify) = mpsc::channel(16);
+        let (load_notify, _load_nodify_rx) = mpsc::channel(16);
+
+        let load_notify = LoadNotifier {
+            sender: load_notify,
+        };
         info!("id: {} became president, term: {term}", chart.our_id());
 
+        let instruct = subjects::instruct(
+            &mut chart,
+            order_tx,
+            commit_notify,
+            load_notify,
+            state.clone(),
+            term,
+        );
+
         tokio::select! {
-            () = subjects::instruct(&mut chart, order_tx, notify_rx, state.clone(), term) => unreachable!(),
+            () = instruct => unreachable!(),
             usurper = orders.recv() => match usurper {
                 Some(Order::ResignPres) => info!("president {} resigned", chart.our_id()),
                 Some(_other) => unreachable!("The president should never recieve
@@ -81,22 +96,37 @@ impl TestVoteNode {
         let (signal, found_majority) = mpsc::channel(1);
 
         let mut tasks = JoinSet::new();
-        tasks.build_task().name("discoverd_majority").spawn(test_util::discoverd_majority(
-            signal,
-            chart.clone(),
-            cluster_size,
-        ));
-        tasks.build_task().name("discovery").spawn(discovery::maintain(chart.clone()));
+        tasks
+            .build_task()
+            .name("discoverd_majority")
+            .spawn(test_util::discoverd_majority(
+                signal,
+                chart.clone(),
+                cluster_size,
+            ));
+        tasks
+            .build_task()
+            .name("discovery")
+            .spawn(discovery::maintain(chart.clone()));
 
-        tasks.build_task().name("incoming").spawn(raft::handle_incoming(listener, state.clone()));
-        tasks.build_task().name("succession").spawn(raft::succession(chart.clone(), cluster_size, state.clone()));
-        tasks.build_task().name("president").spawn(heartbeat_while_pres(
-            chart.clone(),
-            state,
-            order_rx,
-            debug_tx,
-            curr_pres,
-        ));
+        tasks
+            .build_task()
+            .name("incoming")
+            .spawn(raft::handle_incoming(listener, state.clone()));
+        tasks
+            .build_task()
+            .name("succession")
+            .spawn(raft::succession(chart.clone(), cluster_size, state.clone()));
+        tasks
+            .build_task()
+            .name("president")
+            .spawn(heartbeat_while_pres(
+                chart.clone(),
+                state,
+                order_rx,
+                debug_tx,
+                curr_pres,
+            ));
 
         Ok((
             Self {
@@ -124,7 +154,7 @@ pub async fn president(
         info!("id: {} became president, term: {term}", chart.our_id());
 
         let (broadcast, _) = broadcast::channel(16);
-        let (tx, notify_rx) = mpsc::channel(16);
+        let (tx, commit_notify) = mpsc::channel(16);
         let log_writer = LogWriter {
             term,
             state: state.clone(),
@@ -145,8 +175,24 @@ pub async fn president(
             }
         }
 
+        let (load_notify, _load_nodify_rx) = mpsc::channel(16);
+
+        let load_notify = LoadNotifier {
+            sender: load_notify,
+        };
+        info!("id: {} became president, term: {term}", chart.our_id());
+
+        let instruct = subjects::instruct(
+            &mut chart,
+            broadcast,
+            commit_notify,
+            load_notify,
+            state.clone(),
+            term,
+        );
+
         tokio::select! {
-            () = subjects::instruct(&mut chart, broadcast.clone(), notify_rx, state.clone(), term) => unreachable!(),
+            () = instruct => unreachable!(),
             () = messages::handle_incoming(&mut listener, log_writer) => unreachable!(),
             () = keep_log_update(&mut orders) => (), // resigned as president
         }

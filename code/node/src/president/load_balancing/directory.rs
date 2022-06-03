@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use instance_chart::Id;
@@ -7,7 +7,7 @@ use crate::directory::Staff;
 use crate::president::raft::State;
 use crate::president::Order;
 
-use super::issue::{Issue, Issues};
+use super::issue::Issue;
 
 #[derive(Default)]
 pub(super) struct Staffing {
@@ -23,9 +23,9 @@ impl Staffing {
 
         match order {
             AssignMinistry { subtree, staff } => {
-                self.by_subtree.insert(subtree.clone(), staff);
+                self.by_subtree.insert(subtree.clone(), staff.clone());
                 self.ministers.insert(staff.minister, subtree.clone());
-                let tagged_clerks = staff.clerks.into_iter().map(|c| (c, subtree.clone()));
+                let tagged_clerks = staff.clerks.iter().map(|c| (*c, subtree.clone()));
                 self.clerks.extend(tagged_clerks);
                 Ok(())
             }
@@ -34,9 +34,9 @@ impl Staffing {
     }
 
     pub fn from_committed(state: &State) -> Self {
-        let ministries = Staffing::default();
+        let mut ministries = Staffing::default();
         for order in state.committed() {
-            ministries.staff_order(order);
+            let _ig_other = ministries.staff_order(order);
         }
 
         ministries
@@ -58,7 +58,7 @@ impl Staffing {
         self.by_subtree.get(ministry).unwrap().clerks.len()
     }
 
-    pub fn register_node_down(&self, id: Id) -> Option<Issue> {
+    pub fn register_node_down(&mut self, id: Id) -> Option<Issue> {
         if let Some(ministry) = self.ministers.remove(&id) {
             return Some(Issue::LeaderLess {
                 subtree: ministry,
@@ -73,7 +73,7 @@ impl Staffing {
                     down.clone()
                 }
                 None => {
-                    self.clerks_down.insert(ministry, vec![id]).unwrap();
+                    self.clerks_down.insert(ministry.clone(), vec![id]).unwrap();
                     vec![id]
                 }
             };

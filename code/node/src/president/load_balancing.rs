@@ -14,7 +14,7 @@ mod issue;
 
 #[derive(Debug, Clone)]
 pub struct LoadNotifier {
-    sender: mpsc::Sender<Event>,
+    pub sender: mpsc::Sender<Event>,
 }
 
 impl LoadNotifier {
@@ -30,7 +30,7 @@ impl LoadNotifier {
 }
 
 #[derive(Debug)]
-enum Event {
+pub enum Event {
     NodeUp(Id),
     NodeDown(Id),
     Committed(Order),
@@ -57,7 +57,7 @@ impl LoadBalancer {
     }
     pub async fn run(self, state: &raft::State) {
         let mut init = self.initialize(state).await;
-        init.run(state).await;
+        init.run().await;
     }
     pub async fn change_policy(&self) {
         // get some mutex
@@ -135,15 +135,13 @@ struct Init {
 }
 
 impl Init {
-    pub async fn run(&mut self, state: &raft::State) {
+    pub async fn run(&mut self) {
         loop {
-            self.process_state_changes();
+            self.process_state_changes().await;
             //
             // - TODO apply one policy change from queue
             // OR
             self.solve_worst_issue();
-            // - do one action to conform sys to policy
-            todo!();
         }
     }
 
@@ -161,7 +159,7 @@ impl Init {
 }
 
 impl Init {
-    fn node_up(&self, id: Id) {
+    fn node_up(&mut self, id: Id) {
         if self.issues.solved_by_up(id) {
             return;
         }
@@ -173,7 +171,7 @@ impl Init {
         self.idle.insert(id);
     }
 
-    fn node_down(&self, id: Id) {
+    fn node_down(&mut self, id: Id) {
         match self.staffing.register_node_down(id) {
             Some(issue) => self.issues.add(issue),
             None => {
