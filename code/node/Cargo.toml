@@ -13,7 +13,7 @@ num-traits = "0.2"
 
 # for now we depend on this PR to give joinset tasks names
 # note: also change in ../protocol
-tokio = { git = "https://github.com/tokio-rs/tokio", rev = "0d4d3c3", version = "1.0", features = ["macros", "net", "time", "rt-multi-thread", "tracing", "sync"] }
+tokio = { version = "1.0", features = ["macros", "net", "time", "rt-multi-thread", "tracing", "sync"] }
 futures = "0.3"
 
 tracing = "0.1"
