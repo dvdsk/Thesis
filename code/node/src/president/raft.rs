@@ -96,9 +96,9 @@ async fn handle_incoming(listener: TcpListener, state: State) {
             // occurs in the handlers
             tokio::select! {
                 res = listener.accept() => res,
-                res = tasks.join_one() => match res {
-                    Err(err) => panic!("{err:?}"),
-                    Ok(Some(Err(err))) => panic!("{err:?}"),
+                res = tasks.join_one() => match res.expect("tasks should not be empty") {
+                    Err(err) => panic!("conn handler paniced: {err:?}"),
+                    Ok(Err(err)) => panic!("conn handler errored: {err:?}"),
                     Ok(..) => {
                         trace!("task joined");
                         continue

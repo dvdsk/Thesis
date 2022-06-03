@@ -98,11 +98,11 @@ pub(super) async fn run_for_office(
         match requests
             .join_one()
             .await
-            .expect("request vote task panicked")
         {
-            Some(Ok(_)) => votes += 1,
-            Some(Err(_)) => (),
             None => break, // no more req_vote tasks left
+            Some(Ok(Ok(_))) => votes += 1,
+            Some(Err(e)) => panic!("request vote paniced: {e:?}"),
+            Some(Ok(Err(_))) => (),
         }
 
         if to_count + votes < majority as u16 {

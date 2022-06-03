@@ -41,8 +41,8 @@ async fn most_experienced(clerks: &[Id], chart: &Chart) -> Option<Id> {
 
     let mut max_idx = 0;
     let mut most_experienced = None;
-    while let Some(res) = requests.join_one().await.unwrap() {
-        let (clerk, idx) = match res {
+    while let Some(res) = requests.join_one().await {
+        let (clerk, idx) = match res.expect("should not crash") {
             Ok(res) => res,
             Err(_) => continue,
         };

@@ -197,8 +197,8 @@ async fn append_multiple_simultaneous() {
     }
 
     let mut new_gen = None;
-    while let Some(gen) = tasks.join_one().await.unwrap() {
-        new_gen = Some(gen);
+    while let Some(gen) = tasks.join_one().await {
+        new_gen = Some(gen.unwrap());
     }
     let mut gen = new_gen.expect("task set is empty, it should not be");
 

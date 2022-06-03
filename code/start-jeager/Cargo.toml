@@ -8,7 +8,7 @@ edition = "2021"
 [dependencies]
 reqwest = { version = "0.11", features = ["rustls-tls"] }
 tracing = "0.1.3"
-tokio = { version = "1.0", features = ["macros", "process"] }
+tokio = { git = "https://github.com/tokio-rs/tokio", features = ["macros", "process"], rev="0d4d3c3" }
 flate2 = "1"
 tar = "0.4"
 psutil = "3"
