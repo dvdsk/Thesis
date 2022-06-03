@@ -4,12 +4,13 @@ use std::path::PathBuf;
 use crate::Id;
 use tokio::sync::mpsc;
 
-use self::issue::Issues;
+use self::issue::{Issue, Issues};
 
-use super::{raft, LogWriter, Order};
+use super::{raft, Chart, LogWriter, Order};
 use crate::directory::Staff;
-mod directory;
-use directory::Staffing;
+mod staffing;
+use staffing::Staffing;
+mod action;
 mod issue;
 
 #[derive(Debug, Clone)]
@@ -39,17 +40,19 @@ pub enum Event {
 pub struct LoadBalancer {
     log_writer: LogWriter,
     events: mpsc::Receiver<Event>,
+    chart: Chart,
     policy: (),
 }
 
 impl LoadBalancer {
-    pub fn new(log_writer: LogWriter) -> (Self, LoadNotifier) {
+    pub fn new(log_writer: LogWriter, chart: Chart) -> (Self, LoadNotifier) {
         let (tx, rx) = mpsc::channel(16);
         let notifier = LoadNotifier { sender: tx };
         (
             Self {
                 events: rx,
                 log_writer,
+                chart,
                 policy: (),
             },
             notifier,
@@ -71,6 +74,7 @@ impl LoadBalancer {
     async fn initialize(mut self, state: &raft::State) -> Init {
         let staffing = self.organise_staffing(state).await;
         Init {
+            chart: self.chart,
             log_writer: self.log_writer,
             events: self.events,
             staffing,
@@ -105,7 +109,7 @@ impl LoadBalancer {
                 }
                 Committed(order) => {
                     staffing
-                        .staff_order(order)
+                        .process_order(order)
                         .expect("only order in a rootless cluster should be staff assignment");
                     if staffing.has_root() {
                         return staffing;
@@ -126,6 +130,7 @@ impl LoadBalancer {
 }
 
 struct Init {
+    chart: Chart,
     log_writer: LogWriter,
     events: mpsc::Receiver<Event>,
     policy: (),
@@ -141,18 +146,39 @@ impl Init {
             //
             // - TODO apply one policy change from queue
             // OR
-            self.solve_worst_issue();
+            self.solve_worst_issue().await;
         }
     }
 
-    pub fn solve_worst_issue(&mut self) {}
+    pub async fn solve_worst_issue(&mut self) {
+        loop {
+            let issue = match self.issues.remove_worst() {
+                None => return,
+                Some(i) => i,
+            };
+
+            use Issue::*;
+            let solved = match issue {
+                LeaderLess { subtree, .. } => self.promote_clerk(subtree).await,
+                UnderStaffed { subtree, down } => self.try_assign(subtree, down).await,
+                Overloaded { .. } => todo!(),
+            };
+
+            if solved.is_ok() {
+                break; // can only solve one issue before we need a state update
+            }
+        }
+    }
 
     async fn process_state_changes(&mut self) {
         while let Ok(event) = self.events.try_recv() {
             match event {
                 Event::NodeUp(id) => self.node_up(id),
                 Event::NodeDown(id) => self.node_down(id),
-                Event::Committed(_) => todo!(),
+                Event::Committed(order) => match self.staffing.process_order(order) {
+                    Err(_not_staff_order) => todo!(),
+                    Ok(_) => (),
+                },
             }
         }
     }
@@ -164,8 +190,8 @@ impl Init {
             return;
         }
 
-        if self.staffing.clerk_back_up(id) {
-            return
+        if self.staffing.clerk_back_up(id).is_some() {
+            return;
         }
 
         self.idle.insert(id);

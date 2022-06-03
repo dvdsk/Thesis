@@ -102,7 +102,7 @@ pub(super) async fn work(
         notify_tx: tx,
     };
 
-    let (load_balancer, load_notifier) = LoadBalancer::new(log_writer.clone());
+    let (load_balancer, load_notifier) = LoadBalancer::new(log_writer.clone(), chart.clone());
     let instruct_subjects = subjects::instruct(
         chart,
         broadcast.clone(),

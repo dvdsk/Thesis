@@ -13,6 +13,12 @@ pub struct Staff {
     pub clerks: Vec<Id>,
 }
 
+impl Staff {
+    pub fn len(&self) -> usize {
+        self.clerks.len() + 1
+    }
+}
+
 #[derive(Default)]
 pub(super) struct SubtreeAssignment {
     by_subtree: HashMap<PathBuf, Staff>,

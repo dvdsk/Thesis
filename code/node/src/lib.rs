@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use tracing::{info, instrument};
 
 pub mod util;
+pub mod messages;
 
 mod clerk;
 mod idle;

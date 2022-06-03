@@ -11,19 +11,19 @@ use super::issue::Issue;
 
 #[derive(Default)]
 pub(super) struct Staffing {
-    by_subtree: HashMap<PathBuf, Staff>,
+    by_ministry: HashMap<PathBuf, Staff>,
     pub ministers: HashMap<Id, PathBuf>,
     pub clerks: HashMap<Id, PathBuf>,
     clerks_down: HashMap<PathBuf, Vec<Id>>,
 }
 
 impl Staffing {
-    pub fn staff_order(&mut self, order: Order) -> Result<(), Order> {
+    pub fn process_order(&mut self, order: Order) -> Result<(), Order> {
         use Order::*;
 
         match order {
             AssignMinistry { subtree, staff } => {
-                self.by_subtree.insert(subtree.clone(), staff.clone());
+                self.by_ministry.insert(subtree.clone(), staff.clone());
                 self.ministers.insert(staff.minister, subtree.clone());
                 let tagged_clerks = staff.clerks.iter().map(|c| (*c, subtree.clone()));
                 self.clerks.extend(tagged_clerks);
@@ -36,26 +36,22 @@ impl Staffing {
     pub fn from_committed(state: &State) -> Self {
         let mut ministries = Staffing::default();
         for order in state.committed() {
-            let _ig_other = ministries.staff_order(order);
+            let _ig_other = ministries.process_order(order);
         }
 
         ministries
     }
 
     pub fn has_root(&self) -> bool {
-        self.by_subtree.contains_key(&PathBuf::from("/"))
+        self.by_ministry.contains_key(&PathBuf::from("/"))
     }
 
     pub fn is_empty(&self) -> bool {
-        self.by_subtree.is_empty()
-    }
-
-    pub fn has_employee(&self, id: Id) -> bool {
-        self.ministers.contains_key(&id) || self.clerks.contains_key(&id)
+        self.by_ministry.is_empty()
     }
 
     pub fn n_clerks(&self, ministry: &Path) -> usize {
-        self.by_subtree.get(ministry).unwrap().clerks.len()
+        self.by_ministry.get(ministry).unwrap().clerks.len()
     }
 
     pub fn register_node_down(&mut self, id: Id) -> Option<Issue> {
@@ -63,8 +59,8 @@ impl Staffing {
             return Some(Issue::LeaderLess {
                 subtree: ministry,
                 id,
-            })
-        } 
+            });
+        }
 
         if let Some(ministry) = self.clerks.remove(&id) {
             let down = match self.clerks_down.get_mut(&ministry) {
@@ -82,14 +78,28 @@ impl Staffing {
                 return Some(Issue::UnderStaffed {
                     subtree: ministry,
                     down,
-                })
+                });
             }
-        } 
+        }
 
         None
     }
 
-    pub fn clerk_back_up(&self, id: Id) -> bool {
-        todo!()
+    pub fn staff(&self, subtree: &Path) -> &Staff {
+        self.by_ministry.get(subtree).unwrap()
+    }
+
+    pub fn clerk_back_up(&mut self, id: Id) -> Option<()> {
+        let ministry = self.clerks.get(&id)?;
+        let down = self.clerks_down.get_mut(ministry)?;
+        // remove
+        let idx = down
+            .iter()
+            .enumerate()
+            .find(|(_, down_id)| **down_id == id)
+            .unwrap()
+            .0;
+        down.swap_remove(idx);
+        Some(())
     }
 }
