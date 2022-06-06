@@ -1,7 +1,6 @@
 use std::net::{Ipv4Addr, IpAddr};
 use std::path::PathBuf;
 
-use color_eyre::eyre::Result;
 use mktemp::Temp;
 use node::Config;
 use node::util::runtime_dir;
@@ -10,9 +9,8 @@ use tracing::Instrument;
 
 use node::util;
 
-#[ignore]
-#[tokio::test]
-async fn local_cluster() -> Result<()> {
+#[tokio::main]
+async fn main() {
     util::setup_errors();
     start_jeager::start_if_not_running(runtime_dir()).await;
 

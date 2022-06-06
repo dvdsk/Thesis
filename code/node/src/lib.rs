@@ -9,24 +9,24 @@ use instance_chart::{discovery, ChartBuilder};
 use serde::{Deserialize, Serialize};
 use tracing::{info, instrument};
 
-pub mod util;
 pub mod messages;
+pub mod util;
 
 mod clerk;
+mod directory;
 mod idle;
 mod minister;
 mod president;
-mod directory;
 
 pub type Id = u64;
 pub type Term = u32; // raft term
-pub type Idx = u32;  // raft idx
+pub type Idx = u32; // raft idx
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum Role {
     Idle,
     Clerk,
-    Minister,
+    Minister { subtree: PathBuf, clerks: Vec<Id> },
     President { term: Term },
 }
 
@@ -72,29 +72,36 @@ pub struct Config {
 }
 
 #[instrument(level = "info")]
-pub async fn run(conf: Config) -> Result<()> {
-    let (pres_listener, pres_port) = util::open_socket(conf.pres_port).await?;
-    let (mut node_listener, node_port) = util::open_socket(conf.node_port).await?;
-    let (mut req_listener, req_port) = util::open_socket(conf.req_port).await?;
+pub async fn run(conf: Config) {
+    let (pres_listener, pres_port) = util::open_socket(conf.pres_port).await.unwrap();
+    let (mut node_listener, node_port) = util::open_socket(conf.node_port).await.unwrap();
+    let (mut req_listener, req_port) = util::open_socket(conf.req_port).await.unwrap();
     let mut chart = ChartBuilder::new()
         .with_id(conf.id)
         .with_service_ports([pres_port, node_port, req_port])
         .local_discovery(conf.local_instances)
-        .finish()?;
-    tokio::task::Builder::new().name("maintain discovery").spawn(discovery::maintain(chart.clone()));
+        .finish()
+        .unwrap();
+    tokio::task::Builder::new()
+        .name("maintain discovery")
+        .spawn(discovery::maintain(chart.clone()));
     discovery::found_majority(&chart, conf.cluster_size).await;
 
     info!("opening on disk db at: {:?}", conf.database);
     let db = sled::open(conf.database).unwrap();
     let mut pres_orders =
-        president::Log::open(chart.clone(), conf.cluster_size, db, pres_listener)?;
+        president::Log::open(chart.clone(), conf.cluster_size, db, pres_listener).unwrap();
 
     let mut role = Role::Idle;
     loop {
         role = match role {
-            Role::Idle => idle::work(&mut pres_orders).await?,
+            Role::Idle => idle::work(&mut pres_orders, conf.id).await.unwrap(),
             Role::Clerk => clerk::work(&mut pres_orders, &mut node_listener),
-            Role::Minister => minister::work(&mut pres_orders, &mut node_listener),
+            Role::Minister { subtree, clerks } => {
+                minister::work(&mut pres_orders, &mut node_listener, conf.id, subtree, clerks)
+                    .await
+                    .unwrap()
+            }
             Role::President { term } => {
                 president::work(&mut pres_orders, &mut chart, &mut req_listener, term).await
             }
