@@ -45,12 +45,12 @@ async fn test_req(
         Some(idx) => log.re_append(Order::Test(n), idx).await,
         None => log.append(Order::Test(n)).await,
     };
-    stream.send(Reply::Waiting(ticket.idx)).await.ok()?;
+    stream.send(Reply::Waiting(ticket._idx)).await.ok()?;
     ticket.notify.notified().await;
     Some(Reply::Done)
 }
 
-async fn handle_conn(stream: TcpStream, mut log: LogWriter) {
+async fn handle_conn(stream: TcpStream, mut _log: LogWriter) {
     use Msg::*;
     use Reply::*;
     let mut stream: MsgStream<Msg, Reply> = connection::wrap(stream);
@@ -60,7 +60,7 @@ async fn handle_conn(stream: TcpStream, mut log: LogWriter) {
         let final_reply = match msg {
             ClientReq(_) => Some(GoAway),
             #[cfg(test)]
-            Test { n, follow_up: partial } => test_req(n, partial, &mut log, &mut stream).await,
+            Test { n, follow_up: partial } => test_req(n, partial, &mut _log, &mut stream).await,
         };
 
         if let Some(reply) = final_reply {

@@ -8,6 +8,7 @@ pub(crate) async fn work(pres_orders: &mut Log, id: Id) -> Result<Role> {
     loop {
         match pres_orders.recv().await {
             Order::AssignMinistry { subtree, staff } => {
+                // TODO update cluster_directory
                 if staff.minister == id {
                     return Ok(Role::Minister {
                         subtree,

@@ -28,7 +28,7 @@ pub struct LogWriter {
 }
 
 pub struct AppendTicket {
-    idx: Idx,
+    _idx: Idx,
     notify: Arc<Notify>,
 }
 
@@ -45,9 +45,10 @@ impl LogWriter {
         let notify = Arc::new(Notify::new());
         self.notify_tx.send((idx, notify.clone())).await.unwrap();
         self.broadcast.send(order).unwrap();
-        AppendTicket { idx, notify }
+        AppendTicket { _idx: idx, notify }
     }
     /// Verify an order was appended correctly, if it was not append it again
+    #[allow(dead_code)] // not dead used in tests will be used later
     async fn re_append(&self, order: Order, prev_idx: Idx) -> AppendTicket {
         use raft::LogEntry;
 
@@ -59,7 +60,7 @@ impl LogWriter {
                     .await
                     .unwrap();
                 AppendTicket {
-                    idx: prev_idx,
+                    _idx: prev_idx,
                     notify,
                 }
             }

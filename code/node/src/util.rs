@@ -75,6 +75,7 @@ pub fn run_number(dir: &Path) -> u16 {
     run
 }
 
+#[allow(dead_code)]
 pub fn div_ceil(numerator: usize, denominator: usize) -> usize {
     (numerator + denominator - 1) / denominator
 }

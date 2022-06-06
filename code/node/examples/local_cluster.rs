@@ -22,7 +22,7 @@ async fn main() {
         pres_port: None,
         node_port: None,
         req_port: None,
-        cluster_size: 3,
+        cluster_size: 4,
         database: PathBuf::from("changed in loop"),
     };
 

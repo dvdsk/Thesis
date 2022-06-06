@@ -38,7 +38,7 @@ where
 
 pub fn setup_tracing(instance: String, endpoint: IpAddr, run: u16) {
     let filter = filter::EnvFilter::builder()
-        .parse("info,instance_chart=warn")
+        .parse("info,instance_chart=warn,node::president::raft::state=warn")
         .unwrap();
 
     let telemetry = opentelemetry(instance, endpoint, run);
@@ -46,6 +46,7 @@ pub fn setup_tracing(instance: String, endpoint: IpAddr, run: u16) {
         .pretty()
         .with_line_number(true);
 
+    // console_subscriber::init();
     let _ignore_err = tracing_subscriber::registry()
         .with(ErrorLayer::default())
         .with(filter)
@@ -66,7 +67,6 @@ pub fn setup_integration_tracing(instance: String, endpoint: IpAddr, run: u16) {
         .with_line_number(true)
         .with_test_writer();
 
-    // let console_layer = console_subscriber::spawn();
     // console_subscriber::init();
     let _ignore_err = tracing_subscriber::registry()
         .with(ErrorLayer::default())

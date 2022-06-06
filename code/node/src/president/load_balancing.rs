@@ -3,6 +3,7 @@ use std::path::PathBuf;
 
 use crate::Id;
 use tokio::sync::mpsc;
+use tracing::info;
 
 use self::issue::{Issue, Issues};
 
@@ -62,6 +63,7 @@ impl LoadBalancer {
         let mut init = self.initialize(state).await;
         init.run().await;
     }
+    #[allow(dead_code)]
     pub async fn change_policy(&self) {
         // get some mutex
         // execute change
@@ -79,7 +81,7 @@ impl LoadBalancer {
             events: self.events,
             staffing,
             idle: HashSet::new(),
-            policy: self.policy,
+            _policy: self.policy,
             issues: Default::default(),
         }
     }
@@ -118,12 +120,14 @@ impl LoadBalancer {
             }
         }
 
-        let minister = idle.drain().next().unwrap();
-        let clerks = idle.drain().collect();
+        let mut idle = idle.drain();
+        let minister = idle.next().unwrap();
+        let clerks = idle.collect();
         let add_root = Order::AssignMinistry {
             subtree: PathBuf::from("/"),
             staff: Staff { minister, clerks },
         };
+        info!("{:?}",&add_root);
         self.log_writer.append(add_root).await.committed().await;
         staffing
     }
@@ -133,7 +137,9 @@ struct Init {
     chart: Chart,
     log_writer: LogWriter,
     events: mpsc::Receiver<Event>,
-    policy: (),
+    /// used for staffing changes due the drop of a ministry because
+    /// its directory is deleted
+    _policy: (),
     staffing: Staffing,
     idle: HashSet<Id>,
     issues: Issues,

@@ -134,7 +134,7 @@ async fn succession(chart: Chart, cluster_size: u16, state: State) {
             setup_time.end = Duration::min(setup_time.end.mul_f32(1.5), MAX_ELECTION_SETUP);
             let setup_time = rng.gen_range(setup_time.clone());
             tokio::select! {
-                () = sleep(dbg!(setup_time)) => (),
+                () = sleep(setup_time) => (),
                 () = (&mut valid_leader_found) => {
                     debug!("not starting election, valid leader encounterd, our_term: {our_term}");
                     continue 'outer

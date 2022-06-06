@@ -1,14 +1,13 @@
 use std::path::PathBuf;
 
 use color_eyre::Result;
-use futures::pin_mut;
 use tokio::net::TcpListener;
 
 use crate::president::{Log, Order};
 use crate::{Id, Role};
 
 async fn handle_client_requests(socket: &mut TcpListener) {
-    for stream in socket.accept().await {
+    for _stream in socket.accept().await {
         todo!();
     }
 }
@@ -25,6 +24,7 @@ async fn handle_pres_orders(
             Order::BecomePres { term } => return Ok(Role::President { term }),
             Order::ResignPres => unreachable!(),
             Order::AssignMinistry { subtree, staff } => {
+                // TODO update cluster_directory
                 if staff.minister == our_id && subtree != our_subtree {
                     return Ok(Role::Minister {
                         subtree,
@@ -47,10 +47,9 @@ pub(crate) async fn work(
     socket: &mut TcpListener,
     our_id: Id,
     our_subtree: PathBuf,
-    clerks: Vec<Id>,
+    _clerks: Vec<Id>,
 ) -> Result<Role> {
 
-    let ministry = todo!();
     let client_requests = handle_client_requests(socket);
     let pres_orders = handle_pres_orders(pres_orders, our_id, our_subtree);
 

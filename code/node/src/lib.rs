@@ -3,7 +3,6 @@ use std::num::NonZeroU16;
 use std::path::PathBuf;
 
 use clap::Parser;
-use color_eyre::eyre::Result;
 pub use color_eyre::eyre::WrapErr;
 use instance_chart::{discovery, ChartBuilder};
 use serde::{Deserialize, Serialize};
@@ -62,6 +61,7 @@ pub struct Config {
 
     /// number of nodes in the cluster, must be fixed
     /// by default pick a free port
+    /// Minimum is 4 (1 president, 1 minister, 2 clerks)
     #[clap(short, long)]
     pub cluster_size: u16,
 
@@ -73,6 +73,8 @@ pub struct Config {
 
 #[instrument(level = "info")]
 pub async fn run(conf: Config) {
+    assert!(conf.cluster_size > 3, "minimum cluster size is 4");
+
     let (pres_listener, pres_port) = util::open_socket(conf.pres_port).await.unwrap();
     let (mut node_listener, node_port) = util::open_socket(conf.node_port).await.unwrap();
     let (mut req_listener, req_port) = util::open_socket(conf.req_port).await.unwrap();
@@ -96,12 +98,18 @@ pub async fn run(conf: Config) {
     loop {
         role = match role {
             Role::Idle => idle::work(&mut pres_orders, conf.id).await.unwrap(),
-            Role::Clerk => clerk::work(&mut pres_orders, &mut node_listener),
-            Role::Minister { subtree, clerks } => {
-                minister::work(&mut pres_orders, &mut node_listener, conf.id, subtree, clerks)
-                    .await
-                    .unwrap()
-            }
+            Role::Clerk => clerk::work(&mut pres_orders, &mut node_listener, conf.id)
+                .await
+                .unwrap(),
+            Role::Minister { subtree, clerks } => minister::work(
+                &mut pres_orders,
+                &mut node_listener,
+                conf.id,
+                subtree,
+                clerks,
+            )
+            .await
+            .unwrap(),
             Role::President { term } => {
                 president::work(&mut pres_orders, &mut chart, &mut req_listener, term).await
             }

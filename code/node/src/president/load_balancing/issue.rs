@@ -48,6 +48,7 @@ pub enum Issue {
     // less clerks then minimum (=3) left
     UnderStaffed { subtree: PathBuf, down: Vec<Id> },
     // experiencing a load higher then allowed
+    #[allow(dead_code)]
     Overloaded { load: (), subtree: PathBuf },
 }
 
