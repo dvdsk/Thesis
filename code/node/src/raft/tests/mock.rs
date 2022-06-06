@@ -1,5 +1,11 @@
+use async_trait::async_trait;
 use color_eyre::Result;
+use futures::SinkExt;
 use futures::StreamExt;
+use futures::TryStreamExt;
+use protocol::connection::MsgStream;
+use serde::Deserialize;
+use serde::Serialize;
 use tokio::net::TcpListener;
 use tokio::net::TcpStream;
 use tokio::sync::broadcast;
@@ -8,22 +14,30 @@ use tokio::task::JoinSet;
 use tracing::debug;
 use tracing::info;
 use tracing::instrument;
+use tracing::warn;
 
-use crate::president::load_balancing::LoadNotifier;
-use crate::president::messages;
-use crate::president::raft;
-use crate::president::raft::State;
 use crate::president::subjects;
-use crate::president::LogWriter;
+use crate::raft::LogWriter;
 use crate::president::Order;
+use crate::raft;
+use crate::raft::State;
 use crate::util;
 use crate::Idx;
 
 use super::util as test_util;
 use super::util::{wait_till_pres, CurrPres};
 
-use crate::president::Chart;
+use crate::Chart;
 use instance_chart::{discovery, ChartBuilder};
+
+#[derive(Clone)]
+struct MockStatusNotifier;
+
+#[async_trait]
+impl crate::raft::subjects::StatusNotifier for MockStatusNotifier {
+    async fn subject_up(&self, _subject_id: crate::Id) {}
+    async fn subject_down(&self, _subject_id: crate::Id) {}
+}
 
 async fn heartbeat_while_pres(
     mut chart: Chart,
@@ -38,18 +52,15 @@ async fn heartbeat_while_pres(
 
         let (order_tx, _order_rx) = tokio::sync::broadcast::channel(16);
         let (_commit_notify_tx, commit_notify) = mpsc::channel(16);
-        let (load_notify, _load_nodify_rx) = mpsc::channel(16);
 
-        let load_notify = LoadNotifier {
-            sender: load_notify,
-        };
+        let status_notifier = MockStatusNotifier;
         info!("id: {} became president, term: {term}", chart.our_id());
 
         let instruct = subjects::instruct(
             &mut chart,
             order_tx,
             commit_notify,
-            load_notify,
+            status_notifier,
             state.clone(),
             term,
         );
@@ -138,6 +149,54 @@ impl TestVoteNode {
     }
 }
 
+async fn test_req(
+    n: u8,
+    partial: Option<Idx>,
+    log: &mut LogWriter,
+    stream: &mut MsgStream<Msg, Reply>,
+) -> Option<Reply> {
+
+    debug!("appending Test({n}) to log");
+    let ticket = match partial {
+        Some(idx) => log.re_append(Order::Test(n), idx).await,
+        None => log.append(Order::Test(n)).await,
+    };
+    stream.send(Reply::Waiting(ticket._idx)).await.ok()?;
+    ticket.notify.notified().await;
+    Some(Reply::Done)
+}
+
+async fn handle_conn(stream: TcpStream, mut _log: LogWriter) {
+    use Msg::*;
+    use Reply::*;
+    let mut stream: MsgStream<Msg, Reply> = connection::wrap(stream);
+    while let Ok(Some(msg)) = stream.try_next().await {
+        debug!("president got request: {msg:?}");
+
+        let final_reply = match msg {
+            ClientReq(_) => Some(GoAway),
+            #[cfg(test)]
+            Test { n, follow_up: partial } => test_req(n, partial, &mut _log, &mut stream).await,
+        };
+
+        if let Some(reply) = final_reply {
+            if let Err(e) = stream.send(reply).await {
+                warn!("error replying to message: {e:?}");
+                return;
+            }
+        }
+    }
+}
+
+pub async fn handle_incoming(listener: &mut TcpListener, log: LogWriter) {
+    let mut request_handlers = JoinSet::new();
+    loop {
+        let (conn, _addr) = listener.accept().await.unwrap();
+        let handle = handle_conn(conn, log.clone());
+        request_handlers.build_task().name("president msg conn").spawn(handle);
+    }
+}
+
 #[instrument(skip_all, fields(id = state.id))]
 pub async fn president(
     mut chart: Chart,
@@ -175,11 +234,7 @@ pub async fn president(
             }
         }
 
-        let (load_notify, _load_nodify_rx) = mpsc::channel(16);
-
-        let load_notify = LoadNotifier {
-            sender: load_notify,
-        };
+        let load_notify = MockStatusNotifier;
         info!("id: {} became president, term: {term}", chart.our_id());
 
         let instruct = subjects::instruct(
@@ -193,7 +248,7 @@ pub async fn president(
 
         tokio::select! {
             () = instruct => unreachable!(),
-            () = messages::handle_incoming(&mut listener, log_writer) => unreachable!(),
+            () = handle_incoming(&mut listener, log_writer) => unreachable!(),
             () = keep_log_update(&mut orders) => (), // resigned as president
         }
     }
@@ -273,7 +328,24 @@ impl TestAppendNode {
     }
 }
 
-use crate::president::messages::{Msg, Reply};
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum Msg {
+    ClientReq(protocol::Request),
+    #[cfg(test)]
+    Test {
+        n: u8,
+        follow_up: Option<Idx>,
+    },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum Reply {
+    GoAway, // president itself does not assist citizens
+    Waiting(Idx),
+    Done,
+    Error,
+}
+
 use protocol::connection;
 pub struct IncompleteOrder {
     stream: connection::MsgStream<Reply, Msg>,
@@ -301,7 +373,6 @@ impl TestAppendNode {
         order: Order,
         partial: Option<Idx>,
     ) -> Result<IncompleteOrder, &'static str> {
-        use futures::SinkExt;
 
         let stream = TcpStream::connect(("127.0.0.1", self.req_port))
             .await

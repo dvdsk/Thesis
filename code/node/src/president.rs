@@ -1,74 +1,20 @@
-use std::sync::Arc;
-
 use tokio::net::TcpListener;
-use tokio::sync::{broadcast, mpsc, Notify};
+use tokio::sync::{broadcast, mpsc};
 use tracing::info;
-
-use instance_chart::Chart as mChart;
-type Chart = mChart<3, u16>;
 
 mod load_balancing;
 mod messages;
-pub mod raft;
+
+use crate::Chart;
+use crate::raft;
 use crate::president::load_balancing::LoadBalancer;
-use crate::{Idx, Term};
+use crate::Term;
 pub use raft::subjects;
 pub use raft::{Log, Order};
+use raft::LogWriter;
 
 use self::load_balancing::LoadNotifier;
 
-/// interface to append an item to the clusters raft log and
-/// return once it is comitted
-#[derive(Debug, Clone)]
-pub struct LogWriter {
-    term: Term,
-    state: raft::State,
-    broadcast: broadcast::Sender<Order>,
-    notify_tx: mpsc::Sender<(Idx, Arc<Notify>)>,
-}
-
-pub struct AppendTicket {
-    _idx: Idx,
-    notify: Arc<Notify>,
-}
-
-impl AppendTicket {
-    async fn committed(self) {
-        self.notify.notified().await;
-    }
-}
-
-impl LogWriter {
-    // returns notify
-    async fn append(&self, order: Order) -> AppendTicket {
-        let idx = self.state.append(order.clone(), self.term);
-        let notify = Arc::new(Notify::new());
-        self.notify_tx.send((idx, notify.clone())).await.unwrap();
-        self.broadcast.send(order).unwrap();
-        AppendTicket { _idx: idx, notify }
-    }
-    /// Verify an order was appended correctly, if it was not append it again
-    #[allow(dead_code)] // not dead used in tests will be used later
-    async fn re_append(&self, order: Order, prev_idx: Idx) -> AppendTicket {
-        use raft::LogEntry;
-
-        match self.state.entry_at(prev_idx) {
-            Some(LogEntry { order, .. }) if order == order => {
-                let notify = Arc::new(Notify::new());
-                self.notify_tx
-                    .send((prev_idx, notify.clone()))
-                    .await
-                    .unwrap();
-                AppendTicket {
-                    _idx: prev_idx,
-                    notify,
-                }
-            }
-            Some(LogEntry { .. }) => self.append(order).await,
-            None => self.append(order).await,
-        }
-    }
-}
 
 async fn recieve_own_order(orders: &mut mpsc::Receiver<Order>, load_notifier: LoadNotifier) {
     loop {

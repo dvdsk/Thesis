@@ -3,7 +3,7 @@ use std::sync::Arc;
 use tokio::sync::{mpsc, Notify};
 use tracing::{debug, instrument};
 
-use crate::president::raft::State;
+use crate::raft::State;
 use crate::Idx;
 
 struct Waiters {

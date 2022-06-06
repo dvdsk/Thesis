@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use std::collections::HashSet;
 use std::path::PathBuf;
 
@@ -14,18 +15,23 @@ use staffing::Staffing;
 mod action;
 mod issue;
 
+
 #[derive(Debug, Clone)]
 pub struct LoadNotifier {
     pub sender: mpsc::Sender<Event>,
 }
 
-impl LoadNotifier {
-    pub async fn subject_up(&self, subject_id: Id) {
+#[async_trait]
+impl crate::raft::subjects::StatusNotifier for LoadNotifier {
+    async fn subject_up(&self, subject_id: Id) {
         self.sender.try_send(Event::NodeUp(subject_id)).unwrap();
     }
-    pub async fn subject_down(&self, subject_id: Id) {
+    async fn subject_down(&self, subject_id: Id) {
         self.sender.try_send(Event::NodeDown(subject_id)).unwrap();
     }
+}
+
+impl LoadNotifier {
     pub async fn committed(&self, order: Order) {
         self.sender.try_send(Event::Committed(order)).unwrap();
     }
@@ -127,7 +133,7 @@ impl LoadBalancer {
             subtree: PathBuf::from("/"),
             staff: Staff { minister, clerks },
         };
-        info!("{:?}",&add_root);
+        info!("{:?}", &add_root);
         self.log_writer.append(add_root).await.committed().await;
         staffing
     }

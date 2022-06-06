@@ -8,7 +8,7 @@ use tracing::{debug, warn};
 
 use crate::Idx;
 
-use super::LogWriter;
+use crate::raft::LogWriter;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Msg {

@@ -9,7 +9,7 @@ use tokio::task::{self, JoinHandle};
 use tracing::instrument;
 
 use crate::directory::Staff;
-use crate::president::Chart;
+use crate::Chart;
 use crate::{Role, Term};
 
 use super::state::State;

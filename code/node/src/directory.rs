@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use instance_chart::Id;
 use serde::{Serialize, Deserialize};
 
-use crate::president::raft::State;
+use crate::raft::State;
 use crate::president::Order;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

@@ -11,15 +11,20 @@ use tracing::{info, instrument};
 pub mod messages;
 pub mod util;
 
-mod clerk;
+mod raft;
 mod directory;
 mod idle;
+
+mod clerk;
 mod minister;
 mod president;
 
 pub type Id = u64;
 pub type Term = u32; // raft term
 pub type Idx = u32; // raft idx
+
+use instance_chart::Chart as mChart;
+type Chart = mChart<3, u16>;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum Role {

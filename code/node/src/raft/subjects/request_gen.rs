@@ -1,7 +1,7 @@
 use super::super::state::append::Request;
-use crate::president::raft::state::LogMeta;
-use crate::president::raft::State;
-use crate::president::Chart;
+use crate::raft::state::LogMeta;
+use crate::raft::State;
+use crate::Chart;
 use crate::Term;
 
 #[derive(Debug, Clone)]

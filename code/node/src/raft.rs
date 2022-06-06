@@ -16,9 +16,12 @@ mod log;
 mod state;
 pub mod subjects;
 mod succession;
+mod log_writer;
+
 #[cfg(test)]
 mod tests;
 
+pub use log_writer::LogWriter;
 pub use state::LogEntry;
 pub use state::State;
 

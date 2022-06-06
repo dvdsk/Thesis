@@ -15,6 +15,7 @@ num-traits = "0.2"
 # note: also change in ../protocol
 tokio = { version = "^1.19.1", features = ["macros", "net", "time", "rt-multi-thread", "tracing", "sync"] }
 futures = "0.3"
+async-trait = "0.1"
 
 tracing = "0.1"
 tracing-error = "0.2"

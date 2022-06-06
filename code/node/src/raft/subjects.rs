@@ -2,10 +2,10 @@ use std::collections::HashSet;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use crate::president::load_balancing::LoadNotifier;
-use crate::president::raft::CONN_RETRY_PERIOD;
-use crate::president::Chart;
+use crate::raft::CONN_RETRY_PERIOD;
+use crate::Chart;
 use crate::{Id, Idx, Term};
+use async_trait::async_trait;
 use color_eyre::eyre::eyre;
 use futures::{SinkExt, TryStreamExt};
 use protocol::connection::{self, MsgStream};
@@ -23,6 +23,12 @@ mod commited;
 use commited::Commited;
 mod request_gen;
 use request_gen::RequestGen;
+
+#[async_trait]
+pub trait StatusNotifier: Clone + Sync + Send {
+    async fn subject_up(&self, subject_id: Id);
+    async fn subject_down(&self, subject_id: Id);
+}
 
 async fn connect(address: &SocketAddr) -> MsgStream<Reply, Msg> {
     use std::io::ErrorKind;
@@ -52,7 +58,7 @@ async fn manage_subject(
     mut broadcast: broadcast::Receiver<Order>,
     mut appended: mpsc::Sender<u32>,
     mut req_gen: RequestGen,
-    load_balancer: LoadNotifier,
+    status_notify: impl StatusNotifier,
 ) {
     loop {
         let mut stream = connect(&address).await;
@@ -65,9 +71,9 @@ async fn manage_subject(
             continue;
         }
 
-        load_balancer.subject_up(subject_id).await;
+        status_notify.subject_up(subject_id).await;
         replicate_orders(&mut broadcast, &mut appended, &mut req_gen, &mut stream).await;
-        load_balancer.subject_down(subject_id).await;
+        status_notify.subject_down(subject_id).await;
     }
 }
 
@@ -145,7 +151,7 @@ pub async fn instruct(
     chart: &mut Chart,
     orders: broadcast::Sender<Order>,
     commit_notify: mpsc::Receiver<(Idx, Arc<Notify>)>,
-    load_notify: LoadNotifier,
+    status_notify: impl StatusNotifier + Clone + Sync + Send + 'static,
     state: State,
     term: Term,
 ) {
@@ -163,7 +169,7 @@ pub async fn instruct(
             broadcast_rx,
             append_updates,
             base_msg.clone(),
-            load_notify.clone(),
+            status_notify.clone(),
         );
         subjects.build_task().name("manage_subject").spawn(manage);
     };

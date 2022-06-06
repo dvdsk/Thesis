@@ -6,7 +6,7 @@ use tracing::trace;
 use crate::{Term, Id};
 
 use super::*;
-use crate::president::Chart;
+use crate::Chart;
 use instance_chart::discovery;
 
 pub async fn discoverd_majority(signal: mpsc::Sender<()>, chart: Chart, cluster_size: u16) {

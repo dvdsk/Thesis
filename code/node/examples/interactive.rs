@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 use tokio::net::{TcpListener, TcpStream};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use color_eyre::eyre::{Result, ErrReport};
+use color_eyre::eyre::Result;
 use mktemp::Temp;
 use node::Config;
 use node::util::runtime_dir;

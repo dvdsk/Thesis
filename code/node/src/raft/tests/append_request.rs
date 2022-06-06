@@ -3,8 +3,8 @@ use std::sync::Arc;
 use tokio::sync::{mpsc, Barrier};
 use tokio::task::JoinSet;
 
-use crate::president::raft::state::append::Reply;
-use crate::president::raft::State;
+use crate::raft::state::append::Reply;
+use crate::raft::State;
 use crate::president::Order;
 use crate::{util, Id, Term};
 
