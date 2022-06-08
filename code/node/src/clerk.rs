@@ -22,10 +22,11 @@ async fn handle_pres_orders(
             Order::ResignPres => unreachable!(),
             Order::AssignMinistry { subtree, staff } => {
                 // TODO update cluster_directory
-                if staff.minister == our_id {
+                if staff.minister.id == our_id {
                     return Ok(Role::Minister {
                         subtree,
                         clerks: staff.clerks,
+                        term: staff.term,
                     });
                 }
             }
@@ -42,6 +43,7 @@ async fn handle_pres_orders(
 
 pub(crate) async fn work(
     pres_orders: &mut Log,
+    _min_orders: &mut Log,
     socket: &mut TcpListener,
     our_id: Id,
 ) -> Result<Role> {

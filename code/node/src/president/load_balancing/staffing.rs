@@ -24,9 +24,10 @@ impl Staffing {
         match order {
             AssignMinistry { subtree, staff } => {
                 self.by_ministry.insert(subtree.clone(), staff.clone());
-                self.ministers.insert(staff.minister, subtree.clone());
-                let tagged_clerks = staff.clerks.iter().map(|c| (*c, subtree.clone()));
-                self.clerks.extend(tagged_clerks);
+                self.ministers.insert(staff.minister.id, subtree.clone());
+                let tagged_clerks = staff.clerks.iter().map(|c| (c.id, subtree.clone()));
+                self.clerks
+                    .extend(tagged_clerks.map(|(clerk, path)| (clerk, path)));
                 Ok(())
             }
             not_staff_order => Err(not_staff_order),

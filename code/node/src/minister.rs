@@ -2,39 +2,48 @@ use std::path::PathBuf;
 
 use color_eyre::Result;
 use tokio::net::TcpListener;
+use tokio::sync::{broadcast, mpsc};
+use tracing::info;
 
+use crate::directory::{Node, ReDirectory};
+use crate::president::subjects;
 use crate::president::{Log, Order};
-use crate::{Id, Role};
+use crate::raft::LogWriter;
+use crate::{Id, Role, Term};
 
-async fn handle_client_requests(socket: &mut TcpListener) {
-    for _stream in socket.accept().await {
-        todo!();
-    }
-}
+mod clerks;
+mod client;
 
 async fn handle_pres_orders(
     pres_orders: &mut Log,
     our_id: Id,
-    our_subtree: PathBuf,
+    our_subtree: &PathBuf,
+    mut register: clerks::Register,
+    mut redirectory: ReDirectory,
 ) -> Result<Role> {
     loop {
-        match pres_orders.recv().await {
+        let order = pres_orders.recv().await;
+        redirectory.update(&order).await;
+        match order {
             Order::None => todo!(),
             Order::Assigned(_) => todo!(),
             Order::BecomePres { term } => return Ok(Role::President { term }),
             Order::ResignPres => unreachable!(),
             Order::AssignMinistry { subtree, staff } => {
                 // TODO update cluster_directory
-                if staff.minister == our_id && subtree != our_subtree {
+                if staff.minister.id == our_id && subtree != *our_subtree {
                     return Ok(Role::Minister {
                         subtree,
                         clerks: staff.clerks,
+                        term: staff.term,
                     });
                 }
 
-                if staff.clerks.contains(&our_id) {
+                if staff.clerks.contains(&Node::local(our_id)) {
                     return Ok(Role::Clerk);
                 }
+
+                register.update(staff.clerks);
             }
             #[cfg(test)]
             Order::Test(_) => todo!(),
@@ -44,17 +53,50 @@ async fn handle_pres_orders(
 
 pub(crate) async fn work(
     pres_orders: &mut Log,
+    min_orders: &mut Log,
     socket: &mut TcpListener,
     our_id: Id,
     our_subtree: PathBuf,
-    _clerks: Vec<Id>,
+    clerks: Vec<Node>,
+    term: Term,
 ) -> Result<Role> {
+    info!("started work as minister: {our_id}");
+    let (register, mut clerks) = clerks::Map::new(clerks, our_id);
 
-    let client_requests = handle_client_requests(socket);
-    let pres_orders = handle_pres_orders(pres_orders, our_id, our_subtree);
+    let Log { state, .. } = min_orders;
+
+    let redirectory = ReDirectory::from_committed(state, our_subtree.clone());
+
+    let (broadcast, _) = broadcast::channel(16);
+    let (tx, notify_rx) = mpsc::channel(16);
+    let log_writer = LogWriter {
+        term,
+        state: state.clone(),
+        broadcast: broadcast.clone(),
+        notify_tx: tx,
+    };
+
+    let instruct_subjects = subjects::instruct(
+        &mut clerks,
+        broadcast.clone(),
+        notify_rx,
+        subjects::EmptyNotifier,
+        state.clone(),
+        term,
+    );
+
+    let pres_orders = handle_pres_orders(
+        pres_orders,
+        our_id,
+        &our_subtree,
+        register,
+        redirectory.clone(),
+    );
+    let client_requests = client::handle_requests(socket, log_writer, &our_subtree, redirectory);
 
     tokio::select! {
         new_role = pres_orders => return new_role,
-        _ = client_requests => unreachable!(),
+        () = instruct_subjects => unreachable!(),
+        () = client_requests => unreachable!(),
     };
 }

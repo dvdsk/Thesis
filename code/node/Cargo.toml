@@ -10,6 +10,7 @@ instance-chart = { version = "0.2.1" }
 
 rand = "0.8"
 num-traits = "0.2"
+derivative = "2"
 
 # for now we depend on this PR to give joinset tasks names
 # note: also change in ../protocol

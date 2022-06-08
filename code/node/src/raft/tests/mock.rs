@@ -16,6 +16,7 @@ use tracing::info;
 use tracing::instrument;
 use tracing::warn;
 
+use crate::directory::Node;
 use crate::president::subjects;
 use crate::raft::LogWriter;
 use crate::president::Order;
@@ -35,8 +36,8 @@ struct MockStatusNotifier;
 
 #[async_trait]
 impl crate::raft::subjects::StatusNotifier for MockStatusNotifier {
-    async fn subject_up(&self, _subject_id: crate::Id) {}
-    async fn subject_down(&self, _subject_id: crate::Id) {}
+    async fn subject_up(&self, _subject_id: Node) {}
+    async fn subject_down(&self, _subject_id: Node) {}
 }
 
 async fn heartbeat_while_pres(

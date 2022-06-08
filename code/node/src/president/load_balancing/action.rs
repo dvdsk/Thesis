@@ -4,36 +4,34 @@ use tokio::net::TcpStream;
 use tokio::task::JoinSet;
 use tracing::instrument;
 
-use crate::directory::Staff;
+use crate::directory::{Staff, Node};
 use crate::president::Chart;
-use crate::{Id, Idx};
+use crate::Idx;
 use color_eyre::Result;
 use std::io;
-use std::net::SocketAddr;
 use std::path::PathBuf;
 
 use super::Init;
 use crate::messages::{Msg, Reply};
 
 #[instrument(err)]
-async fn request_commit_idx(addr: SocketAddr, id: Id) -> Result<(Id, Idx), io::Error> {
-    let stream = TcpStream::connect(addr).await?;
+async fn request_commit_idx(clerk: Node) -> Result<(Node, Idx), io::Error> {
+    let stream = TcpStream::connect(clerk.addr).await?;
     let mut stream: connection::MsgStream<Reply, Msg> = connection::wrap(stream);
     stream.send(Msg::ReqCommitIdx).await?;
     loop {
         match stream.try_next().await? {
             None => continue,
-            Some(Reply::CommitIdx(idx)) => return Ok((id, idx)),
+            Some(Reply::CommitIdx(idx)) => return Ok((clerk, idx)),
         }
     }
 }
 
 #[instrument(skip(clerks), ret)]
-async fn most_experienced(clerks: &[Id], chart: &Chart) -> Option<Id> {
+async fn most_experienced(clerks: &[Node], chart: &Chart) -> Option<Node> {
     let mut requests: JoinSet<_> = clerks
         .into_iter()
-        .map(|id| (chart.get_nth_addr::<1>(*id).unwrap(), id))
-        .map(|(addr, id)| request_commit_idx(addr, *id))
+        .map(|clerk| request_commit_idx(clerk.clone()))
         .fold(JoinSet::new(), |mut set, fut| {
             set.build_task().name("request_commit_idx").spawn(fut);
             set
@@ -74,14 +72,16 @@ impl Init {
             .await
             .ok_or("Could not contact any staff")?;
 
-        let new_staff = Staff {
-            minister: candidate,
-            clerks: staff
+        let clerks= staff
                 .clerks
                 .iter()
-                .copied()
-                .filter(|id| *id != candidate)
-                .collect(),
+                .cloned()
+                .filter(|clerk| *clerk != candidate)
+                .collect();
+        let new_staff = Staff {
+            minister: candidate,
+            clerks,
+            term: staff.term + 1,
         };
         self.update_ministry_staff(subtree, new_staff).await;
         Ok(())
@@ -101,6 +101,7 @@ impl Init {
         let idle = self.idle.drain().next().ok_or("No free staff left")?;
         let mut new_staff = staff.clone();
         new_staff.clerks.push(idle);
+        new_staff.term += 1;
 
         self.update_ministry_staff(subtree, new_staff).await;
         Ok(())

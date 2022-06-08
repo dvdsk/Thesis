@@ -1,7 +1,7 @@
 use super::super::state::append::Request;
+use super::Source;
 use crate::raft::state::LogMeta;
 use crate::raft::State;
-use crate::Chart;
 use crate::Term;
 
 #[derive(Debug, Clone)]
@@ -48,7 +48,7 @@ impl RequestGen {
         self.state.last_log_meta().idx >= self.next_idx
     }
 
-    pub fn new(state: State, term: Term, chart: &Chart) -> Self {
+    pub fn new(state: State, term: Term, chart: &impl Source) -> Self {
         let LogMeta {
             idx: prev_idx,
             term: prev_term,

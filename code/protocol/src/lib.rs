@@ -1,3 +1,6 @@
+use std::net::SocketAddr;
+use std::path::PathBuf;
+
 use serde::{Deserialize, Serialize};
 
 pub mod connection;
@@ -14,11 +17,13 @@ pub trait Message<'de>: Serialize + Deserialize<'de> {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum Request {
-    Test(u8), // TODO remove
+    CreateFile(PathBuf),
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum Response {
+    /// wrong subtree redirect client to correct clerk/minister
+    Redirect ( SocketAddr ),
 }
 
 // #[cfg(test)]

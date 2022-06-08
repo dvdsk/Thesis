@@ -1,6 +1,5 @@
 use std::path::PathBuf;
 
-use color_eyre::eyre::WrapErr;
 use color_eyre::Result;
 use serde::{Deserialize, Serialize};
 use tokio::net::TcpListener;
@@ -51,12 +50,9 @@ impl Log {
     pub(crate) fn open(
         chart: Chart,
         cluster_size: u16,
-        db: sled::Db,
+        db: sled::Tree,
         listener: TcpListener,
     ) -> Result<Self> {
-        let db = db
-            .open_tree("president log")
-            .wrap_err("Could not open db tree: \"president log\"")?;
         let (tx, orders) = mpsc::channel(8);
         let state = State::new(tx, db, chart.our_id());
 

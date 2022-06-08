@@ -2,8 +2,8 @@ use std::collections::HashSet;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
+use crate::directory::Node;
 use crate::raft::CONN_RETRY_PERIOD;
-use crate::Chart;
 use crate::{Id, Idx, Term};
 use async_trait::async_trait;
 use color_eyre::eyre::eyre;
@@ -19,6 +19,8 @@ use super::state::append;
 use super::{Msg, Order, Reply};
 use super::{State, HB_PERIOD};
 
+mod source;
+pub use source::{Source, SourceNotify};
 mod commited;
 use commited::Commited;
 mod request_gen;
@@ -26,8 +28,18 @@ use request_gen::RequestGen;
 
 #[async_trait]
 pub trait StatusNotifier: Clone + Sync + Send {
-    async fn subject_up(&self, subject_id: Id);
-    async fn subject_down(&self, subject_id: Id);
+    async fn subject_up(&self, subject: Node);
+    async fn subject_down(&self, subject: Node);
+}
+
+/// does nothing
+#[derive(Clone)]
+pub struct EmptyNotifier;
+
+#[async_trait]
+impl StatusNotifier for EmptyNotifier {
+    async fn subject_up(&self, _: Node) {}
+    async fn subject_down(&self, _: Node) {}
 }
 
 async fn connect(address: &SocketAddr) -> MsgStream<Reply, Msg> {
@@ -71,9 +83,19 @@ async fn manage_subject(
             continue;
         }
 
-        status_notify.subject_up(subject_id).await;
+        status_notify
+            .subject_up(Node {
+                id: subject_id,
+                addr: address,
+            })
+            .await;
         replicate_orders(&mut broadcast, &mut appended, &mut req_gen, &mut stream).await;
-        status_notify.subject_down(subject_id).await;
+        status_notify
+            .subject_down(Node {
+                id: subject_id,
+                addr: address,
+            })
+            .await;
     }
 }
 
@@ -148,7 +170,7 @@ async fn replicate_orders(
 /// look for new subjects in the chart and register them
 #[instrument(skip_all, fields(president_id = state.id))]
 pub async fn instruct(
-    chart: &mut Chart,
+    members: &mut impl Source,
     orders: broadcast::Sender<Order>,
     commit_notify: mpsc::Receiver<(Idx, Arc<Notify>)>,
     status_notify: impl StatusNotifier + Clone + Sync + Send + 'static,
@@ -156,7 +178,7 @@ pub async fn instruct(
     term: Term,
 ) {
     let mut commit_idx = Commited::new(commit_notify, &state);
-    let base_msg = RequestGen::new(state.clone(), term, chart);
+    let base_msg = RequestGen::new(state.clone(), term, members);
 
     let mut subjects = JoinSet::new();
     let mut add_subject = |id, addr, commit_idx: &mut Commited| {
@@ -174,15 +196,15 @@ pub async fn instruct(
         subjects.build_task().name("manage_subject").spawn(manage);
     };
 
-    let mut notify = chart.notify();
-    let mut adresses: HashSet<_> = chart.nth_addr_vec::<0>().into_iter().collect();
+    let mut notify = members.notify();
+    let mut adresses: HashSet<_> = members.adresses().into_iter().collect();
     for (id, addr) in adresses.iter().cloned() {
         add_subject(id, addr, &mut commit_idx)
     }
 
     loop {
         let recoverd = tokio::select! {
-            res = notify.recv_nth_addr::<0>() => res,
+            res = notify.recv_new() => res,
             _ = commit_idx.maintain() => unreachable!(),
         };
 

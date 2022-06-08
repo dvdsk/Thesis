@@ -11,9 +11,9 @@ use tracing::{info, instrument};
 pub mod messages;
 pub mod util;
 
-mod raft;
 mod directory;
 mod idle;
+mod raft;
 
 mod clerk;
 mod minister;
@@ -24,14 +24,22 @@ pub type Term = u32; // raft term
 pub type Idx = u32; // raft idx
 
 use instance_chart::Chart as mChart;
+
+use self::directory::Node;
 type Chart = mChart<3, u16>;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum Role {
     Idle,
     Clerk,
-    Minister { subtree: PathBuf, clerks: Vec<Id> },
-    President { term: Term },
+    Minister {
+        subtree: PathBuf,
+        clerks: Vec<Node>,
+        term: Term,
+    },
+    President {
+        term: Term,
+    },
 }
 
 /// Simple program to greet a person
@@ -81,7 +89,7 @@ pub async fn run(conf: Config) {
     assert!(conf.cluster_size > 3, "minimum cluster size is 4");
 
     let (pres_listener, pres_port) = util::open_socket(conf.pres_port).await.unwrap();
-    let (mut node_listener, node_port) = util::open_socket(conf.node_port).await.unwrap();
+    let (node_listener, node_port) = util::open_socket(conf.node_port).await.unwrap();
     let (mut req_listener, req_port) = util::open_socket(conf.req_port).await.unwrap();
     let mut chart = ChartBuilder::new()
         .with_id(conf.id)
@@ -96,22 +104,37 @@ pub async fn run(conf: Config) {
 
     info!("opening on disk db at: {:?}", conf.database);
     let db = sled::open(conf.database).unwrap();
+    let tree = db.open_tree("president log").unwrap();
     let mut pres_orders =
-        president::Log::open(chart.clone(), conf.cluster_size, db, pres_listener).unwrap();
+        raft::Log::open(chart.clone(), conf.cluster_size, tree, pres_listener).unwrap();
+    let tree = db.open_tree("minister log").unwrap();
+    let mut min_orders =
+        raft::Log::open(chart.clone(), conf.cluster_size, tree, node_listener).unwrap();
 
     let mut role = Role::Idle;
     loop {
         role = match role {
             Role::Idle => idle::work(&mut pres_orders, conf.id).await.unwrap(),
-            Role::Clerk => clerk::work(&mut pres_orders, &mut node_listener, conf.id)
-                .await
-                .unwrap(),
-            Role::Minister { subtree, clerks } => minister::work(
+            Role::Clerk => clerk::work(
                 &mut pres_orders,
-                &mut node_listener,
+                &mut min_orders,
+                &mut req_listener,
+                conf.id,
+            )
+            .await
+            .unwrap(),
+            Role::Minister {
+                subtree,
+                clerks,
+                term,
+            } => minister::work(
+                &mut pres_orders,
+                &mut min_orders,
+                &mut req_listener,
                 conf.id,
                 subtree,
                 clerks,
+                term,
             )
             .await
             .unwrap(),

@@ -2,19 +2,17 @@ use async_trait::async_trait;
 use std::collections::HashSet;
 use std::path::PathBuf;
 
-use crate::Id;
 use tokio::sync::mpsc;
 use tracing::info;
 
 use self::issue::{Issue, Issues};
 
 use super::{raft, Chart, LogWriter, Order};
-use crate::directory::Staff;
+use crate::directory::{Staff, Node};
 mod staffing;
 use staffing::Staffing;
 mod action;
 mod issue;
-
 
 #[derive(Debug, Clone)]
 pub struct LoadNotifier {
@@ -23,11 +21,11 @@ pub struct LoadNotifier {
 
 #[async_trait]
 impl crate::raft::subjects::StatusNotifier for LoadNotifier {
-    async fn subject_up(&self, subject_id: Id) {
-        self.sender.try_send(Event::NodeUp(subject_id)).unwrap();
+    async fn subject_up(&self, subject: Node) {
+        self.sender.try_send(Event::NodeUp(subject)).unwrap();
     }
-    async fn subject_down(&self, subject_id: Id) {
-        self.sender.try_send(Event::NodeDown(subject_id)).unwrap();
+    async fn subject_down(&self, subject: Node) {
+        self.sender.try_send(Event::NodeDown(subject)).unwrap();
     }
 }
 
@@ -39,8 +37,8 @@ impl LoadNotifier {
 
 #[derive(Debug)]
 pub enum Event {
-    NodeUp(Id),
-    NodeDown(Id),
+    NodeUp(Node),
+    NodeDown(Node),
     Committed(Order),
 }
 
@@ -131,7 +129,11 @@ impl LoadBalancer {
         let clerks = idle.collect();
         let add_root = Order::AssignMinistry {
             subtree: PathBuf::from("/"),
-            staff: Staff { minister, clerks },
+            staff: Staff {
+                minister,
+                clerks,
+                term: 1,
+            },
         };
         info!("{:?}", &add_root);
         self.log_writer.append(add_root).await.committed().await;
@@ -147,7 +149,7 @@ struct Init {
     /// its directory is deleted
     _policy: (),
     staffing: Staffing,
-    idle: HashSet<Id>,
+    idle: HashSet<Node>,
     issues: Issues,
 }
 
@@ -185,8 +187,8 @@ impl Init {
     async fn process_state_changes(&mut self) {
         while let Ok(event) = self.events.try_recv() {
             match event {
-                Event::NodeUp(id) => self.node_up(id),
-                Event::NodeDown(id) => self.node_down(id),
+                Event::NodeUp(node) => self.node_up(node),
+                Event::NodeDown(node) => self.node_down(node),
                 Event::Committed(order) => match self.staffing.process_order(order) {
                     Err(_not_staff_order) => todo!(),
                     Ok(_) => (),
@@ -197,23 +199,23 @@ impl Init {
 }
 
 impl Init {
-    fn node_up(&mut self, id: Id) {
-        if self.issues.solved_by_up(id) {
+    fn node_up(&mut self, node: Node) {
+        if self.issues.solved_by_up(node.id) {
             return;
         }
 
-        if self.staffing.clerk_back_up(id).is_some() {
+        if self.staffing.clerk_back_up(node.id).is_some() {
             return;
         }
 
-        self.idle.insert(id);
+        self.idle.insert(node);
     }
 
-    fn node_down(&mut self, id: Id) {
-        match self.staffing.register_node_down(id) {
+    fn node_down(&mut self, node: Node) {
+        match self.staffing.register_node_down(node.id) {
             Some(issue) => self.issues.add(issue),
             None => {
-                self.idle.remove(&id);
+                self.idle.remove(&node);
             }
         }
     }
