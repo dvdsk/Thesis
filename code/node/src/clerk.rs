@@ -1,17 +1,12 @@
 use std::path::PathBuf;
 
 use color_eyre::Result;
-use tokio::net::TcpListener;
 
 use crate::directory::{Node, ReDirectory};
 use crate::president::{Log, Order};
 use crate::{Id, Role};
 
-async fn handle_client_requests(socket: &mut TcpListener) {
-    for _stream in socket.accept().await {
-        todo!();
-    }
-}
+mod clients;
 
 async fn handle_pres_orders(
     pres_orders: &mut Log,
@@ -63,7 +58,7 @@ pub(crate) async fn work(
     } = state;
 
     redirectory.set_tree(Some(our_tree.clone()));
-    let client_requests = handle_client_requests(client_listener);
+    let client_requests = clients::handle_requests(client_listener, our_tree.clone(), redirectory.clone());
     let pres_orders = handle_pres_orders(pres_orders, *id, our_tree, redirectory);
     // let minister_orders = handle_minister_orders(); // Q how about minister change...
 
