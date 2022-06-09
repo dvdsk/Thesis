@@ -1,7 +1,6 @@
 use std::path::PathBuf;
 
 use color_eyre::Result;
-use tokio::net::TcpListener;
 use tokio::sync::{broadcast, mpsc};
 use tracing::info;
 
@@ -30,7 +29,6 @@ async fn handle_pres_orders(
             Order::BecomePres { term } => return Ok(Role::President { term }),
             Order::ResignPres => unreachable!(),
             Order::AssignMinistry { subtree, staff } => {
-                // TODO update cluster_directory
                 if staff.minister.id == our_id && subtree != *our_subtree {
                     return Ok(Role::Minister {
                         subtree,
@@ -40,7 +38,7 @@ async fn handle_pres_orders(
                 }
 
                 if staff.clerks.contains(&Node::local(our_id)) {
-                    return Ok(Role::Clerk);
+                    return Ok(Role::Clerk { subtree });
                 }
 
                 register.update(staff.clerks);
@@ -52,20 +50,26 @@ async fn handle_pres_orders(
 }
 
 pub(crate) async fn work(
-    pres_orders: &mut Log,
-    min_orders: &mut Log,
-    socket: &mut TcpListener,
-    our_id: Id,
+    state: &mut super::State,
     our_subtree: PathBuf,
     clerks: Vec<Node>,
     term: Term,
 ) -> Result<Role> {
+    let super::State {
+        pres_orders,
+        min_orders,
+        redirectory,
+        client_listener,
+        id: our_id,
+        ..
+    } = state;
     info!("started work as minister: {our_id}");
-    let (register, mut clerks) = clerks::Map::new(clerks, our_id);
+
+    let (register, mut clerks) = clerks::Map::new(clerks, *our_id);
 
     let Log { state, .. } = min_orders;
 
-    let redirectory = ReDirectory::from_committed(state, our_subtree.clone());
+    redirectory.set_tree(Some(our_subtree.clone()));
 
     let (broadcast, _) = broadcast::channel(16);
     let (tx, notify_rx) = mpsc::channel(16);
@@ -87,12 +91,13 @@ pub(crate) async fn work(
 
     let pres_orders = handle_pres_orders(
         pres_orders,
-        our_id,
+        *our_id,
         &our_subtree,
         register,
         redirectory.clone(),
     );
-    let client_requests = client::handle_requests(socket, log_writer, &our_subtree, redirectory);
+    let client_requests =
+        client::handle_requests(client_listener, log_writer, &our_subtree, redirectory);
 
     tokio::select! {
         new_role = pres_orders => return new_role,

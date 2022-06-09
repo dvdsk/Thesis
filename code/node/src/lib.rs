@@ -6,6 +6,7 @@ use clap::Parser;
 pub use color_eyre::eyre::WrapErr;
 use instance_chart::{discovery, ChartBuilder};
 use serde::{Deserialize, Serialize};
+use tokio::net::TcpListener;
 use tracing::{info, instrument};
 
 pub mod messages;
@@ -25,13 +26,16 @@ pub type Idx = u32; // raft idx
 
 use instance_chart::Chart as mChart;
 
-use self::directory::Node;
+use self::directory::{Node, ReDirectory};
+use self::util::open_socket;
 type Chart = mChart<3, u16>;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum Role {
     Idle,
-    Clerk,
+    Clerk {
+        subtree: PathBuf,
+    },
     Minister {
         subtree: PathBuf,
         clerks: Vec<Node>,
@@ -66,11 +70,11 @@ pub struct Config {
     /// Optional, port on which to listen for internal communication
     /// by default pick a free port
     #[clap(short, long)]
-    pub node_port: Option<NonZeroU16>,
+    pub minister_port: Option<NonZeroU16>,
     /// Optional, port on which to listen for client request
     /// by default pick a free port
     #[clap(short, long)]
-    pub req_port: Option<NonZeroU16>,
+    pub client_port: Option<NonZeroU16>,
 
     /// number of nodes in the cluster, must be fixed
     /// by default pick a free port
@@ -84,16 +88,25 @@ pub struct Config {
     pub database: PathBuf,
 }
 
+struct State {
+    pres_orders: raft::Log,
+    min_orders: raft::Log,
+    client_listener: TcpListener,
+    redirectory: ReDirectory,
+    id: Id,
+}
+
 #[instrument(level = "info")]
 pub async fn run(conf: Config) {
     assert!(conf.cluster_size > 3, "minimum cluster size is 4");
 
-    let (pres_listener, pres_port) = util::open_socket(conf.pres_port).await.unwrap();
-    let (node_listener, node_port) = util::open_socket(conf.node_port).await.unwrap();
-    let (mut req_listener, req_port) = util::open_socket(conf.req_port).await.unwrap();
+    let (pres_listener, pres_port) = open_socket(conf.pres_port).await.unwrap();
+    let (minister_listener, minister_port) = open_socket(conf.minister_port).await.unwrap();
+    let (client_listener, client_port) = open_socket(conf.client_port).await.unwrap();
+
     let mut chart = ChartBuilder::new()
         .with_id(conf.id)
-        .with_service_ports([pres_port, node_port, req_port])
+        .with_service_ports([pres_port, minister_port, client_port])
         .local_discovery(conf.local_instances)
         .finish()
         .unwrap();
@@ -104,43 +117,37 @@ pub async fn run(conf: Config) {
 
     info!("opening on disk db at: {:?}", conf.database);
     let db = sled::open(conf.database).unwrap();
+
     let tree = db.open_tree("president log").unwrap();
-    let mut pres_orders =
+    let pres_orders =
         raft::Log::open(chart.clone(), conf.cluster_size, tree, pres_listener).unwrap();
+    let redirectory = ReDirectory::from_committed(&pres_orders.state);
+
     let tree = db.open_tree("minister log").unwrap();
-    let mut min_orders =
-        raft::Log::open(chart.clone(), conf.cluster_size, tree, node_listener).unwrap();
+    let min_orders =
+        raft::Log::open(chart.clone(), conf.cluster_size, tree, minister_listener).unwrap();
+
+    let mut state = State {
+        pres_orders,
+        min_orders,
+        client_listener,
+        redirectory,
+        id: conf.id,
+    };
 
     let mut role = Role::Idle;
     loop {
         role = match role {
-            Role::Idle => idle::work(&mut pres_orders, conf.id).await.unwrap(),
-            Role::Clerk => clerk::work(
-                &mut pres_orders,
-                &mut min_orders,
-                &mut req_listener,
-                conf.id,
-            )
-            .await
-            .unwrap(),
+            Role::Idle => idle::work(&mut state).await.unwrap(),
+            Role::Clerk { subtree } => clerk::work(&mut state, subtree).await.unwrap(),
             Role::Minister {
                 subtree,
                 clerks,
                 term,
-            } => minister::work(
-                &mut pres_orders,
-                &mut min_orders,
-                &mut req_listener,
-                conf.id,
-                subtree,
-                clerks,
-                term,
-            )
-            .await
-            .unwrap(),
-            Role::President { term } => {
-                president::work(&mut pres_orders, &mut chart, &mut req_listener, term).await
-            }
+            } => minister::work(&mut state, subtree, clerks, term)
+                .await
+                .unwrap(),
+            Role::President { term } => president::work(&mut state, &mut chart, term).await,
         }
     }
 }

@@ -23,8 +23,8 @@ fn setup_node(id: u64) -> Result<Task> {
         run: util::run_number(&runtime_dir()),
         local_instances: true,
         pres_port: None,
-        node_port: None,
-        req_port: None,
+        minister_port: None,
+        client_port: None,
         cluster_size: 3,
         database: PathBuf::from("changed in loop"),
     };

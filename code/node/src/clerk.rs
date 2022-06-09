@@ -1,8 +1,11 @@
-use tokio::net::TcpListener;
-use color_eyre::Result;
+use std::path::PathBuf;
 
-use crate::{Id, Role};
+use color_eyre::Result;
+use tokio::net::TcpListener;
+
+use crate::directory::{Node, ReDirectory};
 use crate::president::{Log, Order};
+use crate::{Id, Role};
 
 async fn handle_client_requests(socket: &mut TcpListener) {
     for _stream in socket.accept().await {
@@ -13,21 +16,27 @@ async fn handle_client_requests(socket: &mut TcpListener) {
 async fn handle_pres_orders(
     pres_orders: &mut Log,
     our_id: Id,
+    our_subtree: PathBuf,
+    redirectory: &mut ReDirectory,
 ) -> Result<Role> {
     loop {
-        match pres_orders.recv().await {
+        let order = pres_orders.recv().await;
+        redirectory.update(&order).await;
+        match order {
             Order::None => todo!(),
             Order::Assigned(_) => todo!(),
             Order::BecomePres { term } => return Ok(Role::President { term }),
             Order::ResignPres => unreachable!(),
             Order::AssignMinistry { subtree, staff } => {
-                // TODO update cluster_directory
                 if staff.minister.id == our_id {
                     return Ok(Role::Minister {
                         subtree,
                         clerks: staff.clerks,
                         term: staff.term,
                     });
+                }
+                if staff.clerks.contains(&Node::local(our_id)) && subtree != *our_subtree {
+                    return Ok(Role::Clerk { subtree });
                 }
             }
             #[cfg(test)]
@@ -42,14 +51,20 @@ async fn handle_pres_orders(
 // }
 
 pub(crate) async fn work(
-    pres_orders: &mut Log,
-    _min_orders: &mut Log,
-    socket: &mut TcpListener,
-    our_id: Id,
+    state: &mut super::State,
+    our_tree: PathBuf,
 ) -> Result<Role> {
+    let super::State {
+        pres_orders,
+        redirectory,
+        client_listener,
+        id,
+        ..
+    } = state;
 
-    let client_requests = handle_client_requests(socket);
-    let pres_orders = handle_pres_orders(pres_orders, our_id);
+    redirectory.set_tree(Some(our_tree.clone()));
+    let client_requests = handle_client_requests(client_listener);
+    let pres_orders = handle_pres_orders(pres_orders, *id, our_tree, redirectory);
     // let minister_orders = handle_minister_orders(); // Q how about minister change...
 
     tokio::select! {

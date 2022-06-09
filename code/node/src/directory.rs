@@ -47,7 +47,7 @@ impl Node {
 /// to there right address given their subtree
 #[derive(Default, Clone)]
 pub struct ReDirectory {
-    our_tree: PathBuf,
+    our_tree: Option<PathBuf>,
     trees: Arc<RwLock<Vec<(PathBuf, Staff)>>>,
 }
 
@@ -62,7 +62,7 @@ fn insert_sorted(trees: &mut Vec<(PathBuf, Staff)>, path: PathBuf, staff: Staff)
 
 // TODO iedereen moet een redirectory
 impl ReDirectory {
-    pub fn from_committed(state: &State, our_tree: PathBuf) -> Self {
+    pub fn from_committed(state: &State) -> Self {
         let mut trees = Vec::new();
         for order in state.committed() {
             if let Order::AssignMinistry { subtree, staff } = order {
@@ -71,7 +71,7 @@ impl ReDirectory {
         }
 
         Self {
-            our_tree,
+            our_tree: None,
             trees: Arc::new(RwLock::new(trees)),
         }
     }
@@ -90,6 +90,10 @@ impl ReDirectory {
             Err(idx) => idx,
         };
         tree[idx].1.clone()
+    }
+
+    pub(crate) fn set_tree(&mut self, tree: Option<PathBuf>) {
+        self.our_tree = tree;
     }
 }
 

@@ -1,4 +1,3 @@
-use tokio::net::TcpListener;
 use tokio::sync::{broadcast, mpsc};
 use tracing::info;
 
@@ -30,15 +29,19 @@ async fn recieve_own_order(orders: &mut mpsc::Receiver<Order>, load_notifier: Lo
 }
 
 pub(super) async fn work(
-    log: &mut Log,
+    state: &mut super::State,
     chart: &mut Chart,
-    listener: &mut TcpListener,
     term: Term,
 ) -> crate::Role {
-    let id = chart.our_id();
+    let super::State {
+        id,
+        pres_orders,
+        client_listener,
+        ..
+    } = state;
 
     info!("started work as president: {id}");
-    let Log { orders, state, .. } = log;
+    let Log { orders, state, .. } = pres_orders;
     let (broadcast, _) = broadcast::channel(16);
     let (tx, notify_rx) = mpsc::channel(16);
 
@@ -62,7 +65,7 @@ pub(super) async fn work(
     tokio::select! {
         () = load_balancer.run(&state) => unreachable!(),
         () = instruct_subjects => unreachable!(),
-        () = messages::handle_incoming(listener, log_writer) => unreachable!(),
+        () = messages::handle_incoming(client_listener, log_writer) => unreachable!(),
         () = recieve_own_order(orders, load_notifier) => {
             info!("President {id} resigned");
             crate::Role::Idle
