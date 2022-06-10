@@ -16,7 +16,7 @@ use tracing::info;
 use tracing::instrument;
 use tracing::warn;
 
-use crate::directory::Node;
+use crate::redirectory::Node;
 use crate::president::subjects;
 use crate::raft::LogWriter;
 use crate::president::Order;

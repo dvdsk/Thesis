@@ -8,7 +8,7 @@ use tracing::info;
 use self::issue::{Issue, Issues};
 
 use super::{raft, Chart, LogWriter, Order};
-use crate::directory::{Staff, Node};
+use crate::redirectory::{Staff, Node};
 mod staffing;
 use staffing::Staffing;
 mod action;

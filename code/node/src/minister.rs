@@ -4,9 +4,9 @@ use color_eyre::Result;
 use tokio::sync::{broadcast, mpsc};
 use tracing::info;
 
-use crate::directory::{Node, ReDirectory};
-use crate::raft::subjects;
-use crate::raft::{Log, ObserverLog, Order};
+use crate::redirectory::{Node, ReDirectory};
+use crate::raft::{subjects, self};
+use crate::raft::{Log, ObserverLog};
 use crate::raft::LogWriter;
 use crate::{Id, Role, Term};
 
@@ -20,15 +20,17 @@ async fn handle_pres_orders(
     mut register: clerks::Register,
     mut redirectory: ReDirectory,
 ) -> Result<Role> {
+    use raft::Order::*;
+
     loop {
         let order = pres_orders.recv().await;
         redirectory.update(&order).await;
         match order {
-            Order::None => todo!(),
-            Order::Assigned(_) => todo!(),
-            Order::BecomePres { term } => return Ok(Role::President { term }),
-            Order::ResignPres => unreachable!(),
-            Order::AssignMinistry { subtree, staff } => {
+            None => todo!(),
+            Assigned(_) => todo!(),
+            BecomePres { term } => return Ok(Role::President { term }),
+            ResignPres => unreachable!(),
+            AssignMinistry { subtree, staff } => {
                 if staff.minister.id == our_id && subtree != *our_subtree {
                     return Ok(Role::Minister {
                         subtree,
@@ -44,9 +46,15 @@ async fn handle_pres_orders(
                 register.update(staff.clerks);
             }
             #[cfg(test)]
-            Order::Test(_) => todo!(),
+            Test(_) => todo!(),
         }
     }
+}
+
+pub enum Order {
+    CreateFolder(PathBuf),
+    CreateFile(PathBuf), 
+    Remove(PathBuf),
 }
 
 pub(crate) async fn work(

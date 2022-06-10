@@ -7,7 +7,7 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio::task::JoinSet;
 use tracing::{debug, warn};
 
-use crate::directory::{Node, ReDirectory};
+use crate::redirectory::{Node, ReDirectory};
 use crate::president::{Log, Order};
 use crate::{Id, Role};
 

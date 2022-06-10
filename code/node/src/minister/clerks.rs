@@ -2,7 +2,7 @@ use std::collections::HashSet;
 use std::net::SocketAddr;
 use tokio::sync::mpsc;
 
-use crate::directory::Node;
+use crate::redirectory::Node;
 use crate::raft::subjects::{Source, SourceNotify};
 use crate::Id;
 

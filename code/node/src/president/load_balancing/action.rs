@@ -4,7 +4,7 @@ use tokio::net::TcpStream;
 use tokio::task::JoinSet;
 use tracing::instrument;
 
-use crate::directory::{Staff, Node};
+use crate::redirectory::{Staff, Node};
 use crate::president::Chart;
 use crate::Idx;
 use color_eyre::Result;

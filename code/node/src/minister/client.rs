@@ -8,7 +8,7 @@ use protocol::{Request, Response};
 use tokio::task::JoinSet;
 use tracing::{debug, warn};
 
-use crate::directory::ReDirectory;
+use crate::redirectory::ReDirectory;
 use crate::raft::LogWriter;
 
 pub async fn handle_requests(

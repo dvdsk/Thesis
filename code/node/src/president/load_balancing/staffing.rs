@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 
 use instance_chart::Id;
 
-use crate::directory::Staff;
+use crate::redirectory::Staff;
 use crate::president::raft::State;
 use crate::president::Order;
 

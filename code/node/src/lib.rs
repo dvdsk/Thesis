@@ -12,6 +12,7 @@ use tracing::{info, instrument};
 pub mod messages;
 pub mod util;
 
+mod redirectory;
 mod directory;
 mod idle;
 mod raft;
@@ -26,7 +27,7 @@ pub type Idx = u32; // raft idx
 
 use instance_chart::Chart as mChart;
 
-use self::directory::{Node, ReDirectory};
+use self::redirectory::{Node, ReDirectory};
 use self::util::open_socket;
 type Chart = mChart<3, u16>;
 

@@ -2,7 +2,7 @@ use std::collections::HashSet;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use crate::directory::Node;
+use crate::redirectory::Node;
 use crate::raft::CONN_RETRY_PERIOD;
 use crate::{Id, Idx, Term};
 use async_trait::async_trait;

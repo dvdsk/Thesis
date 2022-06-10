@@ -7,7 +7,7 @@ use tokio::sync::mpsc::{self, Receiver};
 use tokio::task::{self, JoinHandle};
 use tracing::{instrument, info};
 
-use crate::directory::Staff;
+use crate::redirectory::Staff;
 use crate::Chart;
 use crate::{Role, Term};
 

@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use color_eyre::Result;
 
-use crate::directory::{Node, ReDirectory};
+use crate::redirectory::{Node, ReDirectory};
 use crate::president::{Log, Order};
 use crate::{Id, Role};
 
