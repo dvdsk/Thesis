@@ -150,15 +150,17 @@ impl<T: RandomNode> super::Client<T> {
                 }
                 Ok(None) => {
                     warn!("Connection was closed ");
-                    let mut updated = ministry.unwrap();
-                    updated.minister = None;
-                    self.map.insert(updated);
+                    if let Some(mut updated) = ministry {
+                        updated.minister = None;
+                        self.map.insert(updated);
+                    }
                 }
                 Err(e) => {
                     warn!("Error connecting: {e:?}");
-                    let mut updated = ministry.unwrap();
-                    updated.minister = None;
-                    self.map.insert(updated);
+                    if let Some(mut updated) = ministry {
+                        updated.minister = None;
+                        self.map.insert(updated);
+                    }
                 }
             }
         }

@@ -3,7 +3,6 @@ use std::time::Duration;
 
 use color_eyre::{eyre, Result};
 use futures::{pin_mut, SinkExt, TryStreamExt};
-pub use log::{Log, Order};
 use protocol::connection;
 use rand::{Rng, SeedableRng};
 use serde::{Deserialize, Serialize};
@@ -13,14 +12,15 @@ use tokio::time::sleep;
 use tracing::{debug, instrument, trace, warn};
 
 mod log;
+mod log_writer;
 mod state;
 pub mod subjects;
 mod succession;
-mod log_writer;
 
 #[cfg(test)]
 mod tests;
 
+pub use log::{Log, ObserverLog, Order};
 pub use log_writer::LogWriter;
 pub use state::LogEntry;
 pub use state::State;

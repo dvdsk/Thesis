@@ -5,8 +5,8 @@ use tokio::sync::{broadcast, mpsc};
 use tracing::info;
 
 use crate::directory::{Node, ReDirectory};
-use crate::president::subjects;
-use crate::president::{Log, Order};
+use crate::raft::subjects;
+use crate::raft::{Log, ObserverLog, Order};
 use crate::raft::LogWriter;
 use crate::{Id, Role, Term};
 
@@ -67,7 +67,7 @@ pub(crate) async fn work(
 
     let (register, mut clerks) = clerks::Map::new(clerks, *our_id);
 
-    let Log { state, .. } = min_orders;
+    let ObserverLog { state, .. } = min_orders;
 
     redirectory.set_tree(Some(our_subtree.clone()));
 

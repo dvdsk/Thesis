@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use tokio::net::TcpListener;
 use tokio::sync::mpsc::{self, Receiver};
 use tokio::task::{self, JoinHandle};
-use tracing::instrument;
+use tracing::{instrument, info};
 
 use crate::directory::Staff;
 use crate::Chart;
@@ -14,14 +14,6 @@ use crate::{Role, Term};
 use super::state::State;
 use super::{handle_incoming, succession};
 
-// abstraction over raft that allows us to wait on
-// new committed log entries.
-pub struct Log {
-    pub orders: Receiver<Order>, // commited entries can be recoverd from here
-    pub state: State,
-    _handle_incoming: JoinHandle<()>,
-    _succession: JoinHandle<()>,
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum Order {
@@ -45,6 +37,16 @@ pub enum Order {
     },
 }
 
+/// abstraction over raft that allows us to wait on
+/// new committed log entries, while transparently holding elections
+/// if we become president we recieve log entry: `Order::BecomePres`
+pub struct Log {
+    pub orders: Receiver<Order>, // commited entries can be recoverd from here
+    pub state: State,
+    _handle_incoming: JoinHandle<()>,
+    _succession: JoinHandle<()>,
+}
+
 impl Log {
     #[instrument(skip_all)]
     pub(crate) fn open(
@@ -55,6 +57,7 @@ impl Log {
     ) -> Result<Self> {
         let (tx, orders) = mpsc::channel(8);
         let state = State::new(tx, db, chart.our_id());
+        info!("opening raft log");
 
         Ok(Self {
             state: state.clone(),
@@ -67,6 +70,42 @@ impl Log {
                 cluster_size,
                 state,
             )),
+        })
+    }
+
+    pub(crate) async fn recv(&mut self) -> Order {
+        self.orders
+            .recv()
+            .await
+            .expect("order channel should never be dropped")
+    }
+}
+
+/// abstraction over raft that allows us to wait on
+/// new committed log entries, without taking part in elections
+pub struct ObserverLog {
+    pub orders: Receiver<Order>, // commited entries can be recoverd from here
+    pub state: State,
+    _handle_incoming: JoinHandle<()>,
+}
+
+impl ObserverLog {
+    #[instrument(skip_all)]
+    pub(crate) fn open(
+        chart: Chart,
+        db: sled::Tree,
+        listener: TcpListener,
+    ) -> Result<Self> {
+        let (tx, orders) = mpsc::channel(8);
+        let state = State::new(tx, db, chart.our_id());
+        info!("opening raft log");
+
+        Ok(Self {
+            state: state.clone(),
+            orders,
+            _handle_incoming: task::Builder::new()
+                .name("log_handle_incoming")
+                .spawn(handle_incoming(listener, state.clone())),
         })
     }
 
