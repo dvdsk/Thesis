@@ -1,0 +1,19 @@
+[package]
+name = "client"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+protocol = { path = "../protocol" }
+tokio = { version = "^1.19.1", features = ["macros", "net", "time", "rt-multi-thread", "tracing", "sync"] }
+async-trait = "0.1"
+instance-chart = { version = "0.2" }
+rand = "0.8"
+futures = "0.3"
+tracing = "0.1"
+
+[dev-dependencies]
+tokio = { version = "^1.19.1", features = ["macros", "net", "time", "rt-multi-thread", "tracing", "sync"] }
+clap = { version = "3.1", features = ["derive"] }

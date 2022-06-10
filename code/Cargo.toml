@@ -3,8 +3,8 @@ members = [
 	"node",
 	"protocol",
 	"start-jeager",
+	"client"
 ]
 
 [patch.crates-io]
-# tokio = { git = "https://github.com/tokio-rs/tokio", rev="0d4d3c3" }
-# tokio-util = { git = "https://github.com/tokio-rs/tokio", rev = "0d4d3c3" }
+instance-chart = { git = "https://github.com/dvdsk/instance-chart" }

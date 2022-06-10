@@ -41,7 +41,14 @@ async fn handle_conn(
 
         let reply = match req {
             CreateFile(path) if path.starts_with(&our_subtree) => create_file(path).await,
-            CreateFile(path) => Response::Redirect(redirect.to_staff(&path).await.minister.addr),
+            CreateFile(path) => {
+                let (staff, subtree) = redirect.to_staff(&path).await;
+                Response::Redirect {
+                    addr: staff.minister.addr,
+                    subtree,
+                }
+            }
+            IsCommitted { path, idx } => todo!(),
         };
 
         if let Err(e) = stream.send(reply).await {

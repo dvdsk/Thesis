@@ -26,18 +26,21 @@ pub async fn handle_requests(
     }
 }
 
-async fn handle_conn(
-    stream: TcpStream,
-    _our_subtree: PathBuf,
-    redirect: ReDirectory,
-) {
+async fn handle_conn(stream: TcpStream, _our_subtree: PathBuf, redirect: ReDirectory) {
     use Request::*;
     let mut stream: MsgStream<Request, Response> = connection::wrap(stream);
     while let Ok(Some(req)) = stream.try_next().await {
         debug!("clerk got request: {req:?}");
 
         let reply = match req {
-            CreateFile(path) => Response::Redirect(redirect.to_staff(&path).await.minister.addr),
+            CreateFile(path) => {
+                let (staff, subtree) = redirect.to_staff(&path).await;
+                Response::Redirect {
+                    addr: staff.minister.addr,
+                    subtree,
+                }
+            }
+            IsCommitted { path, idx } => todo!(),
         };
 
         if let Err(e) = stream.send(reply).await {

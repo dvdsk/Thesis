@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 
 pub mod connection;
+pub type Idx = u64;
 
 pub trait Message<'de>: Serialize + Deserialize<'de> {
     fn from_buf(buf: &'de [u8]) -> Self {
@@ -18,12 +19,23 @@ pub trait Message<'de>: Serialize + Deserialize<'de> {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum Request {
     CreateFile(PathBuf),
+    /// check if change is committed to disk, should be awnserd by Done
+    /// if it is or by No if not
+    IsCommitted {path: PathBuf, idx: Idx },
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum Response {
     /// wrong subtree redirect client to correct clerk/minister
-    Redirect ( SocketAddr ),
+    Redirect { subtree: PathBuf, addr: SocketAddr },
+    /// change not yet done, starting comit with index
+    Ticket { idx: Idx },
+    /// affirming awnser to `Request::IsCommitted`
+    Committed,
+    /// negative awnser to `Request::IsCommitted`
+    NotCommitted,
+    /// change committed to disk
+    Done,
 }
 
 // #[cfg(test)]
@@ -40,7 +52,7 @@ pub enum Response {
 //         ];
 
 //         for (size, obj) in test_cases {
-//             let v: Vec<u8> = bincode::serialize(&obj).unwrap();
+//             let v: Vec = bincode::serialize(&obj).unwrap();
 //             assert_eq!(size, v.len())
 //         }
 //     }

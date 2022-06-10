@@ -35,7 +35,7 @@ impl LogWriter {
         self.broadcast.send(order).unwrap();
         AppendTicket { _idx: idx, notify }
     }
-    /// Verify an order was appended correctly, if it was not append it again
+    /// Verify an order was appended correctly, if it was not then append it again
     #[allow(dead_code)] // not dead used in tests will be used later
     pub async fn re_append(&self, order: Order, prev_idx: Idx) -> AppendTicket {
         use super::LogEntry;

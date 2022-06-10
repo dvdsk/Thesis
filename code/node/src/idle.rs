@@ -1,8 +1,8 @@
 use color_eyre::eyre::eyre;
 use color_eyre::{Result, Section, SectionExt};
-use futures::{TryStreamExt, SinkExt};
-use protocol::{Request, Response, connection};
+use futures::{SinkExt, TryStreamExt};
 use protocol::connection::MsgStream;
+use protocol::{connection, Request, Response};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::task::JoinSet;
 use tracing::{debug, warn};
@@ -43,10 +43,7 @@ async fn handle_pres_orders(
     }
 }
 
-pub async fn redirect_clients (
-    listener: &mut TcpListener,
-    redirect: ReDirectory,
-) {
+pub async fn redirect_clients(listener: &mut TcpListener, redirect: ReDirectory) {
     let mut request_handlers = JoinSet::new();
     loop {
         let (conn, _addr) = listener.accept().await.unwrap();
@@ -58,17 +55,20 @@ pub async fn redirect_clients (
     }
 }
 
-async fn handle_conn(
-    stream: TcpStream,
-    redirect: ReDirectory,
-) {
+async fn handle_conn(stream: TcpStream, redirect: ReDirectory) {
     use Request::*;
     let mut stream: MsgStream<Request, Response> = connection::wrap(stream);
     while let Ok(Some(req)) = stream.try_next().await {
         debug!("idle got request: {req:?}");
 
         let reply = match req {
-            CreateFile(path) => Response::Redirect(redirect.to_staff(&path).await.minister.addr),
+            CreateFile(path) | IsCommitted { path, .. } => {
+                let (staff, subtree) = redirect.to_staff(&path).await;
+                Response::Redirect {
+                    addr: staff.minister.addr,
+                    subtree,
+                }
+            }
         };
 
         if let Err(e) = stream.send(reply).await {

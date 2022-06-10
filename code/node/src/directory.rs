@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-use std::path::PathBuf;
+use std::path::{PathBuf, Path};
 use std::sync::Arc;
 
 use derivative::Derivative;
@@ -83,13 +83,14 @@ impl ReDirectory {
         }
     }
 
-    pub async fn to_staff(&self, path: &PathBuf) -> Staff {
+    pub async fn to_staff(&self, path: &Path) -> (Staff, PathBuf) {
         let tree = self.trees.read().await;
-        let idx = match tree.binary_search_by_key(path, |(tree, _)| tree.to_path_buf()) {
-            Ok(idx) => idx,
-            Err(idx) => idx,
-        };
-        tree[idx].1.clone()
+        for (subtree, staff) in tree.iter().rev() {
+            if path.starts_with(subtree) {
+                return (staff.clone(), subtree.clone())
+            }
+        }
+        panic!("no root directory found or path without root")
     }
 
     pub(crate) fn set_tree(&mut self, tree: Option<PathBuf>) {
