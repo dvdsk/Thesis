@@ -1,11 +1,12 @@
 use std::path::PathBuf;
 
 use color_eyre::Result;
+use serde::{Serialize, Deserialize};
 use tokio::sync::{broadcast, mpsc};
 use tracing::info;
 
 use crate::redirectory::{Node, ReDirectory};
-use crate::raft::subjects;
+use crate::raft::{subjects, self};
 use crate::raft::{Log, ObserverLog};
 use crate::raft::LogWriter;
 use crate::{Id, Role, Term, president};
@@ -51,10 +52,25 @@ async fn handle_pres_orders(
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum Order {
-    CreateFolder(PathBuf),
-    CreateFile(PathBuf), 
+    Create(PathBuf),
     Remove(PathBuf),
+    None,
+}
+
+impl raft::Order for Order {
+    fn none() -> Self {
+        Self::None
+    }
+
+    fn elected(_: Term) -> Self {
+        unreachable!("Ministers can not be elected")
+    }
+
+    fn resign() -> Self {
+        unreachable!("Ministers can not be risigned by ministers")
+    }
 }
 
 pub(crate) async fn work(

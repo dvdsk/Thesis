@@ -39,6 +39,20 @@ pub enum Order {
     },
 }
 
+impl raft::Order for Order {
+    fn elected(term: Term) -> Self {
+        Self::BecomePres { term }
+    }
+
+    fn resign() -> Self {
+        Self::ResignPres
+    }
+
+    fn none() -> Self {
+        Self::None
+    }
+}
+
 async fn recieve_own_order(orders: &mut mpsc::Receiver<Order>, load_notifier: LoadNotifier) {
     loop {
         match orders.recv().await {

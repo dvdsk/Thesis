@@ -1,13 +1,13 @@
-use serde::{Deserialize, Serialize};
-use tokio::sync::mpsc::error::TrySendError;
-use std::sync::atomic::Ordering;
-use tracing::{instrument, warn};
-use color_eyre::Result;
 use color_eyre::eyre::eyre;
+use color_eyre::Result;
+use serde::{Deserialize, Serialize};
+use std::sync::atomic::Ordering;
+use tokio::sync::mpsc::error::TrySendError;
+use tracing::{instrument, warn};
 
 use super::{db, LogIdx, Order, State};
 use crate::util::TypedSled;
-use crate::{Id, Term, Idx};
+use crate::{Id, Idx, Term};
 
 impl<O: Order> State<O> {
     #[instrument(skip(self), fields(id = self.id), ret)]
@@ -89,7 +89,8 @@ impl<O: Order> Default for LogEntry<O> {
 impl<O: Order> State<O> {
     /// return true if the log contains prev_log_idx and prev_log_texm
     pub(super) fn log_contains(&self, prev_log_idx: Idx, prev_log_term: Term) -> bool {
-        match self.db.get_val(db::log_key(prev_log_idx)) {
+        let entry: Option<LogEntry<O>> = self.db.get_val(db::log_key(prev_log_idx));
+        match entry {
             Some(LogEntry { term, .. }) if term == prev_log_term => true,
             Some(LogEntry { term, .. }) => {
                 warn!("log contains entry with term: {term}, which is not the required: {prev_log_term}");
@@ -106,7 +107,7 @@ impl<O: Order> State<O> {
     // If an existing entry conflicts with a new one (same index
     // but different terms), delete the existing entry and all that follow it
     fn prepare_log(&self, index: Idx, term: Term) {
-        let existing_entry = self.db.get_val(db::log_key(index));
+        let existing_entry: Option<LogEntry<O>> = self.db.get_val(db::log_key(index));
         let existing_term = match existing_entry {
             None => return,
             Some(LogEntry { term, .. }) => term,
@@ -138,9 +139,7 @@ impl<O: Order> State<O> {
         tracing::trace!("applied log: {idx}");
         match self.tx.try_send(order) {
             Ok(..) => Ok(()),
-            Err(TrySendError::Full(..)) => {
-                Err(eyre!("Orders are not consumed (fast) enough"))
-            }
+            Err(TrySendError::Full(..)) => Err(eyre!("Orders are not consumed (fast) enough")),
             Err(TrySendError::Closed(..)) => unreachable!("Log closed the recieving mpsc"),
         }
     }

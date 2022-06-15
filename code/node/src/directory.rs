@@ -69,6 +69,7 @@ impl Directory {
             match order {
                 Create(path) => dir.add_entry(path),
                 Remove(path) => dir.remove_path(path),
+                None => continue,
             }
         }
 

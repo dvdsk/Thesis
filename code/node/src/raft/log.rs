@@ -46,7 +46,7 @@ impl<O: Order> Log<O> {
         })
     }
 
-    pub(crate) async fn recv(&mut self) -> Order {
+    pub(crate) async fn recv(&mut self) -> O {
         self.orders
             .recv()
             .await
@@ -82,7 +82,7 @@ impl<O: Order> ObserverLog<O> {
         })
     }
 
-    pub(crate) async fn recv(&mut self) -> Order {
+    pub(crate) async fn recv(&mut self) -> impl Order {
         self.orders
             .recv()
             .await

@@ -3,7 +3,7 @@ use std::net::SocketAddr;
 use std::time::Duration;
 
 use color_eyre::{eyre, Result};
-use futures::{pin_mut, SinkExt, TryStreamExt};
+use futures::{pin_mut, TryStreamExt, SinkExt};
 use protocol::connection;
 use rand::{Rng, SeedableRng};
 use serde::de::DeserializeOwned;
@@ -44,10 +44,12 @@ pub(super) const ELECTION_TIMEOUT: Duration = Duration::from_millis(40 * MUL);
 pub(super) const MIN_ELECTION_SETUP: Duration = Duration::from_millis(40 * MUL);
 pub(super) const MAX_ELECTION_SETUP: Duration = Duration::from_secs(8);
 
-pub trait Order : Serialize + DeserializeOwned + fmt::Debug {
+pub trait Order:
+    Serialize + DeserializeOwned + fmt::Debug + Clone + Send + Sync + Unpin + 'static + PartialEq
+{
     fn elected(term: Term) -> Self;
+    fn resign() -> Self;
     fn none() -> Self;
-
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -64,10 +66,13 @@ enum Reply {
 }
 
 #[instrument(skip(state, stream), fields(id=state.id))]
-async fn handle_conn<O: Order>((stream, _source): (TcpStream, SocketAddr), state: State<O>) -> Result<()> {
+async fn handle_conn<O: Order>(
+    (stream, _source): (TcpStream, SocketAddr),
+    state: State<O>,
+) -> Result<()> {
     use Msg::*;
 
-    let mut stream: connection::MsgStream<Msg, Reply> = connection::wrap(stream);
+    let mut stream: connection::MsgStream<Msg<O>, Reply> = connection::wrap(stream);
     while let Ok(msg) = stream.try_next().await {
         let reply = match msg.clone() {
             None => continue,
@@ -186,6 +191,6 @@ async fn succession<O: Order>(chart: Chart, cluster_size: u16, state: State<O>) 
 
         term_increased.await;
         debug!("President saw higher term, resigning");
-        state.order(Order::ResignPres).await
+        state.order(Order::resign()).await
     } // outer loop
 }

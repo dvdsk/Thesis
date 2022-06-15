@@ -1,18 +1,21 @@
 use color_eyre::Result;
 use futures::stream;
+use tracing::warn;
 use std::collections::HashMap;
 use std::net;
 use std::sync::Arc;
+use std::time::Duration;
 use stream::StreamExt;
 use tokio::sync::mpsc::Receiver;
 use tokio::sync::Mutex;
-use tokio::time::timeout;
+use tokio::time::{timeout, sleep};
 
 use crate::{util, Id};
+use crate::president::Order;
 
+use super::TEST_TIMEOUT;
 use super::mock::TestAppendNode;
 use super::util::CurrPres;
-use super::*;
 
 async fn order_cluster(curr_pres: &mut CurrPres, nodes: &mut HashMap<u64, TestAppendNode>, n: u8) {
     let mut incomplete_order = loop {
@@ -105,7 +108,7 @@ async fn spread_order() -> Result<()> {
     Ok(())
 }
 
-type Queue<O> = Arc<Mutex<Receiver<O>>>;
+type Queue = Arc<Mutex<Receiver<Order>>>;
 
 async fn setup(
     n: u64,
@@ -138,7 +141,7 @@ async fn setup(
 async fn add_new_node(
     id: Id,
     nodes: &mut HashMap<u64, TestAppendNode>,
-    orders: &mut Vec<(Id, Queue<impl Order>)>,
+    orders: &mut Vec<(Id, Queue)>,
     curr_pres: &mut CurrPres,
     discovery_port: u16,
     cluster_size: u16,
@@ -154,6 +157,7 @@ async fn add_new_node(
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 16)]
 async fn kill_president_mid_order() -> Result<()> {
+    use crate::president::Order;
     // util::setup_test_tracing("node=warn,node::president=trace,node::president::raft::subjects=trace,node::president::raft=info");
     // util::setup_test_tracing("node=warn,node::president::raft::test::consensus=trace,node::president::raft::state::append=info");
     util::setup_test_tracing("node=trace,node::util=warn,node::president::raft::succession=debug");

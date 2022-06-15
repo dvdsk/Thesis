@@ -42,7 +42,7 @@ impl StatusNotifier for EmptyNotifier {
     async fn subject_down(&self, _: Node) {}
 }
 
-async fn connect(address: &SocketAddr) -> MsgStream<Reply, Msg> {
+async fn connect<O: Order>(address: &SocketAddr) -> MsgStream<Reply, Msg<O>> {
     use std::io::ErrorKind;
     loop {
         match TcpStream::connect(address).await {
@@ -181,7 +181,7 @@ pub async fn instruct<O: Order>(
     let base_msg = RequestGen::new(state.clone(), term, members);
 
     let mut subjects = JoinSet::new();
-    let mut add_subject = |id, addr, commit_idx: &mut Commited| {
+    let mut add_subject = |id, addr, commit_idx: &mut Commited<O>| {
         let broadcast_rx = orders.subscribe();
         let append_updates = commit_idx.track_subject();
 
