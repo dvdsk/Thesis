@@ -4,10 +4,11 @@ use serde::{Deserialize, Serialize};
 use tracing::{instrument, trace};
 
 use super::{db, State};
+use crate::raft::Order;
 use crate::util::TypedSled;
 use crate::{Id, Term};
 
-impl State {
+impl<O: Order> State<O> {
     // this does not need to be lockless as its called a lot
     // once a leader goes down. The function never blocks so
     // locks will not block long.
@@ -164,7 +165,7 @@ impl RequestVote {
     /// check if the log of the requester is at least as
     /// up to date as ours
     #[instrument(ret, skip(arg, self), level = "trace")]
-    fn log_up_to_date(&self, arg: &State) -> bool {
+    fn log_up_to_date<O: Order>(&self, arg: &State<O>) -> bool {
         self.last_log_idx >= arg.last_log_meta().idx
     }
 }

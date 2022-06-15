@@ -3,18 +3,19 @@ use std::path::PathBuf;
 use color_eyre::Result;
 
 use crate::redirectory::{Node, ReDirectory};
-use crate::president::{Log, Order};
-use crate::{Id, Role};
+use crate::raft::Log;
+use crate::{Id, Role, president};
 
 mod clients;
 
 async fn handle_pres_orders(
-    pres_orders: &mut Log,
+    pres_orders: &mut Log<president::Order>,
     our_id: Id,
     our_subtree: PathBuf,
     redirectory: &mut ReDirectory,
 ) -> Result<Role> {
     loop {
+        use president::Order;
         let order = pres_orders.recv().await;
         redirectory.update(&order).await;
         match order {

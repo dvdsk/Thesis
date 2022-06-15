@@ -1,19 +1,43 @@
+use std::path::PathBuf;
+use serde::{Deserialize, Serialize};
 use tokio::sync::{broadcast, mpsc};
 use tracing::info;
 
 mod load_balancing;
 mod messages;
 
-use crate::Chart;
-use crate::raft;
 use crate::president::load_balancing::LoadBalancer;
-use crate::Term;
+use crate::raft;
+use crate::redirectory::Staff;
+use crate::Chart;
+use crate::{Role, Term};
 pub use raft::subjects;
-pub use raft::{Log, Order};
+pub use raft::Log;
 use raft::LogWriter;
 
 use self::load_balancing::LoadNotifier;
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum Order {
+    /// used as placeholder for the first entry in the log
+    None,
+    /// assigns a node a role
+    Assigned(Role),
+    BecomePres {
+        term: Term,
+    },
+    ResignPres,
+    #[cfg(test)]
+    Test(u8),
+
+    /// assigns a file tree a ministry, the load balancer
+    /// will try to uphold its policy that each ministry has
+    /// a minister and clecks
+    AssignMinistry {
+        subtree: PathBuf,
+        staff: Staff,
+    },
+}
 
 async fn recieve_own_order(orders: &mut mpsc::Receiver<Order>, load_notifier: LoadNotifier) {
     loop {
@@ -28,11 +52,7 @@ async fn recieve_own_order(orders: &mut mpsc::Receiver<Order>, load_notifier: Lo
     }
 }
 
-pub(super) async fn work(
-    state: &mut super::State,
-    chart: &mut Chart,
-    term: Term,
-) -> crate::Role {
+pub(super) async fn work(state: &mut super::State, chart: &mut Chart, term: Term) -> crate::Role {
     let super::State {
         id,
         pres_orders,

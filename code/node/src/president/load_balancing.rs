@@ -43,14 +43,14 @@ pub enum Event {
 }
 
 pub struct LoadBalancer {
-    log_writer: LogWriter,
+    log_writer: LogWriter<Order>,
     events: mpsc::Receiver<Event>,
     chart: Chart,
     policy: (),
 }
 
 impl LoadBalancer {
-    pub fn new(log_writer: LogWriter, chart: Chart) -> (Self, LoadNotifier) {
+    pub fn new(log_writer: LogWriter<Order>, chart: Chart) -> (Self, LoadNotifier) {
         let (tx, rx) = mpsc::channel(16);
         let notifier = LoadNotifier { sender: tx };
         (
@@ -63,7 +63,7 @@ impl LoadBalancer {
             notifier,
         )
     }
-    pub async fn run(self, state: &raft::State) {
+    pub async fn run(self, state: &raft::State<Order>) {
         let mut init = self.initialize(state).await;
         init.run().await;
     }
@@ -77,7 +77,7 @@ impl LoadBalancer {
 }
 
 impl LoadBalancer {
-    async fn initialize(mut self, state: &raft::State) -> Init {
+    async fn initialize(mut self, state: &raft::State<Order>) -> Init {
         let staffing = self.organise_staffing(state).await;
         Init {
             chart: self.chart,
@@ -90,7 +90,7 @@ impl LoadBalancer {
         }
     }
 
-    async fn organise_staffing(&mut self, state: &raft::State) -> Staffing {
+    async fn organise_staffing(&mut self, state: &raft::State<Order>) -> Staffing {
         use Event::*;
 
         let mut staffing = Staffing::from_committed(&state);
@@ -143,7 +143,7 @@ impl LoadBalancer {
 
 struct Init {
     chart: Chart,
-    log_writer: LogWriter,
+    log_writer: LogWriter<Order>,
     events: mpsc::Receiver<Event>,
     /// used for staffing changes due the drop of a ministry because
     /// its directory is deleted

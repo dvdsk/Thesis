@@ -3,7 +3,7 @@ use std::sync::Arc;
 use tokio::sync::{mpsc, Notify};
 use tracing::{debug, instrument};
 
-use crate::raft::State;
+use crate::raft::{State, Order};
 use crate::Idx;
 
 struct Waiters {
@@ -42,15 +42,18 @@ struct Update {
     appended: u32,
 }
 
-pub struct Commited<'a> {
+pub struct Commited<'a, O: Order> {
     streams: stream::SelectAll<stream::BoxStream<'a, Update>>,
     highest: Vec<u32>, // index = stream_id
     waiters: Waiters,
-    state: &'a State,
+    state: &'a State<O>,
 }
 
-impl<'a> Commited<'a> {
-    pub fn new(notify_rx: mpsc::Receiver<(Idx, Arc<Notify>)>, state: &'a State) -> Self {
+impl<'a, O: Order> Commited<'a, O> {
+    pub fn new(
+        notify_rx: mpsc::Receiver<(Idx, Arc<Notify>)>,
+        state: &'a State<O>,
+    ) -> Self {
         Self {
             streams: stream::SelectAll::new(),
             highest: Vec::new(),

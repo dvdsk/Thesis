@@ -90,8 +90,8 @@ pub struct Config {
 }
 
 struct State {
-    pres_orders: raft::Log,
-    min_orders: raft::ObserverLog,
+    pres_orders: raft::Log<president::Order>,
+    min_orders: raft::ObserverLog<minister::Order>,
     client_listener: TcpListener,
     redirectory: ReDirectory,
     id: Id,

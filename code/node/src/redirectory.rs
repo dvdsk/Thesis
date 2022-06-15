@@ -7,7 +7,7 @@ use instance_chart::Id;
 use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
 
-use crate::president:: Order;
+use crate::president::Order;
 use crate::raft::State;
 use crate::Term;
 
@@ -60,7 +60,7 @@ fn insert_sorted(trees: &mut Vec<(PathBuf, Staff)>, path: PathBuf, staff: Staff)
 
 // TODO iedereen moet een redirectory
 impl ReDirectory {
-    pub fn from_committed(state: &State) -> Self {
+    pub fn from_committed(state: &State<Order>) -> Self {
         let mut trees = Vec::new();
         for order in state.committed() {
             if let Order::AssignMinistry { subtree, staff } = order {

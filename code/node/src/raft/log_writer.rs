@@ -8,10 +8,10 @@ use super::Order;
 /// interface to append an item to the clusters raft log and
 /// return once it is comitted
 #[derive(Debug, Clone)]
-pub struct LogWriter {
+pub struct LogWriter<O> {
     pub term: Term,
-    pub state: super::State,
-    pub broadcast: broadcast::Sender<Order>,
+    pub state: super::State<O>,
+    pub broadcast: broadcast::Sender<O>,
     pub notify_tx: mpsc::Sender<(Idx, Arc<Notify>)>,
 }
 
@@ -26,9 +26,9 @@ impl AppendTicket {
     }
 }
 
-impl LogWriter {
+impl<O: Order> LogWriter<O> {
     // returns notify
-    pub async fn append(&self, order: Order) -> AppendTicket {
+    pub async fn append(&self, order: O) -> AppendTicket {
         let idx = self.state.append(order.clone(), self.term);
         let notify = Arc::new(Notify::new());
         self.notify_tx.send((idx, notify.clone())).await.unwrap();
@@ -37,7 +37,7 @@ impl LogWriter {
     }
     /// Verify an order was appended correctly, if it was not then append it again
     #[allow(dead_code)] // not dead used in tests will be used later
-    pub async fn re_append(&self, order: Order, prev_idx: Idx) -> AppendTicket {
+    pub async fn re_append(&self, order: O, prev_idx: Idx) -> AppendTicket {
         use super::LogEntry;
 
         match self.state.entry_at(prev_idx) {

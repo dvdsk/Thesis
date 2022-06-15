@@ -1,18 +1,18 @@
 use super::super::state::append::Request;
 use super::Source;
 use crate::raft::state::LogMeta;
-use crate::raft::State;
+use crate::raft::{State, Order};
 use crate::Term;
 
 #[derive(Debug, Clone)]
-pub struct RequestGen {
-    state: State,
-    pub base: Request,
+pub struct RequestGen<O> {
+    state: State<O>,
+    pub base: Request<O>,
     pub next_idx: u32,
 }
 
-impl RequestGen {
-    pub fn heartbeat(&self) -> Request {
+impl<O: Order> RequestGen<O> {
+    pub fn heartbeat(&self) -> Request<O> {
         Request {
             leader_commit: self.state.commit_index(),
             entries: Vec::new(),
@@ -32,7 +32,7 @@ impl RequestGen {
         self.base.prev_log_term = prev_entry.term;
     }
 
-    pub fn append(&mut self) -> Request {
+    pub fn append(&mut self) -> Request<O> {
         let entry = self.state.entry_at(self.next_idx).unwrap();
         let req = Request {
             leader_commit: self.state.commit_index(),
@@ -48,7 +48,7 @@ impl RequestGen {
         self.state.last_log_meta().idx >= self.next_idx
     }
 
-    pub fn new(state: State, term: Term, chart: &impl Source) -> Self {
+    pub fn new(state: State<O>, term: Term, chart: &impl Source) -> Self {
         let LogMeta {
             idx: prev_idx,
             term: prev_term,

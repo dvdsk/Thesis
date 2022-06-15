@@ -16,10 +16,10 @@ use tracing::info;
 use tracing::instrument;
 use tracing::warn;
 
+use crate::president::Order;
 use crate::redirectory::Node;
 use crate::president::subjects;
 use crate::raft::LogWriter;
-use crate::president::Order;
 use crate::raft;
 use crate::raft::State;
 use crate::util;
@@ -42,7 +42,7 @@ impl crate::raft::subjects::StatusNotifier for MockStatusNotifier {
 
 async fn heartbeat_while_pres(
     mut chart: Chart,
-    state: State,
+    state: State<Order>,
     mut orders: mpsc::Receiver<Order>,
     mut tx: mpsc::Sender<Order>,
     mut curr_pres: CurrPres,
@@ -153,7 +153,7 @@ impl TestVoteNode {
 async fn test_req(
     n: u8,
     partial: Option<Idx>,
-    log: &mut LogWriter,
+    log: &mut LogWriter<Order>,
     stream: &mut MsgStream<Msg, Reply>,
 ) -> Option<Reply> {
 
@@ -167,7 +167,7 @@ async fn test_req(
     Some(Reply::Done)
 }
 
-async fn handle_conn(stream: TcpStream, mut _log: LogWriter) {
+async fn handle_conn(stream: TcpStream, mut _log: LogWriter<Order>) {
     use Msg::*;
     use Reply::*;
     let mut stream: MsgStream<Msg, Reply> = connection::wrap(stream);
@@ -189,7 +189,7 @@ async fn handle_conn(stream: TcpStream, mut _log: LogWriter) {
     }
 }
 
-pub async fn handle_incoming(listener: &mut TcpListener, log: LogWriter) {
+pub async fn handle_incoming(listener: &mut TcpListener, log: LogWriter<Order>) {
     let mut request_handlers = JoinSet::new();
     loop {
         let (conn, _addr) = listener.accept().await.unwrap();
@@ -201,7 +201,7 @@ pub async fn handle_incoming(listener: &mut TcpListener, log: LogWriter) {
 #[instrument(skip_all, fields(id = state.id))]
 pub async fn president(
     mut chart: Chart,
-    state: State,
+    state: State<Order>,
     mut orders: mpsc::Receiver<Order>,
     mut tx: mpsc::Sender<Order>,
     mut curr_pres: CurrPres,

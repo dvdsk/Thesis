@@ -105,7 +105,7 @@ async fn spread_order() -> Result<()> {
     Ok(())
 }
 
-type Queue = Arc<Mutex<Receiver<Order>>>;
+type Queue<O> = Arc<Mutex<Receiver<O>>>;
 
 async fn setup(
     n: u64,
@@ -138,7 +138,7 @@ async fn setup(
 async fn add_new_node(
     id: Id,
     nodes: &mut HashMap<u64, TestAppendNode>,
-    orders: &mut Vec<(Id, Queue)>,
+    orders: &mut Vec<(Id, Queue<impl Order>)>,
     curr_pres: &mut CurrPres,
     discovery_port: u16,
     cluster_size: u16,

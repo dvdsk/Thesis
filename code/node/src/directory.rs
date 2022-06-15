@@ -4,6 +4,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
+use crate::minister;
 use crate::raft::State;
 
 #[derive(Serialize, Deserialize)]
@@ -57,7 +58,7 @@ impl Directory {
         }
     }
 
-    pub fn from_committed(state: &State, db: sled::Db) -> Self {
+    pub fn from_committed(state: &State<minister::Order>, db: sled::Db) -> Self {
         use crate::minister::Order::*;
 
         db.drop_tree("directory").unwrap();

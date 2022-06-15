@@ -1,3 +1,4 @@
+use core::fmt;
 use std::net::SocketAddr;
 use std::time::Duration;
 
@@ -5,6 +6,7 @@ use color_eyre::{eyre, Result};
 use futures::{pin_mut, SinkExt, TryStreamExt};
 use protocol::connection;
 use rand::{Rng, SeedableRng};
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::task::JoinSet;
@@ -20,10 +22,12 @@ mod succession;
 #[cfg(test)]
 mod tests;
 
-pub use log::{Log, ObserverLog, Order};
+pub use log::{Log, ObserverLog};
 pub use log_writer::LogWriter;
 pub use state::LogEntry;
 pub use state::State;
+
+use crate::Term;
 
 use self::state::{append, vote};
 use super::Chart;
@@ -40,10 +44,16 @@ pub(super) const ELECTION_TIMEOUT: Duration = Duration::from_millis(40 * MUL);
 pub(super) const MIN_ELECTION_SETUP: Duration = Duration::from_millis(40 * MUL);
 pub(super) const MAX_ELECTION_SETUP: Duration = Duration::from_secs(8);
 
+pub trait Order : Serialize + DeserializeOwned + fmt::Debug {
+    fn elected(term: Term) -> Self;
+    fn none() -> Self;
+
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
-enum Msg {
+enum Msg<O> {
     RequestVote(vote::RequestVote),
-    AppendEntries(append::Request),
+    AppendEntries(append::Request<O>),
     CriticalError(()),
 }
 
@@ -54,7 +64,7 @@ enum Reply {
 }
 
 #[instrument(skip(state, stream), fields(id=state.id))]
-async fn handle_conn((stream, _source): (TcpStream, SocketAddr), state: State) -> Result<()> {
+async fn handle_conn<O: Order>((stream, _source): (TcpStream, SocketAddr), state: State<O>) -> Result<()> {
     use Msg::*;
 
     let mut stream: connection::MsgStream<Msg, Reply> = connection::wrap(stream);
@@ -89,7 +99,7 @@ async fn handle_conn((stream, _source): (TcpStream, SocketAddr), state: State) -
 }
 
 #[instrument(skip_all, fields(id=state.id))]
-async fn handle_incoming(listener: TcpListener, state: State) {
+async fn handle_incoming<O: Order>(listener: TcpListener, state: State<O>) {
     let mut tasks = JoinSet::new();
     loop {
         let res = if tasks.is_empty() {
@@ -120,7 +130,7 @@ async fn handle_incoming(listener: TcpListener, state: State) {
 }
 
 #[instrument(skip_all, fields(id = chart.our_id()))]
-async fn succession(chart: Chart, cluster_size: u16, state: State) {
+async fn succession<O: Order>(chart: Chart, cluster_size: u16, state: State<O>) {
     let mut rng = rand::rngs::StdRng::from_entropy();
     'outer: loop {
         succession::president_died(&state).await;
@@ -167,7 +177,7 @@ async fn succession(chart: Chart, cluster_size: u16, state: State) {
                 res = run_for_office => match res {
                     ElectionResult::Lost => continue,
                     ElectionResult::Won => {
-                        state.order(Order::BecomePres{term: our_term}).await;
+                        state.order(Order::elected(our_term)).await;
                         break term_increased;
                     }
                 }

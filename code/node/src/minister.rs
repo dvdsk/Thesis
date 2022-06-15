@@ -5,22 +5,22 @@ use tokio::sync::{broadcast, mpsc};
 use tracing::info;
 
 use crate::redirectory::{Node, ReDirectory};
-use crate::raft::{subjects, self};
+use crate::raft::subjects;
 use crate::raft::{Log, ObserverLog};
 use crate::raft::LogWriter;
-use crate::{Id, Role, Term};
+use crate::{Id, Role, Term, president};
 
 mod clerks;
 mod client;
 
 async fn handle_pres_orders(
-    pres_orders: &mut Log,
+    pres_orders: &mut Log<president::Order>,
     our_id: Id,
     our_subtree: &PathBuf,
     mut register: clerks::Register,
     mut redirectory: ReDirectory,
 ) -> Result<Role> {
-    use raft::Order::*;
+    use crate::president::Order::*;
 
     loop {
         let order = pres_orders.recv().await;

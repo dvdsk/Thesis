@@ -69,16 +69,16 @@ mod db {
 }
 
 #[derive(Debug, Clone)]
-pub struct State {
+pub struct State<O> {
     pub id: instance_chart::Id,
     pub election_office: Arc<Mutex<ElectionOffice>>,
-    tx: mpsc::Sender<Order>,
+    tx: mpsc::Sender<O>,
     db: sled::Tree,
     vars: Arc<Vars>,
 }
 
-impl State {
-    pub fn new(tx: mpsc::Sender<Order>, db: sled::Tree, id: instance_chart::Id) -> Self {
+impl<O: Order> State<O> {
+    pub fn new(tx: mpsc::Sender<O>, db: sled::Tree, id: instance_chart::Id) -> Self {
         let election_office = ElectionOffice::from_tree(&db);
         election_office.init_election_data();
         let state = Self {
@@ -134,7 +134,7 @@ pub struct LogMeta {
     pub idx: u32,
 }
 
-impl State {
+impl<O: Order> State<O> {
     /// for an empty log return LogMeta{ term: 0, idx: 0 }
     pub(crate) fn last_log_meta(&self) -> LogMeta {
         use db::Prefix;
@@ -155,12 +155,12 @@ impl State {
         }
     }
 
-    pub(crate) fn entry_at(&self, idx: u32) -> Option<LogEntry> {
+    pub(crate) fn entry_at(&self, idx: u32) -> Option<LogEntry<O>> {
         use crate::util::TypedSled;
         self.db.get_val(db::log_key(idx))
     }
 
-    pub(crate) fn append(&self, order: Order, term: Term) -> Idx {
+    pub(crate) fn append(&self, order: O, term: Term) -> Idx {
         use crate::util::TypedSled;
         loop {
             let LogMeta { idx, .. } = self.last_log_meta();
@@ -175,11 +175,11 @@ impl State {
         }
     }
 
-    pub(super) async fn order(&self, ord: Order) {
+    pub(super) async fn order(&self, ord: O) {
         self.tx.send(ord).await.unwrap();
     }
 
-    pub(crate) fn committed(&self) -> Vec<Order> {
+    pub(crate) fn committed(&self) -> Vec<O> {
         let last = db::log_key(self.commit_index());
         self.db
             .range(db::log_key(0)..last)

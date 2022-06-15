@@ -5,7 +5,7 @@ use instance_chart::Id;
 
 use crate::redirectory::Staff;
 use crate::president::raft::State;
-use crate::president::Order;
+use crate::president;
 
 use super::issue::Issue;
 
@@ -18,8 +18,8 @@ pub(super) struct Staffing {
 }
 
 impl Staffing {
-    pub fn process_order(&mut self, order: Order) -> Result<(), Order> {
-        use Order::*;
+    pub fn process_order(&mut self, order: president::Order) -> Result<(), president::Order> {
+        use president::Order::*;
 
         match order {
             AssignMinistry { subtree, staff } => {
@@ -34,7 +34,7 @@ impl Staffing {
         }
     }
 
-    pub fn from_committed(state: &State) -> Self {
+    pub fn from_committed(state: &State<president::Order>) -> Self {
         let mut ministries = Staffing::default();
         for order in state.committed() {
             let _ig_other = ministries.process_order(order);

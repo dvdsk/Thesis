@@ -9,9 +9,9 @@ use super::{db, LogIdx, Order, State};
 use crate::util::TypedSled;
 use crate::{Id, Term, Idx};
 
-impl State {
+impl<O: Order> State<O> {
     #[instrument(skip(self), fields(id = self.id), ret)]
-    pub async fn append_req(&self, req: Request) -> Result<Reply> {
+    pub async fn append_req(&self, req: Request<O>) -> Result<Reply> {
         let nothing_to_append;
         {
             // lock scope of election_office
@@ -72,21 +72,21 @@ impl State {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LogEntry {
+pub struct LogEntry<O> {
     pub term: Term,
-    pub order: Order,
+    pub order: O,
 }
 
-impl Default for LogEntry {
+impl<O: Order> Default for LogEntry<O> {
     fn default() -> Self {
         Self {
             term: 0,
-            order: Order::None,
+            order: O::none(),
         }
     }
 }
 
-impl State {
+impl<O: Order> State<O> {
     /// return true if the log contains prev_log_idx and prev_log_texm
     pub(super) fn log_contains(&self, prev_log_idx: Idx, prev_log_term: Term) -> bool {
         match self.db.get_val(db::log_key(prev_log_idx)) {
@@ -125,7 +125,7 @@ impl State {
     }
 
     #[instrument(skip(self))]
-    pub(super) fn insert_into_log(&self, idx: Term, entry: &LogEntry) {
+    pub(super) fn insert_into_log(&self, idx: Term, entry: &LogEntry<O>) {
         self.db.set_val(db::log_key(idx), entry);
     }
 
@@ -146,7 +146,7 @@ impl State {
     }
 }
 
-impl State {
+impl<O: Order> State<O> {
     /// Sets a new higher commit index
     pub(crate) fn set_commit_index(&self, new: Idx) {
         self.vars.commit_index.fetch_max(new, Ordering::SeqCst);
@@ -166,12 +166,12 @@ impl State {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Request {
+pub struct Request<O> {
     pub term: Term,
     pub leader_id: Id,
     pub prev_log_idx: LogIdx,
     pub prev_log_term: Term,
-    pub entries: Vec<Order>,
+    pub entries: Vec<O>,
     pub leader_commit: LogIdx,
 }
 

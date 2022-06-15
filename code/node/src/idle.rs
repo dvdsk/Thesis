@@ -8,11 +8,11 @@ use tokio::task::JoinSet;
 use tracing::{debug, warn};
 
 use crate::redirectory::{Node, ReDirectory};
-use crate::president::{Log, Order};
+use crate::president::{Log, Order, self};
 use crate::{Id, Role};
 
 async fn handle_pres_orders(
-    pres_orders: &mut Log,
+    pres_orders: &mut Log<president::Order>,
     redirectory: &mut ReDirectory,
     id: Id,
 ) -> Result<Role> {

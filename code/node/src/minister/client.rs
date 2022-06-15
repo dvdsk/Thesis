@@ -13,7 +13,7 @@ use crate::raft::LogWriter;
 
 pub async fn handle_requests(
     listener: &mut TcpListener,
-    log: LogWriter,
+    log: LogWriter<super::Order>,
     our_subtree: &Path,
     redirect: &mut ReDirectory,
 ) {
@@ -30,7 +30,7 @@ pub async fn handle_requests(
 
 async fn handle_conn(
     stream: TcpStream,
-    mut _log: LogWriter,
+    mut _log: LogWriter<super::Order>,
     our_subtree: PathBuf,
     redirect: ReDirectory,
 ) {

@@ -64,12 +64,12 @@ async fn connect(address: &SocketAddr) -> MsgStream<Reply, Msg> {
 }
 
 #[instrument(skip_all, fields(president_id = req_gen.base.leader_id, subject_id = subject_id))]
-async fn manage_subject(
+async fn manage_subject<O: Order>(
     subject_id: Id,
     address: SocketAddr,
-    mut broadcast: broadcast::Receiver<Order>,
+    mut broadcast: broadcast::Receiver<O>,
     mut appended: mpsc::Sender<u32>,
-    mut req_gen: RequestGen,
+    mut req_gen: RequestGen<O>,
     status_notify: impl StatusNotifier,
 ) {
     loop {
@@ -99,9 +99,9 @@ async fn manage_subject(
     }
 }
 
-async fn recieve_reply(
-    stream: &mut MsgStream<Reply, Msg>,
-    req_gen: &mut RequestGen,
+async fn recieve_reply<O: Order>(
+    stream: &mut MsgStream<Reply, Msg<O>>,
+    req_gen: &mut RequestGen<O>,
     appended: &mut mpsc::Sender<u32>,
 ) -> color_eyre::Result<()> {
     loop {
@@ -129,11 +129,11 @@ async fn recieve_reply(
 }
 
 /// replicate orders untill connection is lost
-async fn replicate_orders(
-    _broadcast: &mut broadcast::Receiver<Order>,
+async fn replicate_orders<O: Order>(
+    _broadcast: &mut broadcast::Receiver<O>,
     appended: &mut mpsc::Sender<u32>,
-    req_gen: &mut RequestGen,
-    stream: &mut MsgStream<Reply, Msg>,
+    req_gen: &mut RequestGen<O>,
+    stream: &mut MsgStream<Reply, Msg<O>>,
 ) {
     let mut next_hb = Instant::now() + HB_PERIOD;
     sleep_until(next_hb).await;
@@ -169,12 +169,12 @@ async fn replicate_orders(
 
 /// look for new subjects in the chart and register them
 #[instrument(skip_all, fields(president_id = state.id))]
-pub async fn instruct(
+pub async fn instruct<O: Order>(
     members: &mut impl Source,
-    orders: broadcast::Sender<Order>,
+    orders: broadcast::Sender<O>,
     commit_notify: mpsc::Receiver<(Idx, Arc<Notify>)>,
     status_notify: impl StatusNotifier + Clone + Sync + Send + 'static,
-    state: State,
+    state: State<O>,
     term: Term,
 ) {
     let mut commit_idx = Commited::new(commit_notify, &state);

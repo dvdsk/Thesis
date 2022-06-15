@@ -9,14 +9,14 @@ use tracing::{debug, instrument, trace, warn};
 
 use crate::Term;
 
-use super::HB_TIMEOUT;
+use super::{HB_TIMEOUT, Order};
 use super::{Chart, State};
 
 use super::state::vote;
 use super::{Msg, Reply};
 
 #[instrument(skip_all)]
-pub(super) async fn president_died(state: &State) {
+pub(super) async fn president_died<O: Order>(state: &State<O>) {
     let heartbeat = state.heartbeat();
 
     loop {
@@ -66,8 +66,8 @@ pub enum ElectionResult {
 /// election timeout is implemented by selecting on this
 /// with a timeout. This returns as soon as a majority is reached
 #[instrument(skip_all, fields(id = chart.our_id(), term))]
-pub(super) async fn run_for_office(
-    state: &State,
+pub(super) async fn run_for_office<O: Order>(
+    state: &State<O>,
     chart: &Chart,
     cluster_size: u16,
     term: Term,

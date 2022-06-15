@@ -1,53 +1,26 @@
-use std::path::PathBuf;
 
 use color_eyre::Result;
-use serde::{Deserialize, Serialize};
 use tokio::net::TcpListener;
 use tokio::sync::mpsc::{self, Receiver};
 use tokio::task::{self, JoinHandle};
 use tracing::{instrument, info};
 
-use crate::redirectory::Staff;
 use crate::Chart;
-use crate::{Role, Term};
 
 use super::state::State;
-use super::{handle_incoming, succession};
-
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub enum Order {
-    /// used as placeholder for the first entry in the log
-    None,
-    /// assigns a node a role
-    Assigned(Role),
-    BecomePres {
-        term: Term,
-    },
-    ResignPres,
-    #[cfg(test)]
-    Test(u8),
-
-    /// assigns a file tree a ministry, the load balancer
-    /// will try to uphold its policy that each ministry has
-    /// a minister and clecks
-    AssignMinistry {
-        subtree: PathBuf,
-        staff: Staff,
-    },
-}
+use super::{handle_incoming, succession, Order};
 
 /// abstraction over raft that allows us to wait on
 /// new committed log entries, while transparently holding elections
 /// if we become president we recieve log entry: `Order::BecomePres`
-pub struct Log {
-    pub orders: Receiver<Order>, // commited entries can be recoverd from here
-    pub state: State,
+pub struct Log<O> {
+    pub orders: Receiver<O>, // commited entries can be recoverd from here
+    pub state: State<O>,
     _handle_incoming: JoinHandle<()>,
     _succession: JoinHandle<()>,
 }
 
-impl Log {
+impl<O: Order> Log<O> {
     #[instrument(skip_all)]
     pub(crate) fn open(
         chart: Chart,
@@ -83,13 +56,13 @@ impl Log {
 
 /// abstraction over raft that allows us to wait on
 /// new committed log entries, without taking part in elections
-pub struct ObserverLog {
-    pub orders: Receiver<Order>, // commited entries can be recoverd from here
-    pub state: State,
+pub struct ObserverLog<O> {
+    pub orders: Receiver<O>, // commited entries can be recoverd from here
+    pub state: State<O>,
     _handle_incoming: JoinHandle<()>,
 }
 
-impl ObserverLog {
+impl<O: Order> ObserverLog<O> {
     #[instrument(skip_all)]
     pub(crate) fn open(
         chart: Chart,

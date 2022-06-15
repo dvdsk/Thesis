@@ -43,7 +43,7 @@ impl RequestGen {
             ..self.clone()
         }
     }
-    fn heartbeat(&mut self) -> Request {
+    fn heartbeat(&mut self) -> Request<Order> {
         let req = Request {
             term: self.term,
             leader_id: self.leader_id,
@@ -55,7 +55,7 @@ impl RequestGen {
         self.prev_log_term = self.term;
         req
     }
-    fn correct(&mut self, n: u8) -> Request {
+    fn correct(&mut self, n: u8) -> Request<Order> {
         let entry = Order::Test(n);
         self.entries.push(entry.clone());
         let req = Request {
@@ -89,7 +89,7 @@ impl RequestGen {
 //  - a request sending Order::Test
 //  - invalid requests for the above ^
 
-fn setup() -> (RequestGen, State, mpsc::Receiver<Order>) {
+fn setup() -> (RequestGen, State<Order>, mpsc::Receiver<Order>) {
     const ID: u64 = 2;
     let gen = RequestGen::new(ID);
 
@@ -160,7 +160,7 @@ async fn some_incorrect_entries() {
 
 async fn append_correct(
     mut gen: RequestGen,
-    state: State,
+    state: State<Order>,
     barrier: Arc<Barrier>,
     nums: u8,
 ) -> RequestGen {

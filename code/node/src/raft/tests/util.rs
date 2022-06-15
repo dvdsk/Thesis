@@ -1,11 +1,12 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use tokio::sync::{mpsc, Notify};
-use tracing::trace;
+use tracing::{trace, instrument};
 
+use crate::president::Order;
+use crate::raft::tests::TEST_TIMEOUT;
 use crate::{Term, Id};
 
-use super::*;
 use crate::Chart;
 use instance_chart::discovery;
 
