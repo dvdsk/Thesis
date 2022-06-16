@@ -1,10 +1,12 @@
 use std::net::SocketAddr;
+use std::ops::Range;
 use std::path::PathBuf;
 
+use time::OffsetDateTime;
 use serde::{Deserialize, Serialize};
 
 pub mod connection;
-pub type Idx = u64;
+pub type Idx = u32;
 
 pub trait Message<'de>: Serialize + Deserialize<'de> {
     fn from_buf(buf: &'de [u8]) -> Self {
@@ -18,14 +20,30 @@ pub trait Message<'de>: Serialize + Deserialize<'de> {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum Request {
-    CreateFile(PathBuf),
+    /// list the content of path
+    List(PathBuf),
+    Create(PathBuf),
+    /// refresh the lease hold by the current connection
+    RefreshLease,
+    /// get a write lease to the file at this path
+    Write{path: PathBuf, range: Range<u64>},
     /// check if change is committed to disk, should be awnserd by Done
     /// if it is or by No if not
     IsCommitted {path: PathBuf, idx: Idx },
+    /// send to a clerk by a minister needing write permissions over a file (range)
+    /// the clerk will stop any ongoing reading
+    RevokeRead {path: PathBuf, range: Range<u64> }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Lease {
+    pub expires: OffsetDateTime,
+    pub area: Range<u64>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum Response {
+    List(Vec<PathBuf>),
     /// wrong subtree redirect client to correct clerk/minister
     Redirect { subtree: PathBuf, addr: SocketAddr },
     /// change not yet done, starting comit with index
@@ -36,6 +54,12 @@ pub enum Response {
     NotCommitted,
     /// change committed to disk
     Done,
+    /// a write lease till 
+    WriteLease(Lease),
+    /// Something went wrong
+    Error(String),
+    /// lease timed out or we canceld it by sending another request
+    LeaseDropped,
 }
 
 // #[cfg(test)]

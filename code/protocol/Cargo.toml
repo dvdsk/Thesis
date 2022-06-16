@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 bincode = "1"
 rand = "0.8"
+time = { version = "0.3", features = ["serde"] }
 serde = { version = "1", features = ["derive"] }
 futures = "0.3"
 
