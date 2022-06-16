@@ -2,9 +2,10 @@ use std::path::PathBuf;
 
 use color_eyre::Result;
 
+use crate::directory::Directory;
+use crate::raft::{Log, ObserverLog};
 use crate::redirectory::{Node, ReDirectory};
-use crate::raft::Log;
-use crate::{Id, Role, president};
+use crate::{president, Id, Role, minister};
 
 mod clients;
 
@@ -41,31 +42,42 @@ async fn handle_pres_orders(
     }
 }
 
-// async fn handle_minister_orders() {
-//     loop {
-//     }
-// }
+async fn handle_minister_orders(orders: &mut ObserverLog<minister::Order>, mut dir: Directory) {
+    loop {
+        let order = orders.recv().await;
+        dir.update(order)
+    }
+}
 
-pub(crate) async fn work(
-    state: &mut super::State,
-    our_tree: PathBuf,
-) -> Result<Role> {
+pub(crate) async fn work(state: &mut super::State, our_subtree: PathBuf) -> Result<Role> {
     let super::State {
         pres_orders,
+        min_orders,
         redirectory,
         client_listener,
         id,
+        db,
         ..
     } = state;
 
-    redirectory.set_tree(Some(our_tree.clone()));
-    let client_requests = clients::handle_requests(client_listener, our_tree.clone(), redirectory.clone());
-    let pres_orders = handle_pres_orders(pres_orders, *id, our_tree, redirectory);
-    // let minister_orders = handle_minister_orders(); // Q how about minister change...
+    let ObserverLog { state, .. } = min_orders;
+
+    redirectory.set_tree(Some(our_subtree.clone()));
+    let directory = Directory::from_committed(state, db);
+
+    let client_requests = clients::handle_requests(
+        client_listener,
+        state.clone(),
+        our_subtree.clone(),
+        redirectory.clone(),
+        directory.clone(),
+    );
+    let pres_orders = handle_pres_orders(pres_orders, *id, our_subtree, redirectory);
+    let minister_orders = handle_minister_orders(min_orders, directory);
 
     tokio::select! {
         new_role = pres_orders => return new_role,
         _ = client_requests => unreachable!(),
-        // _ = minister_orders => unreachable!(),
+        _ = minister_orders => unreachable!(),
     };
 }

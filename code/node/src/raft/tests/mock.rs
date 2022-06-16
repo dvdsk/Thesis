@@ -162,7 +162,7 @@ async fn test_req(
         Some(idx) => log.re_append(Order::Test(n), idx).await,
         None => log.append(Order::Test(n)).await,
     };
-    stream.send(Reply::Waiting(ticket._idx)).await.ok()?;
+    stream.send(Reply::Waiting(ticket.idx)).await.ok()?;
     ticket.notify.notified().await;
     Some(Reply::Done)
 }

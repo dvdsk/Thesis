@@ -7,8 +7,8 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio::task::JoinSet;
 use tracing::{debug, warn};
 
+use crate::president::{self, Log, Order};
 use crate::redirectory::{Node, ReDirectory};
-use crate::president::{Log, Order, self};
 use crate::{Id, Role};
 
 async fn handle_pres_orders(
@@ -62,12 +62,16 @@ async fn handle_conn(stream: TcpStream, redirect: ReDirectory) {
         debug!("idle got request: {req:?}");
 
         let reply = match req {
-            CreateFile(path) | IsCommitted { path, .. } => {
+            List(path) | Create(path) | IsCommitted { path, .. } | Write { path, .. } => {
                 let (staff, subtree) = redirect.to_staff(&path).await;
                 Response::Redirect {
                     addr: staff.minister.addr,
                     subtree,
                 }
+            }
+            RefreshLease | RevokeRead { .. } => {
+                warn!("idle node recieved inappropriate request");
+                return;
             }
         };
 

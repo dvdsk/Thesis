@@ -1,15 +1,16 @@
 use std::path::PathBuf;
 
 use color_eyre::Result;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use tokio::sync::{broadcast, mpsc};
 use tracing::info;
 
-use crate::redirectory::{Node, ReDirectory};
-use crate::raft::{subjects, self};
-use crate::raft::{Log, ObserverLog};
+use crate::directory::Directory;
 use crate::raft::LogWriter;
-use crate::{Id, Role, Term, president};
+use crate::raft::{self, subjects};
+use crate::raft::{Log, ObserverLog};
+use crate::redirectory::{Node, ReDirectory};
+use crate::{president, Id, Role, Term};
 
 mod clerks;
 mod client;
@@ -84,6 +85,7 @@ pub(crate) async fn work(
         min_orders,
         redirectory,
         client_listener,
+        db,
         id: our_id,
         ..
     } = state;
@@ -94,6 +96,7 @@ pub(crate) async fn work(
     let ObserverLog { state, .. } = min_orders;
 
     redirectory.set_tree(Some(our_subtree.clone()));
+    let directory = Directory::from_committed(state, db);
 
     let (broadcast, _) = broadcast::channel(16);
     let (tx, notify_rx) = mpsc::channel(16);
@@ -120,8 +123,13 @@ pub(crate) async fn work(
         register,
         redirectory.clone(),
     );
-    let client_requests =
-        client::handle_requests(client_listener, log_writer, &our_subtree, redirectory);
+    let client_requests = client::handle_requests(
+        client_listener,
+        log_writer,
+        &our_subtree,
+        redirectory,
+        directory,
+    );
 
     tokio::select! {
         new_role = pres_orders => return new_role,

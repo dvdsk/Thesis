@@ -41,7 +41,7 @@ impl<T: RandomNode> Client<T> {
     /// committed the ticket member will be set to allow future resuming,
     /// in case of node failure.
     pub async fn create_file(&mut self, path: PathBuf) {
-        self.request(&path, Request::CreateFile(path.clone()), true)
+        self.request(&path, Request::Create(path.clone()), true)
             .await
             .unwrap();
     }

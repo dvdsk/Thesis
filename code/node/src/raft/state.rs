@@ -189,4 +189,8 @@ impl<O: Order> State<O> {
             .map(Result::unwrap)
             .collect()
     }
+
+    pub(crate) fn is_committed(&self, idx: u32) -> bool {
+        self.commit_index() >= idx
+    }
 }

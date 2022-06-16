@@ -95,6 +95,7 @@ struct State {
     client_listener: TcpListener,
     redirectory: ReDirectory,
     id: Id,
+    db: sled::Db,
 }
 
 #[instrument(level = "info")]
@@ -134,6 +135,7 @@ pub async fn run(conf: Config) {
         client_listener,
         redirectory,
         id: conf.id,
+        db,
     };
 
     let mut role = Role::Idle;
