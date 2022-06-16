@@ -7,6 +7,7 @@ use std::net::IpAddr;
 use std::net::Ipv4Addr;
 use std::net::SocketAddr;
 use std::num::NonZeroU16;
+use std::ops::Range;
 use std::path::Path;
 use std::path::PathBuf;
 use tokio::net::TcpListener;
@@ -113,9 +114,65 @@ impl<T> Drop for Wrapper<T> {
     }
 }
 
+pub trait Overlap {
+    fn has_overlap_with(&self, other: &Self) -> bool;
+}
+
+impl<U: PartialOrd> Overlap for Range<U> {
+    fn has_overlap_with(&self, other: &Self) -> bool {
+        let start_max = if self.start > other.start {
+            &self.start
+        } else {
+            &other.start
+        };
+
+        let end_min = if self.end < other.end {
+            &self.end
+        } else {
+            &other.end
+        };
+        start_max < end_min
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
+
+    mod overlap {
+        use super::*;
+
+        #[test]
+        fn zero_len_range() {
+            let overlaps = (0..5).has_overlap_with(&(3..3));
+            assert!(!overlaps)
+        }
+
+        #[test]
+        fn end_start_bordering() {
+            let overlaps = (1..5).has_overlap_with(&(0..1));
+            assert!(!overlaps)
+        }
+
+        #[test]
+        fn start_overlap() {
+            let overlaps = (1..5).has_overlap_with(&(3..6));
+            assert!(overlaps)
+        }
+
+        #[test]
+        fn self_contained() {
+            let overlaps = (3..5).has_overlap_with(&(0..10));
+            assert!(overlaps)
+        }
+
+        #[test]
+        fn other_contained() {
+            let overlaps = (0..10).has_overlap_with(&(3..5));
+            assert!(overlaps)
+        }
+    }
+
     mod run_number {
         use mktemp::Temp;
 
