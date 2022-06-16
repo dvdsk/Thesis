@@ -9,6 +9,7 @@ edition = "2021"
 instance-chart = { version = "0.2.1" }
 
 rand = "0.8"
+time = { version = "0.3", features = ["serde"] }
 num-traits = "0.2"
 derivative = "2"
 
@@ -32,6 +33,7 @@ thiserror = "1"
 result-tools = { git = "https://github.com/dvdsk/result-tools.git" }
 
 sled = "0.34"
+slotmap = { version = "1", features = ["serde"] }
 bincode = "1.3"
 serde = { version = "1", features = ["derive"] }
 
