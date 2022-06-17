@@ -2,8 +2,8 @@ use std::collections::HashSet;
 use std::net::SocketAddr;
 use tokio::sync::mpsc;
 
-use crate::redirectory::Node;
 use crate::raft::subjects::{Source, SourceNotify};
+use crate::redirectory::Node;
 use crate::Id;
 
 // TODO need a way to drop subjects too
@@ -46,7 +46,8 @@ impl Source for Map {
 
 pub struct Register {
     current: HashSet<Node>,
-    notify: mpsc::Sender<(Id, SocketAddr)>,
+    raft_notify: mpsc::Sender<(Id, SocketAddr)>,
+    lock_notify: mpsc::Sender<(Id, SocketAddr)>,
 }
 
 impl Register {
@@ -54,7 +55,10 @@ impl Register {
         let new_assignment: HashSet<Node> = new_assignment.into_iter().collect();
         let newly_added = new_assignment.difference(&self.current);
         for clerk in newly_added {
-            self.notify
+            self.raft_notify
+                .try_send((clerk.id, clerk.addr.clone()))
+                .unwrap();
+            self.lock_notify
                 .try_send((clerk.id, clerk.addr.clone()))
                 .unwrap();
         }
@@ -62,18 +66,28 @@ impl Register {
 }
 
 impl Map {
-    pub(crate) fn new(clerks: Vec<Node>, our_id: Id) -> (Register, Map) {
-        let (notify, rx) = mpsc::channel(16);
+    pub(crate) fn new(clerks: Vec<Node>, our_id: Id) -> (Register, Map, Map) {
         let current: HashSet<_> = clerks.into_iter().collect();
-        let map = Self {
+
+        let (raft_notify, rx) = mpsc::channel(16);
+        let map_a = Self {
             our_id,
             current: current.clone(),
             recv: Some(rx),
         };
+
+        let (lock_notify, rx) = mpsc::channel(16);
+        let map_b = Self {
+            our_id,
+            current: current.clone(),
+            recv: Some(rx),
+        };
+
         let register = Register {
             current,
-            notify,
+            raft_notify,
+            lock_notify,
         };
-        (register, map)
+        (register, map_a, map_b)
     }
 }

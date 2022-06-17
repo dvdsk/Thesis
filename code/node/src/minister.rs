@@ -14,6 +14,7 @@ use crate::{president, Id, Role, Term};
 
 mod clerks;
 mod client;
+mod read_locks;
 
 async fn handle_pres_orders(
     pres_orders: &mut Log<president::Order>,
@@ -123,6 +124,7 @@ pub(crate) async fn work(
         register,
         redirectory.clone(),
     );
+
     let client_requests = client::handle_requests(
         client_listener,
         log_writer,
@@ -130,6 +132,8 @@ pub(crate) async fn work(
         redirectory,
         directory,
     );
+
+    let update_read_locks = read_locks::maintain_file_locks(clerks, lock_req);
 
     tokio::select! {
         new_role = pres_orders => return new_role,

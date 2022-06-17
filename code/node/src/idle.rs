@@ -62,14 +62,18 @@ async fn handle_conn(stream: TcpStream, redirect: ReDirectory) {
         debug!("idle got request: {req:?}");
 
         let reply = match req {
-            List(path) | Create(path) | IsCommitted { path, .. } | Write { path, .. } => {
+            List(path)
+            | Create(path)
+            | IsCommitted { path, .. }
+            | Write { path, .. }
+            | Read { path, .. } => {
                 let (staff, subtree) = redirect.to_staff(&path).await;
                 Response::Redirect {
                     addr: staff.minister.addr,
                     subtree,
                 }
             }
-            RefreshLease | RevokeRead { .. } => {
+            RefreshLease | Lock { .. } => {
                 warn!("idle node recieved inappropriate request");
                 return;
             }

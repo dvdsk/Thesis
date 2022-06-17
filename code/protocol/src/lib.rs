@@ -27,12 +27,14 @@ pub enum Request {
     RefreshLease,
     /// get a write lease to the file at this path
     Write{path: PathBuf, range: Range<u64>},
+    /// get a write lease to the file at this path
+    Read{path: PathBuf, range: Range<u64>},
     /// check if change is committed to disk, should be awnserd by Done
     /// if it is or by No if not
     IsCommitted {path: PathBuf, idx: Idx },
     /// send to a clerk by a minister needing write permissions over a file (range)
     /// the clerk will stop any ongoing reading
-    RevokeRead {path: PathBuf, range: Range<u64> }
+    Lock {path: PathBuf, range: Range<u64>, key: AccessKey }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -56,6 +58,8 @@ pub enum Response {
     Done,
     /// a write lease till 
     WriteLease(Lease),
+    /// a read lease till 
+    ReadLease(Lease),
     /// Something went wrong
     Error(String),
     /// lease timed out or we canceld it by sending another request

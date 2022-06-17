@@ -6,6 +6,7 @@ use derivative::Derivative;
 use instance_chart::Id;
 use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
+use tracing::instrument;
 
 use crate::president::Order;
 use crate::raft::State;
@@ -81,6 +82,7 @@ impl ReDirectory {
         }
     }
 
+    #[instrument(skip(self), ret)]
     pub async fn to_staff(&self, path: &Path) -> (Staff, PathBuf) {
         let tree = self.trees.read().await;
         for (subtree, staff) in tree.iter().rev() {

@@ -15,7 +15,7 @@ use tokio::task::JoinSet;
 use tokio::time::{timeout, sleep};
 use tracing::{debug, warn};
 
-use crate::directory::Directory;
+use crate::directory::{Directory, self, Blocks};
 use crate::raft::{self, LogWriter, HB_TIMEOUT};
 use crate::redirectory::ReDirectory;
 
@@ -25,6 +25,7 @@ pub async fn handle_requests(
     our_subtree: &Path,
     redirect: &mut ReDirectory,
     dir: Directory,
+    blocks: Blocks,
 ) {
     let mut request_handlers = JoinSet::new();
     loop {
@@ -35,6 +36,7 @@ pub async fn handle_requests(
             our_subtree.to_owned(),
             redirect.clone(),
             dir.clone(),
+            blocks.clone(),
         );
         request_handlers
             .build_task()
@@ -71,12 +73,14 @@ async fn check_subtree(
 
 type ClientStream<'a> = Pin<&'a mut Peekable<MsgStream<Request, Response>>>;
 
+// Track locks here too to update new nodes
 async fn handle_conn(
     stream: TcpStream,
     mut log: LogWriter<super::Order>,
     our_subtree: PathBuf,
     redirect: ReDirectory,
     mut dir: Directory,
+    blocks: Blocks,
 ) {
     use Request::*;
     let stream: MsgStream<Request, Response> = connection::wrap(stream);
@@ -116,6 +120,18 @@ async fn handle_conn(
     }
 }
 
+struct WriteLease<'a> {
+    dir_lease: directory::LeaseGuard<'a>,
+}
+
+impl<'a> Drop for WriteLease<'a> {
+    fn drop(self: &mut WriteLease<'a>) {
+        
+
+        
+    }
+}
+
 /// offers a write lease for some period, the client should immediatly queue
 /// for another write lease to keep it
 async fn write_lease(
@@ -124,16 +140,19 @@ async fn write_lease(
     range: Range<u64>,
     dir: &mut Directory,
     redirect: &ReDirectory,
+    blocks: &mut Blocks,
 ) -> Result<Response> {
-    let key = match dir.get_write_access(&path, &range) {
-        Err(e) => return Ok(Response::Error(e)),
-        Ok(key) => key,
+    let dir_lease = match dir.get_exclusive_access(&path, &range) {
+        Err(e) => return Ok(Response::Error(e.to_string())),
+        Ok(lease) => lease,
     };
 
     // revoke all reads for this file on the clerks, if this times 
     // out the clerk or the client will already have dropped the lease
+    blocks.add(dir_lease.key());
     let revoke_clerks = revoke_reads_on_clerks(&path, redirect, &range);
     let _ig_err = timeout(HB_TIMEOUT, revoke_clerks).await;
+    let lease = WriteLease { dir_lease };
 
     let expires = OffsetDateTime::now_utc() + raft::HB_TIMEOUT;
     stream
@@ -152,42 +171,13 @@ async fn write_lease(
                 stream.next().await; // take the refresh cmd out
             }
             _ => {
-                dir.revoke_access(&path, key);
-                break;
+                break; // lease is released on drop
             }
         }
     }
     Ok(Response::LeaseDropped)
 }
 
-async fn revoke_read(addr: SocketAddr, path: PathBuf, range: Range<u64>) -> Result<()> {
-    let stream = TcpStream::connect(addr).await?;
-    let mut stream: MsgStream<Response, Request> = connection::wrap(stream);
-    stream.send(Request::RevokeRead { path, range }).await?;
-    Ok(())
-}
-
-/// connects all the clerks and revokes reads, might block forever therefore should be ran
-/// inside a timeout
-async fn revoke_reads_on_clerks(path: &PathBuf, redirect: &ReDirectory, range: &Range<u64>) {
-    let (staff, _) = redirect.to_staff(path).await;
-    let mut requests = staff
-        .clerks
-        .into_iter()
-        .map(|clerk| revoke_read(clerk.addr, path.clone(), range.clone()))
-        .fold(JoinSet::new(), |mut set, fut| {
-            set.build_task().name("revoke_read").spawn(fut);
-            set
-        });
-
-    while let Some(res) = requests.join_one().await {
-        if res.is_err() {
-            // clerk is malfunctioning, must ensure the clerk's clients
-            // read leases have timed out
-            sleep(HB_TIMEOUT).await;
-        }
-    }
-}
 
 async fn create_file(
     path: PathBuf,
