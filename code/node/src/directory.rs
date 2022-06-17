@@ -1,77 +1,20 @@
+use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::ops::Range;
 use std::os::unix::prelude::OsStrExt;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
-use slotmap::SlotMap;
-use serde::{Deserialize, Serialize};
+use color_eyre::eyre::{eyre, Context};
+use color_eyre::Result;
+use tokio::sync::Mutex;
+use tracing::instrument;
 
 use crate::{minister, raft};
 
-/// access is explicitly revoked once
-/// a client times out
-#[derive(Serialize, Deserialize, Debug)]
-pub enum Access {
-    Reader(Range<u64>),
-    Writer(Range<u64>),
-}
-
-impl Access {
-    fn range(&self) -> &Range<u64> {
-        match self {
-            Self::Reader(r) => r,
-            Self::Writer(r) => r,
-        }
-    }
-}
-
-slotmap::new_key_type! { pub struct AccessKey; }
-
-#[derive(Default, Serialize, Deserialize)]
-pub struct Entry {
-    size: usize,
-    /// list sorted by start position
-    areas: SlotMap<AccessKey, Access>,
-}
-
-impl Entry {
-    fn from_bytes(bytes: &[u8]) -> Self {
-        bincode::deserialize(bytes).unwrap()
-    }
-
-    fn to_bytes(&self) -> Vec<u8> {
-        bincode::serialize(self).unwrap()
-    }
-
-    fn any_overlapping_access(&self, req: &Range<u64>) -> bool {
-        use crate::util::Overlap;
-        for access in self.areas.values() {
-            if access.range().has_overlap_with(req) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    fn overlapping_write_access(&self, req: &Range<u64>) -> bool {
-        use crate::util::Overlap;
-        for access in self.areas.values() {
-            match access {
-                Access::Writer(range) if range.has_overlap_with(req) => return true,
-                _ => (),
-            }
-        }
-        return false;
-    }
-
-    fn add_write_access(&mut self, range: &Range<u64>) -> AccessKey {
-        self.areas.insert(Access::Writer(range.clone()))
-    }
-
-    fn revoke_access(&mut self, key: AccessKey) {
-        self.areas.remove(key);
-    }
-}
+mod entry;
+use entry::Entry;
+pub use entry::AccessKey;
 
 #[derive(Debug, Clone)]
 pub struct Directory {
@@ -82,7 +25,49 @@ fn dbkey(path: &Path) -> &[u8] {
     path.as_os_str().as_bytes()
 }
 
+pub struct LeaseGuard<'a> {
+    pub dir: &'a mut Directory,
+    path: &'a Path,
+    pub key: AccessKey,
+}
+
+impl<'a> LeaseGuard<'a> {
+    pub fn key(&self) -> AccessKey {
+        self.key
+    }
+}
+
+impl<'a> Drop for LeaseGuard<'a> {
+    fn drop(self: &mut LeaseGuard<'a>) {
+        self.dir.revoke_access(&self.path, self.key)
+    }
+}
+
+#[derive(Default, Clone)]
+pub struct Blocks(Arc<Mutex<HashMap<AccessKey, (PathBuf, Range<u64>)>>>);
+
+impl Blocks {
+    pub(crate) async fn reset(&mut self, key: AccessKey, dir: &mut Directory) {
+        todo!()
+    }
+
+    pub(crate) async fn reset_all(&mut self, dir: &mut Directory) {
+        let mut map = self.0.lock().await;
+        for (_, (path, range)) in map.drain() {
+            todo!()
+        }
+    }
+}
+
 impl Directory {
+    fn lease_guard<'a>(&'a mut self, path: &'a Path, key: AccessKey) -> LeaseGuard<'a> {
+        LeaseGuard {
+            dir: self,
+            path,
+            key,
+        }
+    }
+
     pub fn add_entry(&mut self, path: &Path) {
         let entry = Entry::default();
         self.tree.insert(dbkey(path), entry.to_bytes()).unwrap();
@@ -95,7 +80,12 @@ impl Directory {
         }
 
         // TODO check if mounted/subdir part
-        for dir_entry in self.tree.scan_prefix(dbkey(path)).keys().map(Result::unwrap) {
+        for dir_entry in self
+            .tree
+            .scan_prefix(dbkey(path))
+            .keys()
+            .map(Result::unwrap)
+        {
             self.tree.remove(dir_entry).unwrap();
         }
     }
@@ -133,11 +123,35 @@ impl Directory {
         dir
     }
 
-    pub(crate) fn get_write_access(
-        &self,
-        path: &Path,
+    #[instrument(skip(self), err)]
+    pub(crate) fn get_read_access<'a>(
+        &'a self,
+        path: &'a Path,
         req_range: &Range<u64>,
-    ) -> Result<AccessKey, String> {
+    ) -> Result<LeaseGuard<'a>> {
+        let mut key = None;
+        self.tree
+            .update_and_fetch(dbkey(path), |bytes| {
+                let mut entry = Entry::from_bytes(&bytes?);
+                if !entry.overlapping_write_access(&req_range) {
+                    key = Some(entry.add_read_access(&req_range));
+                    Some(entry.to_bytes())
+                } else {
+                    bytes.map(Vec::from)
+                }
+            })
+            .wrap_err("internal db error")?;
+
+        let key = key.ok_or_else(|| eyre!("could not give access, overlapping writes"))?;
+        Ok(self.lease_guard(path, key))
+    }
+
+    #[instrument(skip(self), err)]
+    pub(crate) fn get_exclusive_access<'a>(
+        &'a self,
+        path: &'a Path,
+        req_range: &Range<u64>,
+    ) -> Result<LeaseGuard<'a>> {
         let mut key = None;
         self.tree
             .update_and_fetch(dbkey(path), |bytes| {
@@ -149,9 +163,10 @@ impl Directory {
                     bytes.map(Vec::from)
                 }
             })
-            .unwrap();
+            .wrap_err("internal db error")?;
 
-        key.ok_or(String::from("could not give access, overlapping writes"))
+        let key = key.ok_or_else(|| eyre!("could not give access, overlapping writes"))?;
+        Ok(self.lease_guard(path, key))
     }
 
     pub(crate) fn revoke_access(&self, path: &Path, access: AccessKey) {
@@ -162,5 +177,20 @@ impl Directory {
                 Some(entry.to_bytes())
             })
             .unwrap();
+    }
+
+    #[instrument(skip(self), err)]
+    pub(crate) fn get_overlapping(
+        &self,
+        path: &PathBuf,
+        range: &Range<u64>,
+    ) -> Result<Vec<AccessKey>> {
+        let bytes = self
+            .tree
+            .get(dbkey(path))
+            .wrap_err("internal db error")?
+            .ok_or_else(|| eyre!("no entry for path"))?;
+        let entry = Entry::from_bytes(&bytes);
+        Ok(entry.overlapping(range))
     }
 }
