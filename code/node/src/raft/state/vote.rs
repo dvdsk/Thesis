@@ -12,7 +12,7 @@ impl<O: Order> State<O> {
     // this does not need to be lockless as its called a lot
     // once a leader goes down. The function never blocks so
     // locks will not block long.
-    #[instrument(level= "debug", skip(self), fields(id = self.id), ret)]
+    #[instrument(level= "debug", skip(self), ret)]
     pub async fn vote_req(&self, req: RequestVote) -> Option<VoteReply> {
         // lock term and voted_for,
         let mut election_office = self.election_office.lock().await;

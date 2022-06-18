@@ -1,9 +1,8 @@
-
 use color_eyre::Result;
 use tokio::net::TcpListener;
 use tokio::sync::mpsc::{self, Receiver};
 use tokio::task::{self, JoinHandle};
-use tracing::{instrument, info};
+use tracing::{info, instrument, Instrument};
 
 use crate::Chart;
 
@@ -29,7 +28,9 @@ impl<O: Order> Log<O> {
         listener: TcpListener,
     ) -> Result<Self> {
         let (tx, orders) = mpsc::channel(8);
-        let state = State::new(tx, db, chart.our_id());
+        let state = State::new(tx, db);
+        let handle_incoming = handle_incoming(listener, state.clone()).in_current_span();
+        let succession = succession(chart, cluster_size, state.clone()).in_current_span();
         info!("opening raft log");
 
         Ok(Self {
@@ -37,12 +38,8 @@ impl<O: Order> Log<O> {
             orders,
             _handle_incoming: task::Builder::new()
                 .name("log_handle_incoming")
-                .spawn(handle_incoming(listener, state.clone())),
-            _succession: task::Builder::new().name("succesion").spawn(succession(
-                chart,
-                cluster_size,
-                state,
-            )),
+                .spawn(handle_incoming),
+            _succession: task::Builder::new().name("succesion").spawn(succession),
         })
     }
 
@@ -64,21 +61,18 @@ pub struct ObserverLog<O> {
 
 impl<O: Order> ObserverLog<O> {
     #[instrument(skip_all)]
-    pub(crate) fn open(
-        chart: Chart,
-        db: sled::Tree,
-        listener: TcpListener,
-    ) -> Result<Self> {
+    pub(crate) fn open(db: sled::Tree, listener: TcpListener) -> Result<Self> {
         let (tx, orders) = mpsc::channel(8);
-        let state = State::new(tx, db, chart.our_id());
+        let state = State::new(tx, db);
+        let handle_incoming = handle_incoming(listener, state.clone()).in_current_span();
         info!("opening raft log");
 
         Ok(Self {
-            state: state.clone(),
+            state,
             orders,
             _handle_incoming: task::Builder::new()
                 .name("log_handle_incoming")
-                .spawn(handle_incoming(listener, state)),
+                .spawn(handle_incoming),
         })
     }
 

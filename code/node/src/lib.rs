@@ -127,7 +127,7 @@ pub async fn run(conf: Config) {
 
     let tree = db.open_tree("minister log").unwrap();
     let min_orders =
-        raft::ObserverLog::open(chart.clone(), tree, minister_listener).unwrap();
+        raft::ObserverLog::open(tree, minister_listener).unwrap();
 
     let mut state = State {
         pres_orders,

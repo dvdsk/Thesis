@@ -168,7 +168,7 @@ async fn replicate_orders<O: Order>(
 }
 
 /// look for new subjects in the chart and register them
-#[instrument(skip_all, fields(president_id = state.id))]
+#[instrument(skip_all)]
 pub async fn instruct<O: Order>(
     members: &mut impl Source,
     orders: broadcast::Sender<O>,

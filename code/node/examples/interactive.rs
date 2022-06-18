@@ -1,13 +1,13 @@
-use std::net::{Ipv4Addr, IpAddr};
-use std::path::PathBuf;
 use std::collections::HashMap;
+use std::net::{IpAddr, Ipv4Addr};
+use std::path::PathBuf;
 
-use tokio::net::{TcpListener, TcpStream};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use color_eyre::eyre::Result;
 use mktemp::Temp;
-use node::Config;
 use node::util::runtime_dir;
+use node::Config;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::{TcpListener, TcpStream};
 use tokio::task;
 
 use node::util;
@@ -25,12 +25,12 @@ fn setup_node(id: u64) -> Result<Task> {
         pres_port: None,
         minister_port: None,
         client_port: None,
-        cluster_size: 3,
+        cluster_size: 4,
         database: PathBuf::from("changed in loop"),
     };
 
     let temp_dir = Temp::new_dir().unwrap();
-    let config =  Config {
+    let config = Config {
         id,
         database: temp_dir.join(format!("{id}.db")),
         ..config.clone()
@@ -53,7 +53,6 @@ async fn local_cluster() -> Result<HashMap<u64, Task>> {
 }
 
 async fn manage_cluster() {
-    start_jeager::start_if_not_running(runtime_dir()).await;
     // console_subscriber::init();
     util::setup_errors();
 
@@ -62,7 +61,7 @@ async fn manage_cluster() {
     loop {
         let (mut socket, _) = listener.accept().await.unwrap();
         loop {
-            let mut buf = [0u8;2];
+            let mut buf = [0u8; 2];
             socket.read_exact(&mut buf).await.unwrap();
             let [command, id] = buf;
             match command as char {
@@ -77,12 +76,14 @@ async fn manage_cluster() {
                         warn!("killed node {id} [by remote request]");
                     }
                 }
-                'r' => { // `ressurrect` a node
+                'r' => {
+                    // `ressurrect` a node
                     let node = setup_node(id as u64).unwrap();
                     cluster.insert(id as u64, node);
                     warn!("resurrected node {id} [by remote request]");
                 }
-                'a' => { // add new node
+                'a' => {
+                    // add new node
                     let id = cluster.len() as u64;
                     cluster.insert(id, setup_node(id).unwrap());
                     warn!("added node {id} [by remote request]");
@@ -105,16 +106,24 @@ async fn control_cluster() -> Result<()> {
         let msg = [command as u8, id];
         conn.write_all(&msg).await.unwrap();
     }
-
 }
 
 #[tokio::main]
 async fn main() {
-    let arg = std::env::args().nth(1);
-    match arg.as_ref().map(String::as_str) {
-        Some("c") => manage_cluster().await,
-        Some("r") => control_cluster().await.unwrap(),
+    let arg = match std::env::args().nth(1) {
+        Some(arg) => arg,
+        None => {
+            println!("pass one argument, c (cluster) or r (remote)");
+            return
+        }
+    };
+
+    start_jeager::start_if_not_running(runtime_dir()).await;
+    crate::util::setup_tracing(arg.clone(), IpAddr::V4(Ipv4Addr::LOCALHOST), 10);
+
+    match arg.as_str() {
+        "c" => manage_cluster().await,
+        "r" => control_cluster().await.unwrap(),
         _ => println!("pass one argument, c (cluster) or r (remote)"),
     }
-
 }

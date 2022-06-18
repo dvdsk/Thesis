@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::task::JoinSet;
 use tokio::time::sleep;
-use tracing::{debug, instrument, trace, warn};
+use tracing::{debug, instrument, trace, warn, Instrument};
 
 mod log;
 mod log_writer;
@@ -65,7 +65,7 @@ enum Reply {
     AppendEntries(append::Reply),
 }
 
-#[instrument(skip(state, stream), fields(id=state.id))]
+#[instrument(skip(state, stream))]
 async fn handle_conn<O: Order>(
     (stream, _source): (TcpStream, SocketAddr),
     state: State<O>,
@@ -103,7 +103,7 @@ async fn handle_conn<O: Order>(
     Ok(())
 }
 
-#[instrument(skip_all, fields(id=state.id))]
+#[instrument(skip_all)]
 async fn handle_incoming<O: Order>(listener: TcpListener, state: State<O>) {
     let mut tasks = JoinSet::new();
     loop {
@@ -129,7 +129,7 @@ async fn handle_incoming<O: Order>(listener: TcpListener, state: State<O>) {
             warn!("error accepting presidential connection: {e}");
             continue;
         }
-        let fut = handle_conn(res.unwrap(), state.clone());
+        let fut = handle_conn(res.unwrap(), state.clone()).in_current_span(); //, Span::current().clone());
         tasks.build_task().name("handle connection").spawn(fut);
     }
 }

@@ -70,7 +70,6 @@ mod db {
 
 #[derive(Debug, Clone)]
 pub struct State<O> {
-    pub id: instance_chart::Id,
     pub election_office: Arc<Mutex<ElectionOffice>>,
     tx: mpsc::Sender<O>,
     db: sled::Tree,
@@ -78,11 +77,10 @@ pub struct State<O> {
 }
 
 impl<O: Order> State<O> {
-    pub fn new(tx: mpsc::Sender<O>, db: sled::Tree, id: instance_chart::Id) -> Self {
+    pub fn new(tx: mpsc::Sender<O>, db: sled::Tree) -> Self {
         let election_office = ElectionOffice::from_tree(&db);
         election_office.init_election_data();
         let state = Self {
-            id,
             election_office: Arc::new(Mutex::new(election_office)),
             tx,
             db,
