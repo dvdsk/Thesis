@@ -1,4 +1,3 @@
-use std::net::SocketAddr;
 use std::ops::Range;
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
@@ -12,12 +11,14 @@ use tokio::net::{TcpListener, TcpStream};
 use protocol::{Request, Response};
 use time::OffsetDateTime;
 use tokio::task::JoinSet;
-use tokio::time::{timeout, sleep};
+use tokio::time::{timeout, sleep_until, timeout_at, Instant};
 use tracing::{debug, warn};
 
-use crate::directory::{Directory, self, Blocks};
+use crate::directory::{Directory, self};
 use crate::raft::{self, LogWriter, HB_TIMEOUT};
 use crate::redirectory::ReDirectory;
+
+use super::read_locks::LockManager;
 
 pub async fn handle_requests(
     listener: &mut TcpListener,
@@ -25,7 +26,7 @@ pub async fn handle_requests(
     our_subtree: &Path,
     redirect: &mut ReDirectory,
     dir: Directory,
-    blocks: Blocks,
+    manager: LockManager,
 ) {
     let mut request_handlers = JoinSet::new();
     loop {
@@ -36,7 +37,7 @@ pub async fn handle_requests(
             our_subtree.to_owned(),
             redirect.clone(),
             dir.clone(),
-            blocks.clone(),
+            manager.clone(),
         );
         request_handlers
             .build_task()
@@ -80,7 +81,7 @@ async fn handle_conn(
     our_subtree: PathBuf,
     redirect: ReDirectory,
     mut dir: Directory,
-    blocks: Blocks,
+    mut manager: LockManager,
 ) {
     use Request::*;
     let stream: MsgStream<Request, Response> = connection::wrap(stream);
@@ -94,7 +95,7 @@ async fn handle_conn(
             Ok(_) => match req {
                 Create(path) => create_file(path, &mut stream, &mut log, &mut dir).await,
                 Write { path, range } => {
-                    write_lease(path, stream.as_mut(), range, &mut dir, &redirect).await
+                    write_lease(path, stream.as_mut(), range, &mut dir, &mut manager).await
                 }
                 IsCommitted { idx, .. } => match log.is_committed(idx) {
                     true => Ok(Response::Committed),
@@ -120,15 +121,16 @@ async fn handle_conn(
     }
 }
 
+// guard to ensure that the clerks access gets unlocked if the write lock is 
+// released by returning from the `write_lease` function
 struct WriteLease<'a> {
     dir_lease: directory::LeaseGuard<'a>,
+    manager: &'a mut LockManager,
 }
 
 impl<'a> Drop for WriteLease<'a> {
     fn drop(self: &mut WriteLease<'a>) {
-        
-
-        
+        self.manager.unlock(self.dir_lease.key());
     }
 }
 
@@ -139,8 +141,7 @@ async fn write_lease(
     mut stream: ClientStream<'_>,
     range: Range<u64>,
     dir: &mut Directory,
-    redirect: &ReDirectory,
-    blocks: &mut Blocks,
+    manager: &mut LockManager,
 ) -> Result<Response> {
     let dir_lease = match dir.get_exclusive_access(&path, &range) {
         Err(e) => return Ok(Response::Error(e.to_string())),
@@ -149,11 +150,18 @@ async fn write_lease(
 
     // revoke all reads for this file on the clerks, if this times 
     // out the clerk or the client will already have dropped the lease
-    blocks.add(dir_lease.key());
-    let revoke_clerks = revoke_reads_on_clerks(&path, redirect, &range);
-    let _ig_err = timeout(HB_TIMEOUT, revoke_clerks).await;
-    let lease = WriteLease { dir_lease };
+    let deadline = Instant::now() + HB_TIMEOUT;
+    let lock_clerks = manager.lock(path.clone(), range.clone(), dir_lease.key());
+    match timeout_at(deadline, lock_clerks).await {
+        Err(..) => (),
+        Ok(Ok(_)) => (),
+        Ok(Err(e)) => {
+            warn!("error locking clerks: {e:?}");
+            sleep_until(deadline);
+        }
+    }
 
+    let _lease_guard = WriteLease { dir_lease, manager};
     let expires = OffsetDateTime::now_utc() + raft::HB_TIMEOUT;
     stream
         .send(Response::WriteLease(protocol::Lease {

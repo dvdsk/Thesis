@@ -1,20 +1,17 @@
-use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::ops::Range;
 use std::os::unix::prelude::OsStrExt;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 
 use color_eyre::eyre::{eyre, Context};
 use color_eyre::Result;
-use tokio::sync::Mutex;
 use tracing::instrument;
 
 use crate::{minister, raft};
 
 mod entry;
 use entry::Entry;
-pub use entry::AccessKey;
+use protocol::AccessKey;
 
 #[derive(Debug, Clone)]
 pub struct Directory {
@@ -26,7 +23,7 @@ fn dbkey(path: &Path) -> &[u8] {
 }
 
 pub struct LeaseGuard<'a> {
-    pub dir: &'a mut Directory,
+    pub dir: &'a Directory,
     path: &'a Path,
     pub key: AccessKey,
 }
@@ -43,24 +40,8 @@ impl<'a> Drop for LeaseGuard<'a> {
     }
 }
 
-#[derive(Default, Clone)]
-pub struct Blocks(Arc<Mutex<HashMap<AccessKey, (PathBuf, Range<u64>)>>>);
-
-impl Blocks {
-    pub(crate) async fn reset(&mut self, key: AccessKey, dir: &mut Directory) {
-        todo!()
-    }
-
-    pub(crate) async fn reset_all(&mut self, dir: &mut Directory) {
-        let mut map = self.0.lock().await;
-        for (_, (path, range)) in map.drain() {
-            todo!()
-        }
-    }
-}
-
 impl Directory {
-    fn lease_guard<'a>(&'a mut self, path: &'a Path, key: AccessKey) -> LeaseGuard<'a> {
+    fn lease_guard<'a>(&'a self, path: &'a Path, key: AccessKey) -> LeaseGuard<'a> {
         LeaseGuard {
             dir: self,
             path,

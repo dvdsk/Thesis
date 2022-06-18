@@ -1,6 +1,5 @@
 use std::ops::Range;
 
-use color_eyre::Result;
 use serde::{Deserialize, Serialize};
 use slotmap::SlotMap;
 
@@ -21,8 +20,7 @@ impl Access {
     }
 }
 
-slotmap::new_key_type! { pub struct AccessKey; }
-
+use protocol::AccessKey;
 #[derive(Default, Serialize, Deserialize)]
 pub struct Entry {
     size: usize,

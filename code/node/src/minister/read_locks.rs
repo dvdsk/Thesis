@@ -11,7 +11,7 @@ use tokio::task::JoinSet;
 use tokio::time::{sleep, timeout};
 use tracing::warn;
 
-use crate::directory::AccessKey;
+use protocol::AccessKey;
 use crate::raft::subjects::{Source, SourceNotify};
 use crate::raft::{CONN_RETRY_PERIOD, HB_TIMEOUT};
 
@@ -31,7 +31,7 @@ impl LockReq {
     fn to_request(self) -> Request {
         match self {
             Self::Lock { path, range, key } => Request::Lock { path, range, key },
-            Self::Unlock { key } => Request::UnLock { key },
+            Self::Unlock { key } => Request::Unlock { key },
         }
     }
 }
@@ -89,7 +89,8 @@ async fn send_initial_locks(
     list: Vec<LockReq>,
 ) -> Result<(), ()> {
     for lock in list {
-        stream.send(lock.to_request())?;
+        stream.send(Request::UnlockAll);
+        stream.send(lock.to_request()).await;
         match timeout(HB_TIMEOUT, stream.try_next()).await {
             Err(..) => return Err(()), // clerk must be down, we no longer contact it
             Ok(Ok(Some(Response::Done))) => (),
@@ -111,10 +112,13 @@ async fn manage_clerks_locks(
     }
 }
 
-#[derive(Default)]
 struct Locks(HashMap<AccessKey, (PathBuf, Range<u64>)>);
 
 impl Locks {
+    fn new() -> Self {
+        Self(HashMap::new())
+    }
+
     /// list of lockreq::lock
     fn list(&self) -> Vec<LockReq> {
         self.0
@@ -132,12 +136,41 @@ impl Locks {
     }
 }
 
+type LockManagerMsg = (LockReq, oneshot::Sender<Result<(), FanOutError>>);
+
+#[derive(Debug, Clone)]
+pub struct LockManager(mpsc::Sender<LockManagerMsg>);
+
+impl LockManager {
+    pub fn new() -> (Self, mpsc::Receiver<LockManagerMsg>) {
+        let (tx, rx) = mpsc::channel(16);
+        (Self(tx), rx)
+    }
+
+    pub async fn lock(
+        &mut self,
+        path: PathBuf,
+        range: Range<u64>,
+        key: AccessKey,
+    ) -> Result<(), FanOutError> {
+        let (tx, res) = oneshot::channel();
+        self.0.try_send((LockReq::Lock { path, range, key }, tx));
+        res.await.unwrap()
+    }
+
+    pub async fn unlock(&mut self, key: AccessKey) -> Result<(), FanOutError> {
+        let (tx, res) = oneshot::channel();
+        self.0.try_send((LockReq::Unlock { key }, tx));
+        res.await.unwrap()
+    }
+}
+
 /// look for new subjects in the chart and register them
 pub async fn maintain_file_locks(
     mut members: super::clerks::Map,
     mut lock_req: mpsc::Receiver<(LockReq, oneshot::Sender<Result<(), FanOutError>>)>,
 ) {
-    let mut locks = Locks::default();
+    let mut locks = Locks::new();
     let (mut lock_broadcast, _) = broadcast::channel(16);
     let broadcast_subscriber = lock_broadcast.clone();
 

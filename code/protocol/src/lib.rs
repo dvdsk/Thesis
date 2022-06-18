@@ -18,6 +18,9 @@ pub trait Message<'de>: Serialize + Deserialize<'de> {
     }
 }
 
+
+slotmap::new_key_type! { pub struct AccessKey; }
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum Request {
     /// list the content of path
@@ -34,7 +37,12 @@ pub enum Request {
     IsCommitted {path: PathBuf, idx: Idx },
     /// send to a clerk by a minister needing write permissions over a file (range)
     /// the clerk will stop any ongoing reading
-    Lock {path: PathBuf, range: Range<u64>, key: AccessKey }
+    Lock {path: PathBuf, range: Range<u64>, key: AccessKey },
+    /// tells the clerk it can start reading again
+    Unlock { key: AccessKey },
+    /// unlock all file leases, send by new minister to ensure locks held under
+    /// the old administration are released (since they are no longer used)
+    UnlockAll,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

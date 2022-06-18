@@ -7,6 +7,7 @@ use std::sync::Arc;
 use futures::stream::Peekable;
 use futures::{pin_mut, SinkExt, StreamExt, TryStreamExt};
 use protocol::connection::{self, MsgStream};
+use protocol::AccessKey;
 use time::OffsetDateTime;
 use tokio::net::{TcpListener, TcpStream};
 
@@ -17,9 +18,10 @@ use tokio::task::JoinSet;
 use tokio::time::sleep;
 use tracing::{debug, instrument, warn};
 
-use crate::directory::{AccessKey, Directory};
+use crate::directory::Directory;
 use crate::redirectory::ReDirectory;
 use crate::{minister, raft};
+use super::locks::Locks;
 
 #[derive(Default, Clone)]
 struct Readers(Arc<Mutex<HashMap<AccessKey, Arc<Notify>>>>);
@@ -46,7 +48,7 @@ pub async fn handle_requests(
     dir: Directory,
 ) {
     let readers = Readers::default();
-    let blocks = Blocks::default();
+    let blocks = Locks::default();
     let mut request_handlers = JoinSet::new();
     loop {
         let (conn, _addr) = listener.accept().await.unwrap();
@@ -75,7 +77,7 @@ async fn handle_conn(
     redirect: ReDirectory,
     mut dir: Directory,
     mut readers: Readers,
-    mut blocks: Blocks,
+    mut blocks: Locks,
 ) {
     use Request::*;
     let stream: MsgStream<Request, Response> = connection::wrap(stream);
@@ -102,15 +104,15 @@ async fn handle_conn(
                     subtree,
                 })
             }
-            UnblockAll => {
+            UnlockAll => {
                 blocks.reset_all(&mut dir);
                 Ok(Response::Done)
             }
-            UnBlockRead { key } => {
+            Unlock { key } => {
                 blocks.reset(key, &mut dir);
                 Ok(Response::Done)
             }
-            BlockRead { path, range, key } => {
+            Lock { path, range, key } => {
                 Ok(block_read(&mut dir, &mut readers, path, range).await)
             }
             RefreshLease => Ok(Response::LeaseDropped),

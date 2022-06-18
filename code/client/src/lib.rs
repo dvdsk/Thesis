@@ -12,7 +12,7 @@ use map::{Map, Ministry};
 
 
 pub struct Ticket {
-    idx: u64,
+    idx: protocol::Idx,
     needs_minister: bool,
     path: PathBuf,
 }

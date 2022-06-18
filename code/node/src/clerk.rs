@@ -8,6 +8,7 @@ use crate::redirectory::{Node, ReDirectory};
 use crate::{president, Id, Role, minister};
 
 mod clients;
+mod locks;
 
 async fn handle_pres_orders(
     pres_orders: &mut Log<president::Order>,

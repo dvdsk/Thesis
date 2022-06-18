@@ -6,6 +6,7 @@ use tokio::sync::{broadcast, mpsc};
 use tracing::info;
 
 use crate::directory::Directory;
+use crate::minister::read_locks::LockManager;
 use crate::raft::LogWriter;
 use crate::raft::{self, subjects};
 use crate::raft::{Log, ObserverLog};
@@ -92,7 +93,7 @@ pub(crate) async fn work(
     } = state;
     info!("started work as minister: {our_id}");
 
-    let (register, mut clerks) = clerks::Map::new(clerks, *our_id);
+    let (register, mut clerks, clerks_copy) = clerks::Map::new(clerks, *our_id);
 
     let ObserverLog { state, .. } = min_orders;
 
@@ -125,19 +126,24 @@ pub(crate) async fn work(
         redirectory.clone(),
     );
 
+
+    let (lock_manager, rx) = LockManager::new();
+    let update_read_locks = read_locks::maintain_file_locks(clerks_copy, rx);
+
     let client_requests = client::handle_requests(
         client_listener,
         log_writer,
         &our_subtree,
         redirectory,
         directory,
+        lock_manager,
     );
 
-    let update_read_locks = read_locks::maintain_file_locks(clerks, lock_req);
 
     tokio::select! {
         new_role = pres_orders => return new_role,
         () = instruct_subjects => unreachable!(),
         () = client_requests => unreachable!(),
+        () = update_read_locks => unreachable!(),
     };
 }
