@@ -20,7 +20,7 @@ pub struct Log<O> {
 }
 
 impl<O: Order> Log<O> {
-    #[instrument(skip_all)]
+    #[instrument(name = "Log::open", skip_all)]
     pub(crate) fn open(
         chart: Chart,
         cluster_size: u16,
@@ -31,7 +31,7 @@ impl<O: Order> Log<O> {
         let state = State::new(tx, db);
         let handle_incoming = handle_incoming(listener, state.clone()).in_current_span();
         let succession = succession(chart, cluster_size, state.clone()).in_current_span();
-        info!("opening raft log");
+        info!("opening a normal raft log");
 
         Ok(Self {
             state: state.clone(),
@@ -39,7 +39,7 @@ impl<O: Order> Log<O> {
             _handle_incoming: task::Builder::new()
                 .name("log_handle_incoming")
                 .spawn(handle_incoming),
-            _succession: task::Builder::new().name("succesion").spawn(succession),
+            _succession: task::Builder::new().name("succession").spawn(succession),
         })
     }
 
@@ -60,12 +60,12 @@ pub struct ObserverLog<O> {
 }
 
 impl<O: Order> ObserverLog<O> {
-    #[instrument(skip_all)]
+    #[instrument(name = "ObeserverLog::open", skip_all)]
     pub(crate) fn open(db: sled::Tree, listener: TcpListener) -> Result<Self> {
         let (tx, orders) = mpsc::channel(8);
         let state = State::new(tx, db);
         let handle_incoming = handle_incoming(listener, state.clone()).in_current_span();
-        info!("opening raft log");
+        info!("opening a oberver only raft log");
 
         Ok(Self {
             state,

@@ -2,8 +2,8 @@ use std::collections::HashSet;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use crate::redirectory::Node;
 use crate::raft::CONN_RETRY_PERIOD;
+use crate::redirectory::Node;
 use crate::{Id, Idx, Term};
 use async_trait::async_trait;
 use color_eyre::eyre::eyre;
@@ -13,7 +13,7 @@ use tokio::net::TcpStream;
 use tokio::sync::{broadcast, mpsc, Notify};
 use tokio::task::JoinSet;
 use tokio::time::{sleep, sleep_until, timeout_at, Instant};
-use tracing::{debug, instrument, trace, warn};
+use tracing::{debug, instrument, trace, warn, Instrument};
 
 use super::state::append;
 use super::{Msg, Order, Reply};
@@ -63,7 +63,7 @@ async fn connect<O: Order>(address: &SocketAddr) -> MsgStream<Reply, Msg<O>> {
     }
 }
 
-#[instrument(skip_all, fields(president_id = req_gen.base.leader_id, subject_id = subject_id))]
+#[instrument(skip_all, fields(subject_id = subject_id))]
 async fn manage_subject<O: Order>(
     subject_id: Id,
     address: SocketAddr,
@@ -192,7 +192,8 @@ pub async fn instruct<O: Order>(
             append_updates,
             base_msg.clone(),
             status_notify.clone(),
-        );
+        )
+        .in_current_span();
         subjects.build_task().name("manage_subject").spawn(manage);
     };
 

@@ -134,7 +134,7 @@ async fn handle_incoming<O: Order>(listener: TcpListener, state: State<O>) {
     }
 }
 
-#[instrument(skip_all, fields(id = chart.our_id()))]
+#[instrument(skip_all)]
 async fn succession<O: Order>(chart: Chart, cluster_size: u16, state: State<O>) {
     let mut rng = rand::rngs::StdRng::from_entropy();
     'outer: loop {

@@ -16,11 +16,12 @@ use tracing::warn;
 
 type Task = task::JoinHandle<()>;
 
-fn setup_node(id: u64) -> Result<Task> {
+/// run number 4242 indicates resurrected/added node
+fn setup_node(id: u64, run_number: u16) -> Result<Task> {
     let config = Config {
         id: 0,
         endpoint: IpAddr::V4(Ipv4Addr::LOCALHOST),
-        run: util::run_number(&runtime_dir()),
+        run: run_number,
         local_instances: true,
         pres_port: None,
         minister_port: None,
@@ -41,8 +42,9 @@ fn setup_node(id: u64) -> Result<Task> {
 }
 
 async fn local_cluster() -> Result<HashMap<u64, Task>> {
+    let run_number = util::run_number(&runtime_dir());
     let nodes = (0..4)
-        .map(setup_node)
+        .map(|id| setup_node(id, run_number))
         .map(Result::unwrap)
         .fold(HashMap::new(), |mut set, task| {
             let id = set.len() as u64;
@@ -78,14 +80,14 @@ async fn manage_cluster() {
                 }
                 'r' => {
                     // `ressurrect` a node
-                    let node = setup_node(id as u64).unwrap();
+                    let node = setup_node(id as u64, 4242).unwrap();
                     cluster.insert(id as u64, node);
                     warn!("resurrected node {id} [by remote request]");
                 }
                 'a' => {
                     // add new node
                     let id = cluster.len() as u64;
-                    cluster.insert(id, setup_node(id).unwrap());
+                    cluster.insert(id, setup_node(id, 4242).unwrap());
                     warn!("added node {id} [by remote request]");
                 }
                 _ => panic!("recieved incorrect command"),

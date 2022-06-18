@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use color_eyre::Result;
 use serde::{Deserialize, Serialize};
 use tokio::sync::{broadcast, mpsc};
-use tracing::info;
+use tracing::{info, Instrument, instrument};
 
 use crate::directory::Directory;
 use crate::minister::read_locks::LockManager;
@@ -76,6 +76,7 @@ impl raft::Order for Order {
     }
 }
 
+#[instrument(skip(state))]
 pub(crate) async fn work(
     state: &mut super::State,
     our_subtree: PathBuf,
@@ -116,7 +117,8 @@ pub(crate) async fn work(
         subjects::EmptyNotifier,
         state.clone(),
         term,
-    );
+    )
+    .in_current_span();
 
     let pres_orders = handle_pres_orders(
         pres_orders,
@@ -125,7 +127,6 @@ pub(crate) async fn work(
         register,
         redirectory.clone(),
     );
-
 
     let (lock_manager, rx) = LockManager::new();
     let update_read_locks = read_locks::maintain_file_locks(clerks_copy, rx);
@@ -138,7 +139,6 @@ pub(crate) async fn work(
         directory,
         lock_manager,
     );
-
 
     tokio::select! {
         new_role = pres_orders => new_role,

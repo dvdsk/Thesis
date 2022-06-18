@@ -1,7 +1,7 @@
-use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 use tokio::sync::{broadcast, mpsc};
-use tracing::info;
+use tracing::{info, Instrument, instrument};
 
 mod load_balancing;
 mod messages;
@@ -66,6 +66,7 @@ async fn recieve_own_order(orders: &mut mpsc::Receiver<Order>, load_notifier: Lo
     }
 }
 
+#[instrument(skip(state, chart), ret)]
 pub(super) async fn work(state: &mut super::State, chart: &mut Chart, term: Term) -> crate::Role {
     let super::State {
         id,
@@ -94,10 +95,13 @@ pub(super) async fn work(state: &mut super::State, chart: &mut Chart, term: Term
         load_notifier.clone(),
         state.clone(),
         term,
-    );
+    )
+    .in_current_span();
+
+    let load_balancing = load_balancer.run(state).in_current_span();
 
     tokio::select! {
-        () = load_balancer.run(state) => unreachable!(),
+        () = load_balancing => unreachable!(),
         () = instruct_subjects => unreachable!(),
         () = messages::handle_incoming(client_listener, log_writer) => unreachable!(),
         () = recieve_own_order(orders, load_notifier) => {
