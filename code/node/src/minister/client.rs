@@ -11,10 +11,10 @@ use tokio::net::{TcpListener, TcpStream};
 use protocol::{Request, Response};
 use time::OffsetDateTime;
 use tokio::task::JoinSet;
-use tokio::time::{timeout, sleep_until, timeout_at, Instant};
+use tokio::time::{sleep_until, timeout, timeout_at, Instant};
 use tracing::{debug, warn};
 
-use crate::directory::{Directory, self};
+use crate::directory::{self, Directory};
 use crate::raft::{self, LogWriter, HB_TIMEOUT};
 use crate::redirectory::ReDirectory;
 
@@ -121,7 +121,7 @@ async fn handle_conn(
     }
 }
 
-// guard to ensure that the clerks access gets unlocked if the write lock is 
+// guard to ensure that the clerks access gets unlocked if the write lock is
 // released by returning from the `write_lease` function
 struct WriteLease<'a> {
     dir_lease: directory::LeaseGuard<'a>,
@@ -130,7 +130,8 @@ struct WriteLease<'a> {
 
 impl<'a> Drop for WriteLease<'a> {
     fn drop(self: &mut WriteLease<'a>) {
-        self.manager.unlock(self.dir_lease.key());
+        self.manager
+            .unlock(self.dir_lease.path.to_owned(), self.dir_lease.key());
     }
 }
 
@@ -143,12 +144,12 @@ async fn write_lease(
     dir: &mut Directory,
     manager: &mut LockManager,
 ) -> Result<Response> {
-    let dir_lease = match dir.get_exclusive_access(&path, &range) {
+    let dir_lease = match dir.get_write_access(&path, &range) {
         Err(e) => return Ok(Response::Error(e.to_string())),
         Ok(lease) => lease,
     };
 
-    // revoke all reads for this file on the clerks, if this times 
+    // revoke all reads for this file on the clerks, if this times
     // out the clerk or the client will already have dropped the lease
     let deadline = Instant::now() + HB_TIMEOUT;
     let lock_clerks = manager.lock(path.clone(), range.clone(), dir_lease.key());
@@ -157,11 +158,11 @@ async fn write_lease(
         Ok(Ok(_)) => (),
         Ok(Err(e)) => {
             warn!("error locking clerks: {e:?}");
-            sleep_until(deadline);
+            sleep_until(deadline).await;
         }
     }
 
-    let _lease_guard = WriteLease { dir_lease, manager};
+    let _lease_guard = WriteLease { dir_lease, manager };
     let expires = OffsetDateTime::now_utc() + raft::HB_TIMEOUT;
     stream
         .send(Response::WriteLease(protocol::Lease {
@@ -185,7 +186,6 @@ async fn write_lease(
     }
     Ok(Response::LeaseDropped)
 }
-
 
 async fn create_file(
     path: PathBuf,

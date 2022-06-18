@@ -18,6 +18,13 @@ impl Access {
             Self::Writer(r) => r,
         }
     }
+
+    fn is_read(&self) -> bool {
+        match self {
+            Self::Reader(_) => true,
+            Self::Writer(_) => false,
+        }
+    }
 }
 
 use protocol::AccessKey;
@@ -37,11 +44,12 @@ impl Entry {
         bincode::serialize(self).unwrap()
     }
 
-    pub fn overlapping(&self, req: &Range<u64>) -> Vec<AccessKey> {
+    pub fn overlapping_reads(&self, req: &Range<u64>) -> Vec<AccessKey> {
         use crate::util::Overlap;
         self.areas
             .iter()
             .filter(|(_, access)| access.range().has_overlap_with(req))
+            .filter(|(_, access)| access.is_read())
             .map(|(key, _)| key)
             .collect()
     }

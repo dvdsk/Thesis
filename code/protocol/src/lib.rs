@@ -39,7 +39,7 @@ pub enum Request {
     /// the clerk will stop any ongoing reading
     Lock {path: PathBuf, range: Range<u64>, key: AccessKey },
     /// tells the clerk it can start reading again
-    Unlock { key: AccessKey },
+    Unlock { path: PathBuf, key: AccessKey },
     /// unlock all file leases, send by new minister to ensure locks held under
     /// the old administration are released (since they are no longer used)
     UnlockAll,

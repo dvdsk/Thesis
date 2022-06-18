@@ -16,12 +16,12 @@ use protocol::{Request, Response};
 use tokio::sync::{Mutex, Notify};
 use tokio::task::JoinSet;
 use tokio::time::sleep;
-use tracing::{debug, instrument, warn};
+use tracing::{debug, warn};
 
+use super::locks::Locks;
 use crate::directory::Directory;
 use crate::redirectory::ReDirectory;
 use crate::{minister, raft};
-use super::locks::Locks;
 
 #[derive(Default, Clone)]
 struct Readers(Arc<Mutex<HashMap<AccessKey, Arc<Notify>>>>);
@@ -77,7 +77,7 @@ async fn handle_conn(
     redirect: ReDirectory,
     mut dir: Directory,
     mut readers: Readers,
-    mut blocks: Locks,
+    mut locks: Locks,
 ) {
     use Request::*;
     let stream: MsgStream<Request, Response> = connection::wrap(stream);
@@ -105,15 +105,22 @@ async fn handle_conn(
                 })
             }
             UnlockAll => {
-                blocks.reset_all(&mut dir);
+                locks.reset_all(&mut dir).await;
                 Ok(Response::Done)
             }
-            Unlock { key } => {
-                blocks.reset(key, &mut dir);
+            Unlock { path, key } => {
+                locks.reset(path, key, &mut dir).await;
                 Ok(Response::Done)
             }
             Lock { path, range, key } => {
-                Ok(block_read(&mut dir, &mut readers, path, range).await)
+                // for consistency this has to happen first, if we did it later new 
+                // reads could be added while we are revoking the existing
+                locks.add(&mut dir, path.clone(), range.clone(), key).await;
+                let overlapping = dir.get_overlapping_reads(&path, &range).unwrap();
+                for key in overlapping {
+                    readers.revoke(&key).await;
+                }
+                Ok(Response::Done)
             }
             RefreshLease => Ok(Response::LeaseDropped),
         };
@@ -181,20 +188,4 @@ async fn read_lease(
     }
 
     Ok(Response::LeaseDropped)
-}
-
-#[instrument(skip(dir, readers))]
-async fn block_read(
-    dir: &mut Directory,
-    readers: &mut Readers,
-    path: PathBuf,
-    range: Range<u64>,
-) -> Response {
-    let overlapping = dir.get_overlapping(&path, &range).unwrap();
-    for key in overlapping {
-        readers.revoke(&key).await;
-    }
-
-    dir.get_exclusive_access(&path, &range).unwrap();
-    Response::Done
 }

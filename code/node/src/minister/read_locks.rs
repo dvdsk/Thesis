@@ -1,3 +1,5 @@
+use color_eyre::eyre::eyre;
+use color_eyre::Help;
 use futures::{SinkExt, TryStreamExt};
 use protocol::connection::MsgStream;
 use protocol::{connection, Request, Response};
@@ -9,14 +11,14 @@ use tokio::net::TcpStream;
 use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio::task::JoinSet;
 use tokio::time::{sleep, timeout};
-use tracing::warn;
+use tracing::{error, warn};
 
-use protocol::AccessKey;
 use crate::raft::subjects::{Source, SourceNotify};
 use crate::raft::{CONN_RETRY_PERIOD, HB_TIMEOUT};
+use protocol::AccessKey;
 
 #[derive(Debug, Clone)]
-enum LockReq {
+pub enum LockReq {
     Lock {
         path: PathBuf,
         range: Range<u64>,
@@ -24,6 +26,7 @@ enum LockReq {
     },
     Unlock {
         key: AccessKey,
+        path: PathBuf,
     },
 }
 
@@ -31,7 +34,7 @@ impl LockReq {
     fn to_request(self) -> Request {
         match self {
             Self::Lock { path, range, key } => Request::Lock { path, range, key },
-            Self::Unlock { key } => Request::Unlock { key },
+            Self::Unlock { path, key } => Request::Unlock { path, key },
         }
     }
 }
@@ -76,7 +79,7 @@ async fn keep_client_up_to_date(
             Err(..) => (), // clerk must be down, we no longer contact it
             Ok(Ok(Some(Response::Done))) => return ack_tx.try_send(Result::Ok(())).unwrap(),
             Ok(Ok(_)) => unreachable!("incorrect reply from clerk"),
-            Ok(Err(e)) => (),
+            Ok(Err(e)) => warn!("error in transport: {e:?}"),
         }
 
         ack_tx.try_send(Result::Err(())).unwrap();
@@ -87,15 +90,18 @@ async fn keep_client_up_to_date(
 async fn send_initial_locks(
     stream: &mut MsgStream<Response, Request>,
     list: Vec<LockReq>,
-) -> Result<(), ()> {
+) -> color_eyre::Result<()> {
+    stream.send(Request::UnlockAll).await?;
     for lock in list {
-        stream.send(Request::UnlockAll);
-        stream.send(lock.to_request()).await;
+        stream.send(lock.to_request()).await?;
+
         match timeout(HB_TIMEOUT, stream.try_next()).await {
-            Err(..) => return Err(()), // clerk must be down, we no longer contact it
+            Err(..) => return Err(eyre!("timeout recieving response")), // clerk must be down, we no longer contact it
             Ok(Ok(Some(Response::Done))) => (),
             Ok(Ok(_)) => unreachable!("incorrect reply from clerk"),
-            Ok(Err(e)) => return Err(()),
+            Ok(Err(e)) => {
+                return Err(eyre!("transport error, recieving response")).with_error(|| e)
+            }
         }
     }
     Ok(())
@@ -107,9 +113,8 @@ async fn manage_clerks_locks(
     lock_list: Vec<LockReq>,
 ) {
     let mut stream = connect(&address).await;
-    if send_initial_locks(&mut stream, lock_list).await.is_ok() {
-        keep_client_up_to_date(&mut broadcast, &mut stream).await;
-    }
+    send_initial_locks(&mut stream, lock_list).await.unwrap();
+    keep_client_up_to_date(&mut broadcast, &mut stream).await;
 }
 
 struct Locks(HashMap<AccessKey, (PathBuf, Range<u64>)>);
@@ -130,7 +135,7 @@ impl Locks {
 
     fn apply(&mut self, req: LockReq) {
         match req {
-            LockReq::Unlock { key } => self.0.remove(&key),
+            LockReq::Unlock { key, .. } => self.0.remove(&key),
             LockReq::Lock { path, range, key } => self.0.insert(key, (path, range)),
         };
     }
@@ -154,14 +159,19 @@ impl LockManager {
         key: AccessKey,
     ) -> Result<(), FanOutError> {
         let (tx, res) = oneshot::channel();
-        self.0.try_send((LockReq::Lock { path, range, key }, tx));
+        self.0
+            .try_send((LockReq::Lock { path, range, key }, tx))
+            .unwrap();
         res.await.unwrap()
     }
 
-    pub async fn unlock(&mut self, key: AccessKey) -> Result<(), FanOutError> {
-        let (tx, res) = oneshot::channel();
-        self.0.try_send((LockReq::Unlock { key }, tx));
-        res.await.unwrap()
+    pub fn unlock(&mut self, path: PathBuf, key: AccessKey) {
+        let (tx, _) = oneshot::channel();
+        // we do not wait for a result, failure in unlock means failure
+        // of clerks, replacement clecks will not hold the lock
+        self.0
+            .try_send((LockReq::Unlock { path, key }, tx))
+            .unwrap();
     }
 }
 
@@ -169,13 +179,13 @@ impl LockManager {
 pub async fn maintain_file_locks(
     mut members: super::clerks::Map,
     mut lock_req: mpsc::Receiver<(LockReq, oneshot::Sender<Result<(), FanOutError>>)>,
-) {
+) -> ! {
     let mut locks = Locks::new();
     let (mut lock_broadcast, _) = broadcast::channel(16);
     let broadcast_subscriber = lock_broadcast.clone();
 
     let mut clerks = JoinSet::new();
-    let mut add_clerk = |addr, locks: &Locks| {
+    let add_clerk = |addr, locks: &Locks, clerks: &mut JoinSet<_>| {
         let broadcast_rx = broadcast_subscriber.subscribe();
 
         let manage = manage_clerks_locks(addr, broadcast_rx, locks.list());
@@ -185,16 +195,33 @@ pub async fn maintain_file_locks(
     let mut notify = members.notify();
     let mut adresses: HashSet<_> = members.adresses().into_iter().collect();
     for (_, addr) in adresses.iter().cloned() {
-        add_clerk(addr, &locks)
+        add_clerk(addr, &locks, &mut clerks)
     }
 
     loop {
+        if clerks.is_empty() {
+            let (id, addr) = notify.recv_new().await.unwrap();
+            let is_new = adresses.insert((id, addr));
+            if is_new {
+                add_clerk(addr, &locks, &mut clerks);
+            }
+        }
+
         tokio::select! {
+            res = clerks.join_one() => {
+                // TODO deregister the clerk/report clerk dead to president
+                // (not in current design)
+                match res.unwrap() {
+                    Err(e) => error!("error while managering clerk: {e:?}"),
+                    Ok(_) => warn!("disconnected from clerk"),
+                }
+
+            },
             recoverd = notify.recv_new() => {
                 let (id, addr) = recoverd.unwrap();
                 let is_new = adresses.insert((id, addr));
                 if is_new {
-                    add_clerk(addr, &locks);
+                    add_clerk(addr, &locks, &mut clerks);
                 }
             },
             req = lock_req.recv() => {
@@ -208,7 +235,7 @@ pub async fn maintain_file_locks(
 }
 
 #[derive(Debug)]
-enum FanOutError {
+pub enum FanOutError {
     NoSubscribedNodes,
     ClerkDidNotRespond,
 }

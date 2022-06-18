@@ -24,7 +24,7 @@ fn dbkey(path: &Path) -> &[u8] {
 
 pub struct LeaseGuard<'a> {
     pub dir: &'a Directory,
-    path: &'a Path,
+    pub path: &'a Path,
     pub key: AccessKey,
 }
 
@@ -128,11 +128,11 @@ impl Directory {
     }
 
     #[instrument(skip(self), err)]
-    pub(crate) fn get_exclusive_access<'a>(
-        &'a self,
-        path: &'a Path,
+    pub(crate) fn get_exclusive_access(
+        &self,
+        path: &Path,
         req_range: &Range<u64>,
-    ) -> Result<LeaseGuard<'a>> {
+    ) -> Result<AccessKey> {
         let mut key = None;
         self.tree
             .update_and_fetch(dbkey(path), |bytes| {
@@ -147,7 +147,17 @@ impl Directory {
             .wrap_err("internal db error")?;
 
         let key = key.ok_or_else(|| eyre!("could not give access, overlapping writes"))?;
-        Ok(self.lease_guard(path, key))
+        Ok(key)
+    }
+
+    #[instrument(skip(self), err)]
+    pub(crate) fn get_write_access<'a>(
+        &'a self,
+        path: &'a Path,
+        req_range: &Range<u64>,
+    ) -> Result<LeaseGuard<'a>> {
+        self.get_exclusive_access(path, req_range)
+            .map(|key| self.lease_guard(path, key))
     }
 
     pub(crate) fn revoke_access(&self, path: &Path, access: AccessKey) {
@@ -161,7 +171,7 @@ impl Directory {
     }
 
     #[instrument(skip(self), err)]
-    pub(crate) fn get_overlapping(
+    pub(crate) fn get_overlapping_reads(
         &self,
         path: &PathBuf,
         range: &Range<u64>,
@@ -172,6 +182,6 @@ impl Directory {
             .wrap_err("internal db error")?
             .ok_or_else(|| eyre!("no entry for path"))?;
         let entry = Entry::from_bytes(&bytes);
-        Ok(entry.overlapping(range))
+        Ok(entry.overlapping_reads(range))
     }
 }
