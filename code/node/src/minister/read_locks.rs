@@ -119,29 +119,30 @@ impl Locks {
     fn list(&self) -> Vec<LockReq> {
         self.0
             .iter()
-            .map(|(key, (path, range))| LockReq::Lock { path, range, key })
+            .map(|(key, (path, range))| (key.clone(), path.clone(), range.clone()))
+            .map(|(key, path, range)| LockReq::Lock { path, range, key })
             .collect()
     }
 
     fn apply(&mut self, req: LockReq) {
         match req {
-            LockReq::Unlock { key } => self.remove(key),
-            LockReq::Lock { path, range, key } => self.insert(key, (path, range)),
-        }
+            LockReq::Unlock { key } => self.0.remove(&key),
+            LockReq::Lock { path, range, key } => self.0.insert(key, (path, range)),
+        };
     }
 }
 
 /// look for new subjects in the chart and register them
 pub async fn maintain_file_locks(
     mut members: super::clerks::Map,
-    mut lock_req: mpsc::Receiver<(LockReq, oneshot::Receiver<Result<(), ()>>)>,
+    mut lock_req: mpsc::Receiver<(LockReq, oneshot::Sender<Result<(), FanOutError>>)>,
 ) {
-    let locks = Locks::default();
+    let mut locks = Locks::default();
     let (mut lock_broadcast, _) = broadcast::channel(16);
     let broadcast_subscriber = lock_broadcast.clone();
 
     let mut clerks = JoinSet::new();
-    let mut add_clerk = |addr| {
+    let mut add_clerk = |addr, locks: &Locks| {
         let broadcast_rx = broadcast_subscriber.subscribe();
 
         let manage = manage_clerks_locks(addr, broadcast_rx, locks.list());
@@ -151,7 +152,7 @@ pub async fn maintain_file_locks(
     let mut notify = members.notify();
     let mut adresses: HashSet<_> = members.adresses().into_iter().collect();
     for (_, addr) in adresses.iter().cloned() {
-        add_clerk(addr)
+        add_clerk(addr, &locks)
     }
 
     loop {
@@ -160,18 +161,20 @@ pub async fn maintain_file_locks(
                 let (id, addr) = recoverd.unwrap();
                 let is_new = adresses.insert((id, addr));
                 if is_new {
-                    add_clerk(addr);
+                    add_clerk(addr, &locks);
                 }
             },
             req = lock_req.recv() => {
                 let (req, ack) = req.unwrap();
-                locks.apply(req);
-                fan_out_lock_req(&mut lock_broadcast, req);
+                locks.apply(req.clone());
+                let res = fan_out_lock_req(&mut lock_broadcast, req).await;
+                ack.send(res).unwrap();
             },
         };
     }
 }
 
+#[derive(Debug)]
 enum FanOutError {
     NoSubscribedNodes,
     ClerkDidNotRespond,
