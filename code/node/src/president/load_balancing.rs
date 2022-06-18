@@ -8,7 +8,7 @@ use tracing::info;
 use self::issue::{Issue, Issues};
 
 use super::{raft, Chart, LogWriter, Order};
-use crate::redirectory::{Staff, Node};
+use crate::redirectory::{Node, Staff};
 mod staffing;
 use staffing::Staffing;
 mod action;
@@ -93,7 +93,7 @@ impl LoadBalancer {
     async fn organise_staffing(&mut self, state: &raft::State<Order>) -> Staffing {
         use Event::*;
 
-        let mut staffing = Staffing::from_committed(&state);
+        let mut staffing = Staffing::from_committed(state);
         if staffing.has_root() {
             return staffing;
         }
@@ -157,7 +157,6 @@ impl Init {
     pub async fn run(&mut self) {
         loop {
             self.process_state_changes().await;
-            //
             // - TODO apply one policy change from queue
             // OR
             self.solve_worst_issue().await;
@@ -189,10 +188,9 @@ impl Init {
             match event {
                 Event::NodeUp(node) => self.node_up(node),
                 Event::NodeDown(node) => self.node_down(node),
-                Event::Committed(order) => match self.staffing.process_order(order) {
-                    Err(_not_staff_order) => todo!(),
-                    Ok(_) => (),
-                },
+                Event::Committed(order) => {
+                    let _ig_staff_order = self.staffing.process_order(order);
+                }
             }
         }
     }

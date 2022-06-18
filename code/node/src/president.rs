@@ -97,7 +97,7 @@ pub(super) async fn work(state: &mut super::State, chart: &mut Chart, term: Term
     );
 
     tokio::select! {
-        () = load_balancer.run(&state) => unreachable!(),
+        () = load_balancer.run(state) => unreachable!(),
         () = instruct_subjects => unreachable!(),
         () = messages::handle_incoming(client_listener, log_writer) => unreachable!(),
         () = recieve_own_order(orders, load_notifier) => {

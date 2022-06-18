@@ -99,6 +99,6 @@ pub(crate) async fn work(state: &mut super::State) -> Result<Role> {
 
     tokio::select! {
         () = redirect_clients(client_listener, redirectory.clone()) => unreachable!(),
-        new_role = handle_pres_orders(pres_orders, redirectory, *id) => return new_role,
-    };
+        new_role = handle_pres_orders(pres_orders, redirectory, *id) => new_role,
+    }
 }

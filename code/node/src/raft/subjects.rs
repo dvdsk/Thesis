@@ -139,7 +139,7 @@ async fn replicate_orders<O: Order>(
     sleep_until(next_hb).await;
 
     loop {
-        next_hb = next_hb + HB_PERIOD;
+        next_hb += HB_PERIOD;
 
         let to_send = if req_gen.misses_logs() {
             debug!("sending missing logs at idx: {}", req_gen.next_idx);

@@ -141,9 +141,9 @@ pub(crate) async fn work(
 
 
     tokio::select! {
-        new_role = pres_orders => return new_role,
+        new_role = pres_orders => new_role,
         () = instruct_subjects => unreachable!(),
         () = client_requests => unreachable!(),
         () = update_read_locks => unreachable!(),
-    };
+    }
 }

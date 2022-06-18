@@ -36,7 +36,7 @@ impl<'a> LeaseGuard<'a> {
 
 impl<'a> Drop for LeaseGuard<'a> {
     fn drop(self: &mut LeaseGuard<'a>) {
-        self.dir.revoke_access(&self.path, self.key)
+        self.dir.revoke_access(self.path, self.key)
     }
 }
 
@@ -113,9 +113,9 @@ impl Directory {
         let mut key = None;
         self.tree
             .update_and_fetch(dbkey(path), |bytes| {
-                let mut entry = Entry::from_bytes(&bytes?);
-                if !entry.overlapping_write_access(&req_range) {
-                    key = Some(entry.add_read_access(&req_range));
+                let mut entry = Entry::from_bytes(bytes?);
+                if !entry.overlapping_write_access(req_range) {
+                    key = Some(entry.add_read_access(req_range));
                     Some(entry.to_bytes())
                 } else {
                     bytes.map(Vec::from)
@@ -136,9 +136,9 @@ impl Directory {
         let mut key = None;
         self.tree
             .update_and_fetch(dbkey(path), |bytes| {
-                let mut entry = Entry::from_bytes(&bytes?);
-                if !entry.overlapping_write_access(&req_range) {
-                    key = Some(entry.add_write_access(&req_range));
+                let mut entry = Entry::from_bytes(bytes?);
+                if !entry.overlapping_write_access(req_range) {
+                    key = Some(entry.add_write_access(req_range));
                     Some(entry.to_bytes())
                 } else {
                     bytes.map(Vec::from)
@@ -163,7 +163,7 @@ impl Directory {
     pub(crate) fn revoke_access(&self, path: &Path, access: AccessKey) {
         self.tree
             .update_and_fetch(dbkey(path), |bytes| {
-                let mut entry = Entry::from_bytes(&bytes?);
+                let mut entry = Entry::from_bytes(bytes?);
                 entry.revoke_access(access);
                 Some(entry.to_bytes())
             })

@@ -31,7 +31,7 @@ pub enum LockReq {
 }
 
 impl LockReq {
-    fn to_request(self) -> Request {
+    fn into_request(self) -> Request {
         match self {
             Self::Lock { path, range, key } => Request::Lock { path, range, key },
             Self::Unlock { path, key } => Request::Unlock { path, key },
@@ -67,7 +67,7 @@ async fn keep_client_up_to_date(
 ) {
     loop {
         let (ack_tx, lock_req) = broadcast.recv().await.unwrap();
-        let lock_req = lock_req.to_request();
+        let lock_req = lock_req.into_request();
 
         if let Err(e) = stream.send(lock_req).await {
             warn!("did not send to host, error: {e:?}");
@@ -93,7 +93,7 @@ async fn send_initial_locks(
 ) -> color_eyre::Result<()> {
     stream.send(Request::UnlockAll).await?;
     for lock in list {
-        stream.send(lock.to_request()).await?;
+        stream.send(lock.into_request()).await?;
 
         match timeout(HB_TIMEOUT, stream.try_next()).await {
             Err(..) => return Err(eyre!("timeout recieving response")), // clerk must be down, we no longer contact it
@@ -128,7 +128,7 @@ impl Locks {
     fn list(&self) -> Vec<LockReq> {
         self.0
             .iter()
-            .map(|(key, (path, range))| (key.clone(), path.clone(), range.clone()))
+            .map(|(key, (path, range))| (*key, path.clone(), range.clone()))
             .map(|(key, path, range)| LockReq::Lock { path, range, key })
             .collect()
     }

@@ -99,7 +99,7 @@ impl ElectionOffice {
             .compare_and_swap(db::ELECTION_DATA, None as Option<&[u8]>, Some(data))
             .unwrap();
     }
-    pub fn data<'a>(&'a self) -> ElectionGuard<'a> {
+    pub fn data(&self) -> ElectionGuard<'_> {
         let data = self.db.get_val(db::ELECTION_DATA).unwrap_or_default();
         ElectionGuard {
             data,

@@ -78,7 +78,7 @@ impl<O: Order> ObserverLog<O> {
             orders,
             _handle_incoming: task::Builder::new()
                 .name("log_handle_incoming")
-                .spawn(handle_incoming(listener, state.clone())),
+                .spawn(handle_incoming(listener, state)),
         })
     }
 

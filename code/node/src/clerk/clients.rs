@@ -89,7 +89,7 @@ async fn handle_conn(
         let final_response = match req {
             List(path) => Ok(Response::List(dir.list(&path))),
             Read { path, range } if path.starts_with(&our_subtree) => {
-                read_lease(path, stream.as_mut(), range, &mut dir, &mut readers).await
+                read_lease(path, stream.as_mut(), range, &mut dir, &readers).await
             }
             IsCommitted { path, idx } if path.starts_with(&our_subtree) => {
                 match state.is_committed(idx) {
@@ -158,7 +158,7 @@ async fn read_lease(
     let expires = OffsetDateTime::now_utc() + raft::HB_TIMEOUT;
     stream
         .send(Response::ReadLease(protocol::Lease {
-            expires: expires.clone(),
+            expires,
             area: range,
         }))
         .await?;

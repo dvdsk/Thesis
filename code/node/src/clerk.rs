@@ -77,8 +77,8 @@ pub(crate) async fn work(state: &mut super::State, our_subtree: PathBuf) -> Resu
     let minister_orders = handle_minister_orders(min_orders, directory);
 
     tokio::select! {
-        new_role = pres_orders => return new_role,
+        new_role = pres_orders => new_role,
         _ = client_requests => unreachable!(),
         _ = minister_orders => unreachable!(),
-    };
+    }
 }

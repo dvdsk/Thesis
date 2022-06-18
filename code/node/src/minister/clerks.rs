@@ -56,10 +56,10 @@ impl Register {
         let newly_added = new_assignment.difference(&self.current);
         for clerk in newly_added {
             self.raft_notify
-                .try_send((clerk.id, clerk.addr.clone()))
+                .try_send((clerk.id, clerk.addr))
                 .unwrap();
             self.lock_notify
-                .try_send((clerk.id, clerk.addr.clone()))
+                .try_send((clerk.id, clerk.addr))
                 .unwrap();
         }
     }

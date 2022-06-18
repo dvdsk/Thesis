@@ -55,14 +55,14 @@ async fn check_subtree(
     use Request::*;
     match req {
         List(path) => {
-            let (staff, subtree) = redirect.to_staff(&path).await;
+            let (staff, subtree) = redirect.to_staff(path).await;
             Err(Response::Redirect {
                 addr: staff.minister.addr,
                 subtree,
             })
         }
         Create(path) | IsCommitted { path, .. } if !path.starts_with(&our_subtree) => {
-            let (staff, subtree) = redirect.to_staff(&path).await;
+            let (staff, subtree) = redirect.to_staff(path).await;
             Err(Response::Redirect {
                 addr: staff.minister.addr,
                 subtree,
@@ -166,7 +166,7 @@ async fn write_lease(
     let expires = OffsetDateTime::now_utc() + raft::HB_TIMEOUT;
     stream
         .send(Response::WriteLease(protocol::Lease {
-            expires: expires.clone(),
+            expires,
             area: range,
         }))
         .await?;

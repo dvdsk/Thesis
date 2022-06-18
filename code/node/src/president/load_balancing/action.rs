@@ -30,7 +30,7 @@ async fn request_commit_idx(clerk: Node) -> Result<(Node, Idx), io::Error> {
 #[instrument(skip(clerks), ret)]
 async fn most_experienced(clerks: &[Node], chart: &Chart) -> Option<Node> {
     let mut requests: JoinSet<_> = clerks
-        .into_iter()
+        .iter()
         .map(|clerk| request_commit_idx(clerk.clone()))
         .fold(JoinSet::new(), |mut set, fut| {
             set.build_task().name("request_commit_idx").spawn(fut);

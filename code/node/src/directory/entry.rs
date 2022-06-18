@@ -62,7 +62,7 @@ impl Entry {
                 _ => (),
             }
         }
-        return false;
+        false
     }
 
     pub fn add_write_access(&mut self, range: &Range<u64>) -> AccessKey {

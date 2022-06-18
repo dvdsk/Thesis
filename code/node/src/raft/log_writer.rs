@@ -2,8 +2,8 @@ use std::sync::Arc;
 
 use tokio::sync::{broadcast, mpsc, Notify};
 
-use crate::{Idx, Term};
 use super::Order;
+use crate::{Idx, Term};
 
 /// interface to append an item to the clusters raft log and
 /// return once it is comitted
@@ -41,7 +41,10 @@ impl<O: Order> LogWriter<O> {
         use super::LogEntry;
 
         match self.state.entry_at(prev_idx) {
-            Some(LogEntry { order, .. }) if order == order => {
+            Some(LogEntry {
+                order: existing_order,
+                ..
+            }) if existing_order == order => {
                 let notify = Arc::new(Notify::new());
                 self.notify_tx
                     .send((prev_idx, notify.clone()))
