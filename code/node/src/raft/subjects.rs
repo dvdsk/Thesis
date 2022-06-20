@@ -12,7 +12,7 @@ use tokio::net::TcpStream;
 use tokio::sync::{broadcast, mpsc, Notify};
 use tokio::task::JoinSet;
 use tokio::time::{sleep, sleep_until, timeout_at, Instant};
-use tracing::{debug, instrument, trace, warn, Instrument};
+use tracing::{debug, instrument, trace, warn, Instrument, info};
 
 use super::state::append;
 use super::{Msg, Order, Reply};
@@ -83,6 +83,7 @@ async fn manage_subject<O: Order>(
             continue;
         }
 
+        info!("subject up");
         status_notify.subject_up(subject_id).await;
         replicate_orders(
             &mut broadcast,
@@ -93,6 +94,7 @@ async fn manage_subject<O: Order>(
         )
         .await;
         status_notify.subject_down(subject_id).await;
+        warn!("subject down");
     }
 }
 
@@ -126,6 +128,7 @@ async fn recieve_reply<O: Order>(
 }
 
 /// replicate orders untill connection is lost
+#[instrument(skip(_broadcast, appended, req_gen, stream))]
 async fn replicate_orders<O: Order>(
     _broadcast: &mut broadcast::Receiver<O>,
     appended: &mut mpsc::Sender<u32>,
@@ -143,6 +146,7 @@ async fn replicate_orders<O: Order>(
             debug!("sending missing logs at idx: {}", req_gen.next_idx);
             req_gen.append()
         } else if no_heartbeats {
+            sleep_until(next_hb).await;
             continue;
         } else {
             trace!("sending heartbeat");
