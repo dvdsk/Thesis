@@ -9,7 +9,7 @@ use crate::president::Chart;
 use crate::Idx;
 use color_eyre::Result;
 use std::io;
-use std::path::PathBuf;
+use std::path::{PathBuf, Path};
 
 use super::Init;
 use crate::messages::{Msg, Reply};
@@ -66,8 +66,8 @@ impl Init {
 
     /// solve a ministry without minister by promoting the most experianced clerk
     #[instrument(skip(self))]
-    pub(crate) async fn promote_clerk(&self, subtree: PathBuf) -> Result<(), &'static str> {
-        let staff = self.staffing.staff(&subtree);
+    pub(crate) async fn promote_clerk(&self, subtree: &Path) -> Result<(), &'static str> {
+        let staff = self.staffing.staff(subtree);
         let candidate = most_experienced(&staff.clerks, &self.chart)
             .await
             .ok_or("Could not contact any staff")?;
@@ -83,7 +83,7 @@ impl Init {
             clerks,
             term: staff.term + 1,
         };
-        self.update_ministry_staff(subtree, new_staff).await;
+        self.update_ministry_staff(subtree.to_owned(), new_staff).await;
         Ok(())
     }
 
@@ -95,10 +95,10 @@ impl Init {
     #[instrument(skip(self))]
     pub(crate) async fn try_assign(
         &mut self,
-        subtree: PathBuf,
-        down: Vec<u64>,
+        subtree: &Path,
+        down: &[u64],
     ) -> Result<(), &'static str> {
-        let staff = self.staffing.staff(&subtree);
+        let staff = self.staffing.staff(subtree);
         if staff.len() < 2 {
             return Err("Not enough staff left to restore ministry");
         }
@@ -107,7 +107,7 @@ impl Init {
         new_staff.clerks.push(self.take_idle_node()?);
         new_staff.term += 1;
 
-        self.update_ministry_staff(subtree, new_staff).await;
+        self.update_ministry_staff(subtree.to_owned(), new_staff).await;
         Ok(())
     }
 }

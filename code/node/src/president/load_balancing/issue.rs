@@ -37,8 +37,6 @@ impl Issues {
             false
         }
     }
-
-    
 }
 
 #[derive(Clone, PartialEq, Eq, Hash)]

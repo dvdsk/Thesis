@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 use tokio::sync::mpsc;
-use tracing::info;
+use tracing::{info, debug};
 
 use self::issue::{Issue, Issues};
 
@@ -158,41 +158,53 @@ struct Init {
 impl Init {
     pub async fn run(&mut self) {
         loop {
+            // wait for a change to be able to solve existing issues or
+            // for new issues to appear
             self.process_state_changes().await;
+
             // - TODO apply one policy change from queue
+            //   ( will need to join state_change with wait for new policy change )
             // OR
             self.solve_worst_issue().await;
         }
     }
 
     pub async fn solve_worst_issue(&mut self) {
+        let mut unsolved = Vec::new();
         loop {
             let issue = match self.issues.remove_worst() {
-                None => return,
+                None => break,
                 Some(i) => i,
             };
 
             use Issue::*;
-            let solved = match issue {
-                LeaderLess { subtree, .. } => self.promote_clerk(subtree).await,
-                UnderStaffed { subtree, down } => self.try_assign(subtree, down).await,
+            let solved = match &issue {
+                LeaderLess { subtree, .. } => self.promote_clerk(&subtree).await,
+                UnderStaffed { subtree, down } => self.try_assign(&subtree, &down).await,
                 Overloaded { .. } => todo!(),
             };
 
-            if solved.is_ok() {
-                break; // can only solve one issue before we need a state update
+            match solved {
+                Ok(_) => return, // state changed due to solving issue
+                Err(e) => {
+                    debug!("could not solve issue, err: {e:?}");
+                    unsolved.push(issue);
+                }
             }
         }
     }
 
     async fn process_state_changes(&mut self) {
-        while let Ok(event) = self.events.try_recv() {
-            match event {
-                Event::NodeUp(node) => self.node_up(node),
-                Event::NodeDown(node) => self.node_down(node),
-                Event::Committed(order) => {
-                    let _ig_staff_order = self.staffing.process_order(order);
-                }
+        let event = self
+            .events
+            .recv()
+            .await
+            .expect("events mpsc should not be closed");
+        match event {
+            Event::NodeUp(node) => self.node_up(node),
+            Event::NodeDown(node) => self.node_down(node),
+            Event::Committed(order) => {
+                let _ig_staff_order = self.staffing.process_order(order);
             }
         }
     }

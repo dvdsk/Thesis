@@ -134,13 +134,14 @@ pub struct LogMeta {
 
 impl<O: Order> State<O> {
     /// for an empty log return LogMeta{ term: 0, idx: 0 }
+    #[instrument(level = "info", skip(self), ret)]
     pub(crate) fn last_log_meta(&self) -> LogMeta {
         use db::Prefix;
 
         let max_key = [u8::MAX];
         let (key, value) = self
             .db
-            .get_lt(max_key)
+            .get_lt(max_key) // PERF this is wrecking 2 cpu cores right now
             .expect("internal db issue")
             .unwrap_or_default();
 

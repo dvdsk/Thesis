@@ -38,7 +38,7 @@ where
 
 pub fn setup_tracing(instance: String, endpoint: IpAddr, run: u16) {
     let filter = filter::EnvFilter::builder()
-        .parse("info,instance_chart=warn,node::raft::state=info,node=debug,node::raft::subjects=trace")//,node::raft::state::append=warn")
+        .parse("info,instance_chart=warn,node::raft::state=info")//,node::raft::state::append=warn")
         .unwrap();
 
     let telemetry = opentelemetry(instance, endpoint, run);

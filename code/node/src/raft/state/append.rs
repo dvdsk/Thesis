@@ -10,7 +10,7 @@ use crate::util::TypedSled;
 use crate::{Id, Idx, Term};
 
 impl<O: Order> State<O> {
-    #[instrument(skip(self), ret)]
+    #[instrument(level="debug", skip(self), ret)]
     pub async fn append_req(&self, req: Request<O>) -> Result<Reply> {
         let nothing_to_append;
         {

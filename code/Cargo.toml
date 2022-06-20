@@ -8,3 +8,6 @@ members = [
 
 [patch.crates-io]
 instance-chart = { git = "https://github.com/dvdsk/instance-chart" }
+
+[profile.release]
+debug = true

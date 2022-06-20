@@ -75,7 +75,10 @@ async fn handle_conn<O: Order>(
     let mut stream: connection::MsgStream<Msg<O>, Reply> = connection::wrap(stream);
     while let Ok(msg) = stream.try_next().await {
         let reply = match msg.clone() {
-            None => continue,
+            None => {
+                debug!("Connection closed");
+                break
+            }
             Some(CriticalError(err)) => {
                 return Err(eyre::eyre!(
                     "critical error happend elsewhere in the cluster: {err:?}"
