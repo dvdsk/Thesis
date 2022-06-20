@@ -14,7 +14,7 @@ use tokio::net::TcpListener;
 
 mod db;
 mod logging;
-pub use db::TypedSled;
+pub use db::{TypedSled, open_db};
 pub use logging::setup_errors;
 #[allow(unused_imports)] // used by unit tests
 pub(crate) use logging::setup_test_tracing;

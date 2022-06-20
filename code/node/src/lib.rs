@@ -7,7 +7,7 @@ pub use color_eyre::eyre::WrapErr;
 use instance_chart::{discovery, ChartBuilder};
 use serde::{Deserialize, Serialize};
 use tokio::net::TcpListener;
-use tracing::{info, instrument};
+use tracing::instrument;
 
 pub mod messages;
 pub mod util;
@@ -117,9 +117,7 @@ pub async fn run(conf: Config) {
         .spawn(discovery::maintain(chart.clone()));
     discovery::found_majority(&chart, conf.cluster_size).await;
 
-    info!("opening on disk db at: {:?}", conf.database);
-    let db = sled::open(conf.database).unwrap();
-
+    let db = util::open_db(&conf.database).unwrap();
     let tree = db.open_tree("president log").unwrap();
     let pres_orders =
         raft::Log::open(chart.clone(), conf.cluster_size, tree, pres_listener).unwrap();

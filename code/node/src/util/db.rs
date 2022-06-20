@@ -4,7 +4,23 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::fmt::Debug;
 use std::ops::Add;
-use tracing::trace;
+use std::path::Path;
+use sysinfo::{System, SystemExt};
+use tracing::{info, trace};
+
+pub fn open_db(path: &Path) -> Result<sled::Db, sled::Error> {
+    let ram_kb = System::new_all().total_memory();
+    let ram_bytes = dbg!(ram_kb) * (1000. * 0.8) as u64;
+    let config = sled::Config::default()
+        .path(path)
+        .cache_capacity(ram_bytes) // eat 80% of system ram
+        .flush_every_ms(Some(1000)) // flushes manually when needed (TODO)
+        .mode(sled::Mode::HighThroughput)
+        .use_compression(false); // values are really tiny
+                                 //
+    info!("opening db: {config:?}");
+    config.open()
+}
 
 pub struct CompareAndSwapError<T> {
     pub current: Option<T>,
