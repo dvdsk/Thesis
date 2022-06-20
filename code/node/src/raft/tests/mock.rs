@@ -16,8 +16,8 @@ use tracing::info;
 use tracing::instrument;
 use tracing::warn;
 
+use crate::Id;
 use crate::president::Order;
-use crate::redirectory::Node;
 use crate::president::subjects;
 use crate::raft::LogWriter;
 use crate::raft;
@@ -36,8 +36,8 @@ struct MockStatusNotifier;
 
 #[async_trait]
 impl crate::raft::subjects::StatusNotifier for MockStatusNotifier {
-    async fn subject_up(&self, _subject_id: Node) {}
-    async fn subject_down(&self, _subject_id: Node) {}
+    async fn subject_up(&self, _subject_id: Id) {}
+    async fn subject_down(&self, _subject_id: Id) {}
 }
 
 async fn heartbeat_while_pres(
@@ -64,6 +64,7 @@ async fn heartbeat_while_pres(
             status_notifier,
             state.clone(),
             term,
+            false,
         );
 
         tokio::select! {
@@ -103,7 +104,7 @@ impl TestVoteNode {
         let tree = db.open_tree("pres").unwrap();
         let (order_tx, order_rx) = mpsc::channel(16);
         let (debug_tx, debug_rx) = mpsc::channel(16);
-        let state = State::new(order_tx, tree.clone(), id);
+        let state = State::new(order_tx, tree.clone());
 
         let (signal, found_majority) = mpsc::channel(1);
 
@@ -198,7 +199,7 @@ pub async fn handle_incoming(listener: &mut TcpListener, log: LogWriter<Order>) 
     }
 }
 
-#[instrument(skip_all, fields(id = state.id))]
+#[instrument(skip_all)]
 pub async fn president(
     mut chart: Chart,
     state: State<Order>,
@@ -245,6 +246,7 @@ pub async fn president(
             load_notify,
             state.clone(),
             term,
+            true,
         );
 
         tokio::select! {
@@ -283,7 +285,7 @@ impl TestAppendNode {
         let tree = db.open_tree("pres").unwrap();
         let (order_tx, order_rx) = mpsc::channel(16);
         let (debug_tx, debug_rx) = mpsc::channel(16);
-        let state = State::new(order_tx, tree.clone(), id);
+        let state = State::new(order_tx, tree.clone());
 
         let (signal, found_majority) = mpsc::channel(1);
 

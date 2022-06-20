@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use std::collections::HashSet;
+use std::collections::HashMap;
 use std::path::PathBuf;
 
 use tokio::sync::mpsc;
@@ -9,6 +9,7 @@ use self::issue::{Issue, Issues};
 
 use super::{raft, Chart, LogWriter, Order};
 use crate::redirectory::{Node, Staff};
+use crate::Id;
 mod staffing;
 use staffing::Staffing;
 mod action;
@@ -21,10 +22,10 @@ pub struct LoadNotifier {
 
 #[async_trait]
 impl crate::raft::subjects::StatusNotifier for LoadNotifier {
-    async fn subject_up(&self, subject: Node) {
+    async fn subject_up(&self, subject: Id) {
         self.sender.try_send(Event::NodeUp(subject)).unwrap();
     }
-    async fn subject_down(&self, subject: Node) {
+    async fn subject_down(&self, subject: Id) {
         self.sender.try_send(Event::NodeDown(subject)).unwrap();
     }
 }
@@ -37,8 +38,8 @@ impl LoadNotifier {
 
 #[derive(Debug)]
 pub enum Event {
-    NodeUp(Node),
-    NodeDown(Node),
+    NodeUp(Id),
+    NodeDown(Id),
     Committed(Order),
 }
 
@@ -84,7 +85,7 @@ impl LoadBalancer {
             log_writer: self.log_writer,
             events: self.events,
             staffing,
-            idle: HashSet::new(),
+            idle: HashMap::new(),
             _policy: self.policy,
             issues: Default::default(),
         }
@@ -104,11 +105,12 @@ impl LoadBalancer {
         );
 
         // collect up to three not yet assigned nodes nodes, filter out those assigned to ministry
-        let mut idle = HashSet::new();
+        let mut idle = HashMap::new();
         while idle.len() < 3 {
             match self.events.recv().await.unwrap() {
                 NodeUp(id) => {
-                    idle.insert(id);
+                    let node = Node::from_chart(id, &self.chart);
+                    idle.insert(id, node);
                 }
                 NodeDown(id) => {
                     idle.remove(&id);
@@ -124,7 +126,7 @@ impl LoadBalancer {
             }
         }
 
-        let mut idle = idle.drain();
+        let mut idle = idle.into_values();
         let minister = idle.next().unwrap();
         let clerks = idle.collect();
         let add_root = Order::AssignMinistry {
@@ -149,7 +151,7 @@ struct Init {
     /// its directory is deleted
     _policy: (),
     staffing: Staffing,
-    idle: HashSet<Node>,
+    idle: HashMap<Id, Node>,
     issues: Issues,
 }
 
@@ -197,23 +199,24 @@ impl Init {
 }
 
 impl Init {
-    fn node_up(&mut self, node: Node) {
-        if self.issues.solved_by_up(node.id) {
+    fn node_up(&mut self, node_id: Id) {
+        if self.issues.solved_by_up(node_id) {
             return;
         }
 
-        if self.staffing.clerk_back_up(node.id).is_some() {
+        if self.staffing.clerk_back_up(node_id).is_some() {
             return;
         }
 
-        self.idle.insert(node);
+        let node = Node::from_chart(node_id, &self.chart);
+        self.idle.insert(node_id, node);
     }
 
-    fn node_down(&mut self, node: Node) {
-        match self.staffing.register_node_down(node.id) {
+    fn node_down(&mut self, node_id: Id) {
+        match self.staffing.register_node_down(node_id) {
             Some(issue) => self.issues.add(issue),
             None => {
-                self.idle.remove(&node);
+                self.idle.remove(&node_id);
             }
         }
     }

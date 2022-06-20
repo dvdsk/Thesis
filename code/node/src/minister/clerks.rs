@@ -39,7 +39,7 @@ impl Source for Map {
         self.current
             .iter()
             .cloned()
-            .map(|c| (c.id, c.addr))
+            .map(|c| (c.id, c.minister_addr()))
             .collect()
     }
 }
@@ -56,10 +56,10 @@ impl Register {
         let newly_added = new_assignment.difference(&self.current);
         for clerk in newly_added {
             self.raft_notify
-                .try_send((clerk.id, clerk.addr))
+                .try_send((clerk.id, clerk.minister_addr()))
                 .unwrap();
             self.lock_notify
-                .try_send((clerk.id, clerk.addr))
+                .try_send((clerk.id, clerk.minister_addr()))
                 .unwrap();
         }
     }

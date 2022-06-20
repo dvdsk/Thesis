@@ -96,7 +96,7 @@ fn setup() -> (RequestGen, State<Order>, mpsc::Receiver<Order>) {
     let db = sled::Config::new().temporary(true).open().unwrap();
     let tree = db.open_tree("pres").unwrap();
     let (order_tx, order_rx) = mpsc::channel(16);
-    let state = State::new(order_tx, tree.clone(), ID);
+    let state = State::new(order_tx, tree.clone());
     (gen, state, order_rx)
 }
 
@@ -221,7 +221,7 @@ async fn mpsc_full() {
     let db = sled::Config::new().temporary(true).open().unwrap();
     let tree = db.open_tree("pres").unwrap();
     let (order_tx, _order_rx) = mpsc::channel(16);
-    let state = State::new(order_tx, tree.clone(), ID);
+    let state = State::new(order_tx, tree.clone());
 
     // get some entries rdy to be committed
     for n in 0..16 {

@@ -100,7 +100,7 @@ async fn handle_conn(
             IsCommitted { path, .. } | Write { path, .. } | Create(path) | Read { path, .. } => {
                 let (staff, subtree) = redirect.to_staff(&path).await;
                 Ok(Response::Redirect {
-                    addr: staff.minister.addr,
+                    addr: staff.minister.client_addr(),
                     subtree,
                 })
             }

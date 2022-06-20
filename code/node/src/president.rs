@@ -95,6 +95,7 @@ pub(super) async fn work(state: &mut super::State, chart: &mut Chart, term: Term
         load_notifier.clone(),
         state.clone(),
         term,
+        false,
     )
     .in_current_span();
 

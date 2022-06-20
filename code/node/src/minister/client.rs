@@ -57,14 +57,14 @@ async fn check_subtree(
         List(path) => {
             let (staff, subtree) = redirect.to_staff(path).await;
             Err(Response::Redirect {
-                addr: staff.minister.addr,
+                addr: staff.minister.client_addr(),
                 subtree,
             })
         }
         Create(path) | IsCommitted { path, .. } if !path.starts_with(&our_subtree) => {
             let (staff, subtree) = redirect.to_staff(path).await;
             Err(Response::Redirect {
-                addr: staff.minister.addr,
+                addr: staff.minister.client_addr(),
                 subtree,
             })
         }

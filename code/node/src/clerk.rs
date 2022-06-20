@@ -4,8 +4,8 @@ use color_eyre::Result;
 
 use crate::directory::Directory;
 use crate::raft::{Log, ObserverLog};
-use crate::redirectory::{Node, ReDirectory};
-use crate::{president, Id, Role, minister};
+use crate::redirectory::ReDirectory;
+use crate::{minister, president, Id, Role};
 
 mod clients;
 mod locks;
@@ -33,7 +33,7 @@ async fn handle_pres_orders(
                         term: staff.term,
                     });
                 }
-                if staff.clerks.contains(&Node::local(our_id)) && subtree != *our_subtree {
+                if staff.clerks.iter().any(|clerk| clerk.id == our_id) && subtree != *our_subtree {
                     return Ok(Role::Clerk { subtree });
                 }
             }

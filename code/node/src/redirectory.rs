@@ -1,5 +1,5 @@
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-use std::path::{PathBuf, Path};
+use std::net::{IpAddr, SocketAddr};
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use derivative::Derivative;
@@ -10,7 +10,7 @@ use tracing::instrument;
 
 use crate::president::Order;
 use crate::raft::State;
-use crate::Term;
+use crate::{Chart, Term};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Staff {
@@ -30,15 +30,36 @@ impl Staff {
 pub struct Node {
     pub id: Id,
     #[derivative(Hash = "ignore", PartialEq = "ignore")]
-    pub addr: SocketAddr,
+    ip: IpAddr,
+    #[derivative(Hash = "ignore", PartialEq = "ignore")]
+    client_port: u16,
+    #[derivative(Hash = "ignore", PartialEq = "ignore")]
+    minister_port: u16,
+    #[derivative(Hash = "ignore", PartialEq = "ignore")]
+    president_port: u16,
 }
 
 impl Node {
-    pub fn local(id: Id) -> Self {
+    pub fn from_chart(id: Id, chart: &Chart) -> Self {
+        let addresses = chart.get_addr_list(id).expect("id not in chart");
+        let ip = addresses[0].ip();
+        let [president_port, minister_port, client_port] = addresses.map(|addr| addr.port());
         Self {
             id,
-            addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080),
+            ip,
+            client_port,
+            minister_port,
+            president_port,
         }
+    }
+    pub fn client_addr(&self) -> SocketAddr {
+        SocketAddr::new(self.ip, self.client_port)
+    }
+    pub fn minister_addr(&self) -> SocketAddr {
+        SocketAddr::new(self.ip, self.minister_port)
+    }
+    pub fn president_addr(&self) -> SocketAddr {
+        SocketAddr::new(self.ip, self.president_port)
     }
 }
 
@@ -87,7 +108,7 @@ impl ReDirectory {
         let tree = self.trees.read().await;
         for (subtree, staff) in tree.iter().rev() {
             if path.starts_with(subtree) {
-                return (staff.clone(), subtree.clone())
+                return (staff.clone(), subtree.clone());
             }
         }
         panic!("no root directory found or path without root")
@@ -95,27 +116,5 @@ impl ReDirectory {
 
     pub(crate) fn set_tree(&mut self, tree: Option<PathBuf>) {
         self.our_tree = tree;
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-    use std::collections::HashSet;
-    use std::net::SocketAddr;
-    use std::str::FromStr;
-
-    fn test_cleck() {
-        let set: HashSet<_> = [Node {
-            id: 3,
-            addr: SocketAddr::from_str("127.0.0.1:42").unwrap(),
-        }]
-        .into_iter()
-        .collect();
-
-        assert!(set.contains(&Node {
-            id: 3,
-            addr: SocketAddr::from_str("192.168.1.4:22").unwrap()
-        }))
     }
 }

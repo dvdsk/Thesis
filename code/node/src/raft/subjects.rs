@@ -3,7 +3,6 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use crate::raft::CONN_RETRY_PERIOD;
-use crate::redirectory::Node;
 use crate::{Id, Idx, Term};
 use async_trait::async_trait;
 use color_eyre::eyre::eyre;
@@ -28,8 +27,8 @@ use request_gen::RequestGen;
 
 #[async_trait]
 pub trait StatusNotifier: Clone + Sync + Send {
-    async fn subject_up(&self, subject: Node);
-    async fn subject_down(&self, subject: Node);
+    async fn subject_up(&self, subject: Id);
+    async fn subject_down(&self, subject: Id);
 }
 
 /// does nothing
@@ -38,8 +37,8 @@ pub struct EmptyNotifier;
 
 #[async_trait]
 impl StatusNotifier for EmptyNotifier {
-    async fn subject_up(&self, _: Node) {}
-    async fn subject_down(&self, _: Node) {}
+    async fn subject_up(&self, _: Id) {}
+    async fn subject_down(&self, _: Id) {}
 }
 
 async fn connect<O: Order>(address: &SocketAddr) -> MsgStream<Reply, Msg<O>> {
@@ -71,6 +70,7 @@ async fn manage_subject<O: Order>(
     mut appended: mpsc::Sender<u32>,
     mut req_gen: RequestGen<O>,
     status_notify: impl StatusNotifier,
+    send_heartbeats: bool,
 ) {
     loop {
         let mut stream = connect(&address).await;
@@ -83,19 +83,16 @@ async fn manage_subject<O: Order>(
             continue;
         }
 
-        status_notify
-            .subject_up(Node {
-                id: subject_id,
-                addr: address,
-            })
-            .await;
-        replicate_orders(&mut broadcast, &mut appended, &mut req_gen, &mut stream).await;
-        status_notify
-            .subject_down(Node {
-                id: subject_id,
-                addr: address,
-            })
-            .await;
+        status_notify.subject_up(subject_id).await;
+        replicate_orders(
+            &mut broadcast,
+            &mut appended,
+            &mut req_gen,
+            &mut stream,
+            send_heartbeats,
+        )
+        .await;
+        status_notify.subject_down(subject_id).await;
     }
 }
 
@@ -134,6 +131,7 @@ async fn replicate_orders<O: Order>(
     appended: &mut mpsc::Sender<u32>,
     req_gen: &mut RequestGen<O>,
     stream: &mut MsgStream<Reply, Msg<O>>,
+    no_heartbeats: bool,
 ) {
     let mut next_hb = Instant::now() + HB_PERIOD;
     sleep_until(next_hb).await;
@@ -144,6 +142,8 @@ async fn replicate_orders<O: Order>(
         let to_send = if req_gen.misses_logs() {
             debug!("sending missing logs at idx: {}", req_gen.next_idx);
             req_gen.append()
+        } else if no_heartbeats {
+            continue;
         } else {
             trace!("sending heartbeat");
             req_gen.heartbeat()
@@ -176,6 +176,7 @@ pub async fn instruct<O: Order>(
     status_notify: impl StatusNotifier + Clone + Sync + Send + 'static,
     state: State<O>,
     term: Term,
+    hold_heartbeats: bool,
 ) {
     let mut commit_idx = Commited::new(commit_notify, &state);
     let base_msg = RequestGen::new(state.clone(), term, members);
@@ -192,6 +193,7 @@ pub async fn instruct<O: Order>(
             append_updates,
             base_msg.clone(),
             status_notify.clone(),
+            hold_heartbeats,
         )
         .in_current_span();
         subjects.build_task().name("manage_subject").spawn(manage);

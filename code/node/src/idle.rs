@@ -8,7 +8,7 @@ use tokio::task::JoinSet;
 use tracing::{debug, warn};
 
 use crate::president::{self, Log, Order};
-use crate::redirectory::{Node, ReDirectory};
+use crate::redirectory::ReDirectory;
 use crate::{Id, Role};
 
 async fn handle_pres_orders(
@@ -29,7 +29,7 @@ async fn handle_pres_orders(
                     });
                 }
 
-                if staff.clerks.contains(&Node::local(id)) {
+                if staff.clerks.iter().any(|clerk| clerk.id == id) {
                     return Ok(Role::Clerk { subtree });
                 }
             }
@@ -69,7 +69,7 @@ async fn handle_conn(stream: TcpStream, redirect: ReDirectory) {
             | Read { path, .. } => {
                 let (staff, subtree) = redirect.to_staff(&path).await;
                 Response::Redirect {
-                    addr: staff.minister.addr,
+                    addr: staff.minister.client_addr(),
                     subtree,
                 }
             }

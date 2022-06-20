@@ -42,8 +42,7 @@ async fn handle_pres_orders(
                         term: staff.term,
                     });
                 }
-
-                if staff.clerks.contains(&Node::local(our_id)) {
+                if staff.clerks.iter().any(|clerk| clerk.id == our_id) {
                     return Ok(Role::Clerk { subtree });
                 }
 
@@ -117,6 +116,7 @@ pub(crate) async fn work(
         subjects::EmptyNotifier,
         state.clone(),
         term,
+        true,
     )
     .in_current_span();
 

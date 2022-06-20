@@ -16,7 +16,7 @@ use crate::messages::{Msg, Reply};
 
 #[instrument(err)]
 async fn request_commit_idx(clerk: Node) -> Result<(Node, Idx), io::Error> {
-    let stream = TcpStream::connect(clerk.addr).await?;
+    let stream = TcpStream::connect(clerk.president_addr()).await?;
     let mut stream: connection::MsgStream<Reply, Msg> = connection::wrap(stream);
     stream.send(Msg::ReqCommitIdx).await?;
     loop {
@@ -87,6 +87,11 @@ impl Init {
         Ok(())
     }
 
+    fn take_idle_node(&mut self) -> Result<Node, &'static str> {
+        let id = *self.idle.keys().next().ok_or("No free staff left")?;
+        Ok(self.idle.remove(&id).unwrap())
+    }
+
     #[instrument(skip(self))]
     pub(crate) async fn try_assign(
         &mut self,
@@ -98,9 +103,8 @@ impl Init {
             return Err("Not enough staff left to restore ministry");
         }
 
-        let idle = self.idle.drain().next().ok_or("No free staff left")?;
         let mut new_staff = staff.clone();
-        new_staff.clerks.push(idle);
+        new_staff.clerks.push(self.take_idle_node()?);
         new_staff.term += 1;
 
         self.update_ministry_staff(subtree, new_staff).await;
