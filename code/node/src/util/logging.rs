@@ -2,10 +2,10 @@ use opentelemetry::sdk::resource::Resource;
 use opentelemetry::sdk::trace;
 use opentelemetry::KeyValue;
 
+use tracing_error::ErrorLayer;
 use tracing_opentelemetry::OpenTelemetryLayer;
 use tracing_subscriber::filter;
 use tracing_subscriber::prelude::*;
-use tracing_error::ErrorLayer;
 
 use std::net::IpAddr;
 
@@ -38,7 +38,7 @@ where
 
 pub fn setup_tracing(instance: String, endpoint: IpAddr, run: u16) {
     let filter = filter::EnvFilter::builder()
-        .parse("info,instance_chart=warn,node::raft::state=info")//,node::raft::state::append=warn")
+        .parse("info,instance_chart=warn,node::raft=info,node::raft::subjects=debug") //,node::raft::state::append=warn")
         .unwrap();
 
     let telemetry = opentelemetry(instance, endpoint, run);

@@ -8,9 +8,10 @@ use std::path::Path;
 use sysinfo::{System, SystemExt};
 use tracing::{info, trace};
 
+#[allow(dead_code)]
 pub fn open_db(path: &Path) -> Result<sled::Db, sled::Error> {
     let ram_kb = System::new_all().total_memory();
-    let ram_bytes = dbg!(ram_kb) * (1000. * 0.8) as u64;
+    let ram_bytes = ram_kb * (1000. * 0.8) as u64;
     let config = sled::Config::default()
         .path(path)
         .cache_capacity(ram_bytes) // eat 80% of system ram

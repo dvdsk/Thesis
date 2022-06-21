@@ -14,7 +14,7 @@ use tokio::net::TcpListener;
 
 mod db;
 mod logging;
-pub use db::{TypedSled, open_db};
+pub use db::{open_db, TypedSled};
 pub use logging::setup_errors;
 #[allow(unused_imports)] // used by unit tests
 pub(crate) use logging::setup_test_tracing;
@@ -89,27 +89,27 @@ use tokio::task;
 /// Spawn a new tokio Task and cancel it on drop.
 #[allow(dead_code)]
 #[track_caller]
-pub fn spawn<T>(future: T) -> Wrapper<T::Output>
+pub fn spawn_cancel_on_drop<T>(future: T, name: &'static str) -> CancelOnDropTask<T::Output>
 where
     T: Future + Send + 'static,
     T::Output: Send + 'static,
 {
-    Wrapper(task::spawn(future))
+    let handle = task::Builder::new().name(name).spawn(future);
+    CancelOnDropTask(handle)
 }
 
 /// Cancels the wrapped tokio Task on Drop.
-pub struct Wrapper<T>(task::JoinHandle<T>);
+pub struct CancelOnDropTask<T>(task::JoinHandle<T>);
 
-impl<T> Future for Wrapper<T> {
+impl<T> Future for CancelOnDropTask<T> {
     type Output = Result<T, task::JoinError>;
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         unsafe { Pin::new_unchecked(&mut self.0) }.poll(cx)
     }
 }
 
-impl<T> Drop for Wrapper<T> {
+impl<T> Drop for CancelOnDropTask<T> {
     fn drop(&mut self) {
-        // do `let _ = self.0.cancel()` for `async_std::task::Task`
         self.0.abort();
     }
 }

@@ -73,7 +73,7 @@ async fn handle_conn(stream: TcpStream, redirect: ReDirectory) {
                     subtree,
                 }
             }
-            RefreshLease | Lock { .. } | Unlock { .. } | UnlockAll { .. } => {
+            RefreshLease | Lock { .. } | Unlock { .. } | UnlockAll { .. } | HighestCommited => {
                 warn!("idle node recieved inappropriate request");
                 return;
             }

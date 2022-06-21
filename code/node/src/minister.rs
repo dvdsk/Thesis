@@ -91,7 +91,7 @@ pub(crate) async fn work(
         id: our_id,
         ..
     } = state;
-    info!("started work as minister: {our_id}");
+    info!("started work as minister");
 
     let (register, mut clerks, clerks_copy) = clerks::Map::new(clerks, *our_id);
 

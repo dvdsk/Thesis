@@ -5,14 +5,13 @@ use std::sync::Arc;
 use crate::raft::CONN_RETRY_PERIOD;
 use crate::{Id, Idx, Term};
 use async_trait::async_trait;
-use color_eyre::eyre::eyre;
 use futures::{SinkExt, TryStreamExt};
 use protocol::connection::{self, MsgStream};
 use tokio::net::TcpStream;
 use tokio::sync::{broadcast, mpsc, Notify};
 use tokio::task::JoinSet;
 use tokio::time::{sleep, sleep_until, timeout_at, Instant};
-use tracing::{debug, instrument, trace, warn, Instrument, info};
+use tracing::{debug, info, instrument, trace, warn, Instrument};
 
 use super::state::append;
 use super::{Msg, Order, Reply};
@@ -98,15 +97,21 @@ async fn manage_subject<O: Order>(
     }
 }
 
+#[derive(Debug)]
+enum RecieveErr {
+    ConnectionClosed,
+    ConnectionError(std::io::Error),
+}
+
 async fn recieve_reply<O: Order>(
     stream: &mut MsgStream<Reply, Msg<O>>,
     req_gen: &mut RequestGen<O>,
     appended: &mut mpsc::Sender<u32>,
-) -> color_eyre::Result<()> {
+) -> Result<(), RecieveErr> {
     loop {
         match stream.try_next().await {
-            Ok(None) => return Err(eyre!("did not recieve reply from host")),
-            Err(e) => return Err(eyre!("did not recieve reply from host, error: {e:?}")),
+            Ok(None) => return Err(RecieveErr::ConnectionClosed),
+            Err(e) => return Err(RecieveErr::ConnectionError(e)),
             Ok(Some(Reply::RequestVote(..))) => {
                 unreachable!("no vote request is ever send on this connection")
             }
@@ -165,7 +170,7 @@ async fn replicate_orders<O: Order>(
             Ok(Ok(..)) => unreachable!("we always keep recieving"),
             Ok(Err(e)) => {
                 warn!("did not recieve reply, error: {e:?}");
-                sleep_until(next_hb).await;
+                return;
             }
         }
     }

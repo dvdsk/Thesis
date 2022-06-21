@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 use tokio::sync::mpsc;
-use tracing::{info, debug};
+use tracing::{info, instrument, warn};
 
 use self::issue::{Issue, Issues};
 
@@ -116,9 +116,7 @@ impl LoadBalancer {
                     idle.remove(&id);
                 }
                 Committed(order) => {
-                    staffing
-                        .process_order(order)
-                        .expect("only order in a rootless cluster should be staff assignment");
+                    staffing.process_order(order);
                     if staffing.has_root() {
                         return staffing;
                     }
@@ -169,7 +167,10 @@ impl Init {
         }
     }
 
+    #[instrument(skip(self))]
     pub async fn solve_worst_issue(&mut self) {
+        use Issue::*;
+
         let mut unsolved = Vec::new();
         loop {
             let issue = match self.issues.remove_worst() {
@@ -177,7 +178,7 @@ impl Init {
                 Some(i) => i,
             };
 
-            use Issue::*;
+            info!("trying to solve: {issue:?}");
             let solved = match &issue {
                 LeaderLess { subtree, .. } => self.promote_clerk(&subtree).await,
                 UnderStaffed { subtree, down } => self.try_assign(&subtree, &down).await,
@@ -187,13 +188,14 @@ impl Init {
             match solved {
                 Ok(_) => return, // state changed due to solving issue
                 Err(e) => {
-                    debug!("could not solve issue, err: {e:?}");
+                    warn!("could not solve issue, err: {e:?}");
                     unsolved.push(issue);
                 }
             }
         }
     }
 
+    #[instrument(skip(self))]
     async fn process_state_changes(&mut self) {
         let event = self
             .events
@@ -203,14 +205,13 @@ impl Init {
         match event {
             Event::NodeUp(node) => self.node_up(node),
             Event::NodeDown(node) => self.node_down(node),
-            Event::Committed(order) => {
-                let _ig_staff_order = self.staffing.process_order(order);
-            }
+            Event::Committed(order) => self.staffing.process_order(order),
         }
     }
 }
 
 impl Init {
+    #[instrument(skip(self))]
     fn node_up(&mut self, node_id: Id) {
         if self.issues.solved_by_up(node_id) {
             return;
@@ -224,12 +225,11 @@ impl Init {
         self.idle.insert(node_id, node);
     }
 
+    #[instrument(skip(self))]
     fn node_down(&mut self, node_id: Id) {
-        match self.staffing.register_node_down(node_id) {
-            Some(issue) => self.issues.add(issue),
-            None => {
-                self.idle.remove(&node_id);
-            }
+        let issues = self.staffing.register_node_down(node_id);
+        for issue in issues {
+            self.issues.add(issue);
         }
     }
 }

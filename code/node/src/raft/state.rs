@@ -134,7 +134,7 @@ pub struct LogMeta {
 
 impl<O: Order> State<O> {
     /// for an empty log return LogMeta{ term: 0, idx: 0 }
-    #[instrument(level = "info", skip(self), ret)]
+    #[instrument(level = "trace", skip(self), ret)]
     pub(crate) fn last_log_meta(&self) -> LogMeta {
         use db::Prefix;
 
@@ -185,7 +185,7 @@ impl<O: Order> State<O> {
             .map(Result::unwrap)
             .map(|(_, value)| value)
             .map(|bytes| bincode::deserialize(&bytes))
-            .map(Result::unwrap)
+            .map(Result::unwrap) // panics!
             .collect()
     }
 

@@ -43,6 +43,9 @@ pub enum Request {
     /// unlock all file leases, send by new minister to ensure locks held under
     /// the old administration are released (since they are no longer used)
     UnlockAll,
+    /// get the highest committed commit idx (used by the load balancer to find a
+    /// replacement for a minister that went down)
+    HighestCommited,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -72,6 +75,8 @@ pub enum Response {
     Error(String),
     /// lease timed out or we canceld it by sending another request
     LeaseDropped,
+    /// Highest commit index
+    HighestCommited(Idx),
 }
 
 // #[cfg(test)]

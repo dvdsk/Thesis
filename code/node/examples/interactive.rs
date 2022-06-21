@@ -122,6 +122,7 @@ async fn main() {
 
     start_jeager::start_if_not_running(runtime_dir()).await;
     crate::util::setup_tracing(arg.clone(), IpAddr::V4(Ipv4Addr::LOCALHOST), 10);
+    println!("logging setup completed");
 
     match arg.as_str() {
         "c" => manage_cluster().await,

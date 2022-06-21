@@ -104,6 +104,7 @@ async fn handle_conn(
                     subtree,
                 })
             }
+            HighestCommited => Ok(Response::HighestCommited(state.commit_index())),
             UnlockAll => {
                 locks.reset_all(&mut dir).await;
                 Ok(Response::Done)

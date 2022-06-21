@@ -9,7 +9,6 @@ use serde::{Deserialize, Serialize};
 use tokio::net::TcpListener;
 use tracing::instrument;
 
-pub mod messages;
 pub mod util;
 
 mod redirectory;

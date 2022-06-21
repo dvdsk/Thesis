@@ -39,7 +39,7 @@ impl Issues {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, Hash)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub enum Issue {
     // lost a minister
     LeaderLess { subtree: PathBuf, id: Id },

@@ -2,10 +2,11 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use instance_chart::Id;
+use tracing::instrument;
 
-use crate::redirectory::Staff;
-use crate::president::raft::State;
 use crate::president;
+use crate::president::raft::State;
+use crate::redirectory::Staff;
 
 use super::issue::Issue;
 
@@ -18,19 +19,20 @@ pub(super) struct Staffing {
 }
 
 impl Staffing {
-    pub fn process_order(&mut self, order: president::Order) -> Result<(), president::Order> {
+    pub fn process_order(&mut self, order: president::Order) {
         use president::Order::*;
 
         match order {
             AssignMinistry { subtree, staff } => {
+                // TODO detect changes that make a ministry to
+                // small (understaffed err)
                 self.by_ministry.insert(subtree.clone(), staff.clone());
                 self.ministers.insert(staff.minister.id, subtree.clone());
                 let tagged_clerks = staff.clerks.iter().map(|c| (c.id, subtree.clone()));
                 self.clerks
                     .extend(tagged_clerks.map(|(clerk, path)| (clerk, path)));
-                Ok(())
             }
-            not_staff_order => Err(not_staff_order),
+            _ => (),
         }
     }
 
@@ -55,35 +57,41 @@ impl Staffing {
         self.by_ministry.get(ministry).unwrap().clerks.len()
     }
 
-    pub fn register_node_down(&mut self, id: Id) -> Option<Issue> {
-        if let Some(ministry) = self.ministers.remove(&id) {
-            return Some(Issue::LeaderLess {
-                subtree: ministry,
+    #[instrument(skip(self), ret)]
+    pub fn register_node_down(&mut self, id: Id) -> Vec<Issue> {
+        let mut issues = Vec::new();
+
+        let ministry = if let Some(ministry) = self.ministers.remove(&id) {
+            issues.push(Issue::LeaderLess {
+                subtree: ministry.clone(),
                 id,
             });
-        }
+            ministry
+        } else if let Some(ministry) = self.clerks.remove(&id) {
+            ministry
+        } else {
+            return Vec::new(); // node that went down was idle node
+        };
 
-        if let Some(ministry) = self.clerks.remove(&id) {
-            let down = match self.clerks_down.get_mut(&ministry) {
-                Some(down) => {
-                    down.push(id);
-                    down.clone()
-                }
-                None => {
-                    self.clerks_down.insert(ministry.clone(), vec![id]).unwrap();
-                    vec![id]
-                }
-            };
-
-            if self.n_clerks(&ministry) - down.len() < 2 {
-                return Some(Issue::UnderStaffed {
-                    subtree: ministry,
-                    down,
-                });
+        let down = match self.clerks_down.get_mut(&ministry) {
+            Some(down) => {
+                down.push(id);
+                down.clone()
             }
-        }
+            None => {
+                let existing = self.clerks_down.insert(ministry.clone(), vec![id]);
+                assert_eq!(existing, None);
+                vec![id]
+            }
+        };
 
-        None
+        if self.n_clerks(&ministry) - down.len() < 2 {
+            issues.push(Issue::UnderStaffed {
+                subtree: ministry,
+                down,
+            });
+        }
+        issues
     }
 
     pub fn staff(&self, subtree: &Path) -> &Staff {

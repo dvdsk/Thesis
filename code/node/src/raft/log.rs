@@ -4,7 +4,7 @@ use tokio::sync::mpsc::{self, Receiver};
 use tokio::task::{self, JoinHandle};
 use tracing::{info, instrument, Instrument};
 
-use crate::Chart;
+use crate::{Chart, util};
 
 use super::state::State;
 use super::{handle_incoming, succession, Order};
@@ -15,8 +15,8 @@ use super::{handle_incoming, succession, Order};
 pub struct Log<O> {
     pub orders: Receiver<O>, // commited entries can be recoverd from here
     pub state: State<O>,
-    _handle_incoming: JoinHandle<()>,
-    _succession: JoinHandle<()>,
+    _handle_incoming: util::CancelOnDropTask<()>,
+    _succession: util::CancelOnDropTask<()>,
 }
 
 impl<O: Order> Log<O> {
@@ -36,10 +36,8 @@ impl<O: Order> Log<O> {
         Ok(Self {
             state: state.clone(),
             orders,
-            _handle_incoming: task::Builder::new()
-                .name("log_handle_incoming")
-                .spawn(handle_incoming),
-            _succession: task::Builder::new().name("succession").spawn(succession),
+            _handle_incoming: util::spawn_cancel_on_drop(handle_incoming, "log_handle_incoming"),
+            _succession: util::spawn_cancel_on_drop(succession, "succession"),
         })
     }
 
