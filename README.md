@@ -1,6 +1,6 @@
 Notice: Work in Progress
 
-Below is an excerpt of the design section of my thesis automatically converted to markdown. I recommand you instead go to the Design section in my [thesis](report/main.pdf)
+Below is an excerpt of the design section of my thesis automatically converted to markdown. I recommend you instead go to the Design section in my [thesis](report/main.pdf)
 
 
 API and Capabilities
