@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use color_eyre::Result;
+use tracing::{instrument, info};
 
 use crate::directory::Directory;
 use crate::raft::{Log, ObserverLog};
@@ -50,6 +51,7 @@ async fn handle_minister_orders(orders: &mut ObserverLog<minister::Order>, mut d
     }
 }
 
+#[instrument(skip(state))]
 pub(crate) async fn work(state: &mut super::State, our_subtree: PathBuf) -> Result<Role> {
     let super::State {
         pres_orders,
@@ -60,6 +62,7 @@ pub(crate) async fn work(state: &mut super::State, our_subtree: PathBuf) -> Resu
         db,
         ..
     } = state;
+    info!("started work as clerk");
 
     let ObserverLog { state, .. } = min_orders;
 
