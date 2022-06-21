@@ -182,10 +182,11 @@ impl<O: Order> State<O> {
         let last = db::log_key(self.commit_index());
         self.db
             .range(db::log_key(0)..last)
-            .map(Result::unwrap)
+            .map(|r| r.expect("the log is empty, which should not be possible"))
             .map(|(_, value)| value)
-            .map(|bytes| bincode::deserialize(&bytes))
-            .map(Result::unwrap) // panics!
+            .map(|bytes| bincode::deserialize::<LogEntry<O>>(&bytes))
+            .map(|r| r.expect("decoding the bytes failed")) // panics!
+            .map(|entry| entry.order)
             .collect()
     }
 
