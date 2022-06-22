@@ -42,6 +42,9 @@ impl Source for Map {
             .map(|c| (c.id, c.minister_addr()))
             .collect()
     }
+    fn forget_impl(&self, _id: Id) {
+        unimplemented!()
+    }
 }
 
 pub struct Register {

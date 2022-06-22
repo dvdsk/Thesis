@@ -43,6 +43,8 @@ pub(super) const ELECTION_TIMEOUT: Duration = Duration::from_millis(40 * MUL);
 /// elections are only started after after 0 .. SETUP_TIME
 pub(super) const MIN_ELECTION_SETUP: Duration = Duration::from_millis(40 * MUL);
 pub(super) const MAX_ELECTION_SETUP: Duration = Duration::from_secs(8);
+/// time allowed to try and (re-)connect to a node before giving up
+pub(super) const SUBJECT_CONN_TIMEOUT: Duration = Duration::from_secs(8); 
 
 pub trait Order:
     Serialize + DeserializeOwned + fmt::Debug + Clone + Send + Sync + Unpin + 'static + PartialEq

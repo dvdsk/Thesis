@@ -2,7 +2,7 @@ use std::collections::HashSet;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use crate::raft::CONN_RETRY_PERIOD;
+use crate::raft::{CONN_RETRY_PERIOD, SUBJECT_CONN_TIMEOUT};
 use crate::{Id, Idx, Term};
 use async_trait::async_trait;
 use futures::{SinkExt, TryStreamExt};
@@ -10,7 +10,7 @@ use protocol::connection::{self, MsgStream};
 use tokio::net::TcpStream;
 use tokio::sync::{broadcast, mpsc, Notify};
 use tokio::task::JoinSet;
-use tokio::time::{sleep, sleep_until, timeout_at, Instant};
+use tokio::time::{sleep, sleep_until, timeout, timeout_at, Instant};
 use tracing::{debug, info, instrument, trace, warn, Instrument};
 
 use super::state::append;
@@ -61,6 +61,9 @@ async fn connect<O: Order>(address: &SocketAddr) -> MsgStream<Reply, Msg<O>> {
     }
 }
 
+/// replicates orders to a subject (a raft follower), returns its own id
+/// when done. The id is used to inform node discovery to let us know
+/// if this node comes back online
 #[instrument(skip_all, fields(subject_id = subject_id))]
 async fn manage_subject<O: Order>(
     subject_id: Id,
@@ -70,9 +73,12 @@ async fn manage_subject<O: Order>(
     mut req_gen: RequestGen<O>,
     status_notify: impl StatusNotifier,
     send_heartbeats: bool,
-) {
+) -> Id {
     loop {
-        let mut stream = connect(&address).await;
+        let mut stream = match timeout(SUBJECT_CONN_TIMEOUT, connect(&address)).await {
+            Ok(stream) => stream,
+            Err(_) => break,
+        };
 
         let init_msg = req_gen.heartbeat();
 
@@ -95,6 +101,8 @@ async fn manage_subject<O: Order>(
         status_notify.subject_down(subject_id).await;
         warn!("subject down");
     }
+    warn!("giving up on subject!");
+    subject_id
 }
 
 #[derive(Debug)]
@@ -176,6 +184,51 @@ async fn replicate_orders<O: Order>(
     }
 }
 
+struct Subjects<O: Order, N: StatusNotifier> {
+    subject_added: Notify,
+    subjects: JoinSet<Id>,
+    orders: broadcast::Sender<O>,
+    base_msg: RequestGen<O>,
+    status_notify: N,
+    hold_heartbeats: bool,
+}
+
+impl<O: Order, N: StatusNotifier + 'static> Subjects<O, N> {
+    fn add(&mut self, id: Id, addr: SocketAddr, commit_idx: &mut Commited<'_, O>) {
+        let broadcast_rx = self.orders.subscribe();
+        let append_updates = commit_idx.track_subject();
+
+        let manage = manage_subject(
+            id,
+            addr,
+            broadcast_rx,
+            append_updates,
+            self.base_msg.clone(),
+            self.status_notify.clone(),
+            self.hold_heartbeats,
+        )
+        .in_current_span();
+
+        self.subjects
+            .build_task()
+            .name("manage_subject")
+            .spawn(manage);
+        self.subject_added.notify_one();
+    }
+
+    async fn join_one(&mut self) -> Result<Id, Box<dyn std::any::Any + std::marker::Send>> {
+        if self.subjects.is_empty() {
+            self.subject_added.notified().await;
+        };
+
+        self.subjects
+            .join_one()
+            .await
+            .unwrap()
+            .map_err(|e| e.into_panic())
+    }
+}
+
 /// look for new subjects in the chart and register them
 #[instrument(skip_all)]
 pub async fn instruct<O: Order>(
@@ -188,42 +241,35 @@ pub async fn instruct<O: Order>(
     hold_heartbeats: bool,
 ) {
     let mut commit_idx = Commited::new(commit_notify, &state);
-    let base_msg = RequestGen::new(state.clone(), term, members);
-
-    let mut subjects = JoinSet::new();
-    let mut add_subject = |id, addr, commit_idx: &mut Commited<O>| {
-        let broadcast_rx = orders.subscribe();
-        let append_updates = commit_idx.track_subject();
-
-        let manage = manage_subject(
-            id,
-            addr,
-            broadcast_rx,
-            append_updates,
-            base_msg.clone(),
-            status_notify.clone(),
-            hold_heartbeats,
-        )
-        .in_current_span();
-        subjects.build_task().name("manage_subject").spawn(manage);
+    let mut subjects = Subjects {
+        subjects: JoinSet::new(),
+        subject_added: Notify::new(),
+        orders,
+        base_msg: RequestGen::new(state.clone(), term, members),
+        status_notify,
+        hold_heartbeats,
     };
 
     let mut notify = members.notify();
     let mut adresses: HashSet<_> = members.adresses().into_iter().collect();
     for (id, addr) in adresses.iter().cloned() {
-        add_subject(id, addr, &mut commit_idx)
+        subjects.add(id, addr, &mut commit_idx);
     }
 
     loop {
-        let recoverd = tokio::select! {
-            res = notify.recv_new() => res,
+        tokio::select! {
+            recoverd = notify.recv_new() => {
+                let (id, addr) = recoverd.unwrap();
+                let is_new = adresses.insert((id, addr));
+                if is_new {
+                    subjects.add(id, addr, &mut commit_idx);
+                }
+            },
+            down = subjects.join_one() => {
+                let down = down.expect("manage subject panicked!");
+                members.forget_impl(down);
+            }
             _ = commit_idx.maintain() => unreachable!(),
-        };
-
-        let (id, addr) = recoverd.unwrap();
-        let is_new = adresses.insert((id, addr));
-        if is_new {
-            add_subject(id, addr, &mut commit_idx)
         }
     }
 }

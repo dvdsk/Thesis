@@ -1,7 +1,7 @@
-use std::net::SocketAddr;
 use crate::{Chart, Id};
 use async_trait::async_trait;
 use std::fmt::Debug;
+use std::net::SocketAddr;
 
 #[async_trait]
 pub trait SourceNotify {
@@ -23,6 +23,10 @@ pub trait Source {
     fn notify(&mut self) -> Self::Notify;
     fn our_id(&self) -> Id;
     fn adresses(&mut self) -> Vec<(Id, SocketAddr)>;
+    fn forget(&self, id: Id) {
+        self.forget_impl(id)
+    }
+    fn forget_impl(&self, id: Id);
 }
 
 impl Source for Chart {
@@ -36,5 +40,8 @@ impl Source for Chart {
     }
     fn adresses(&mut self) -> Vec<(Id, SocketAddr)> {
         self.nth_addr_vec::<0>()
+    }
+    fn forget_impl(&self, id: Id) {
+        Chart::forget(self, id)
     }
 }
