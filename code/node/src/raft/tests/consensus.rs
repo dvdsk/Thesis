@@ -1,6 +1,6 @@
 use color_eyre::Result;
 use futures::stream;
-use tracing::warn;
+use tracing::{warn, instrument};
 use std::collections::HashMap;
 use std::net;
 use std::sync::Arc;
@@ -110,6 +110,7 @@ async fn spread_order() -> Result<()> {
 
 type Queue = Arc<Mutex<Receiver<Order>>>;
 
+#[instrument()]
 async fn setup(
     n: u64,
 ) -> (
@@ -138,6 +139,7 @@ async fn setup(
     (nodes, orders, curr_pres, guard)
 }
 
+#[instrument(skip(nodes, orders, curr_pres))]
 async fn add_new_node(
     id: Id,
     nodes: &mut HashMap<u64, TestAppendNode>,
