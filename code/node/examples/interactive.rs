@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::net::{IpAddr, Ipv4Addr};
 use std::path::PathBuf;
+use std::str::FromStr;
 
 use color_eyre::eyre::Result;
 use mktemp::Temp;
@@ -96,17 +97,74 @@ async fn manage_cluster() {
     }
 }
 
+type Client = client::Client<client::ChartNodes<3, 2>>;
+
+async fn client_action(client: &mut Client, buffer: String) {
+    let mut args = buffer.split(" ");
+    let cmd = args.next();
+    let path = args
+        .next()
+        .map(str::trim)
+        .map(PathBuf::from)
+        .expect("each argument needs a path");
+    let bytes = args
+        .next()
+        .map(usize::from_str)
+        .map(|r| r.expect("bytes needs to be an unsigned int"));
+
+    match cmd {
+        Some("list") => println!("list: {:?}", client.list(path).await),
+        Some("create") => client.create_file(path).await,
+        Some("read") => {
+            let mut file = client.open_readable(path).await;
+            let mut data = vec![0u8; bytes.expect("read needs bytes as third arg")];
+            file.read(&mut data).await;
+        }
+        Some("write") => {
+            let mut file = client.open_writeable(path).await;
+            let data = vec![42u8; bytes.expect("write needs bytes as third arg")];
+            file.write(&data).await;
+        }
+        _ => panic!("invalid command: {cmd:?}"),
+    }
+}
+
+async fn cluster_action(conn: &mut TcpStream, buffer: String) {
+    let command = buffer.chars().next().unwrap();
+    let id: u8 = buffer.trim()[1..].parse().unwrap();
+    let msg = [command as u8, id];
+    conn.write_all(&msg).await.unwrap();
+}
+
 async fn control_cluster() -> Result<()> {
+    let nodes = client::ChartNodes::<3, 2>::new(8080);
+    let mut client = client::Client::new(nodes);
+
     let mut conn = TcpStream::connect("127.0.0.1:4242").await.unwrap();
+
     loop {
-        println!("send a command to the cluster manager, <k,r,a><an id>");
+        println!(
+            "\nsend a command to the cluster manager
+    k<id>: kill node with the given id
+    r<id>: ressurect the node with id (must be killed first!)
+    a<id>: add a new node with id (make sure its a unique id!)
+    
+    interact with the cluster
+    list <path>: list files in this dir and any subdir
+    create <path>: makes a new file on the cluster
+    read <path> <bytes>: makes a new file on the cluster
+    write <path> <bytes>: makes a new file on the cluster
+        "
+        );
+
         let mut buffer = String::new();
         let stdin = std::io::stdin(); // We get `Stdin` here.
         stdin.read_line(&mut buffer)?;
-        let command = buffer.chars().next().unwrap();
-        let id: u8 = buffer.trim()[1..].parse().unwrap();
-        let msg = [command as u8, id];
-        conn.write_all(&msg).await.unwrap();
+        if buffer.contains(" ") {
+            client_action(&mut client, buffer).await;
+        } else {
+            cluster_action(&mut conn, buffer).await;
+        }
     }
 }
 
@@ -116,10 +174,11 @@ async fn main() {
         Some(arg) => arg,
         None => {
             println!("pass one argument, c (cluster) or r (remote)");
-            return
+            return;
         }
     };
 
+    println!("setting up log analyzer/collector (jeager)");
     start_jeager::start_if_not_running(runtime_dir()).await;
     crate::util::setup_tracing(arg.clone(), IpAddr::V4(Ipv4Addr::LOCALHOST), 10);
     println!("logging setup completed");

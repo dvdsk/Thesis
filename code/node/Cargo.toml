@@ -13,8 +13,6 @@ time = { version = "0.3", features = ["serde"] }
 num-traits = "0.2"
 derivative = "2"
 
-# for now we depend on this PR to give joinset tasks names
-# note: also change in ../protocol
 tokio = { version = "^1.19.1", features = ["macros", "net", "time", "rt-multi-thread", "tracing", "sync"] }
 futures = "0.3"
 async-trait = "0.1"
@@ -41,6 +39,7 @@ serde = { version = "1", features = ["derive"] }
 protocol = { path = "../protocol" }
 
 [dev-dependencies]
+client = { path = "../client" }
 start-jeager = { path = "../start-jeager" }
 socket2 = "0.4"
 mktemp = "0.4"
