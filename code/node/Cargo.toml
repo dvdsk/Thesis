@@ -19,7 +19,7 @@ tokio = { version = "^1.19.1", features = ["macros", "net", "time", "rt-multi-th
 futures = "0.3"
 async-trait = "0.1"
 
-tracing = { version = "0.1", features = ["max_level_debug", "release_max_level_error"] }
+tracing = { version = "0.1", features = ["release_max_level_error"] }
 tracing-error = "0.2"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tracing-opentelemetry = { version = "0.17" }

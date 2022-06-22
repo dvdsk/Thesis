@@ -11,10 +11,10 @@ use tokio::net::TcpStream;
 use tokio::sync::broadcast;
 use tokio::sync::mpsc;
 use tokio::task::JoinSet;
+use tracing::Instrument;
 use tracing::debug;
 use tracing::info;
 use tracing::instrument;
-use tracing::instrument::WithSubscriber;
 use tracing::warn;
 
 use crate::president::subjects;
@@ -87,6 +87,7 @@ pub struct TestVoteNode {
 }
 
 impl TestVoteNode {
+    #[instrument(skip(curr_pres))]
     pub async fn new(
         id: u64,
         cluster_size: u16,
@@ -124,13 +125,13 @@ impl TestVoteNode {
             .spawn(discovery::maintain(chart.clone()));
 
         let handle_incoming =
-            raft::handle_incoming(listener, state.clone()).with_current_subscriber();
+            raft::handle_incoming(listener, state.clone()).in_current_span();
         tasks.build_task().name("incoming").spawn(handle_incoming);
         let succesion =
-            raft::succession(chart.clone(), cluster_size, state.clone()).with_current_subscriber();
+            raft::succession(chart.clone(), cluster_size, state.clone()).in_current_span();
         tasks.build_task().name("succession").spawn(succesion);
         let president = heartbeat_while_pres(chart.clone(), state, order_rx, debug_tx, curr_pres)
-            .with_current_subscriber();
+            .in_current_span();
         tasks.build_task().name("president").spawn(president);
 
         Ok((
@@ -188,7 +189,7 @@ pub async fn handle_incoming(listener: &mut TcpListener, log: LogWriter<Order>) 
     let mut request_handlers = JoinSet::new();
     loop {
         let (conn, _addr) = listener.accept().await.unwrap();
-        let handle = handle_conn(conn, log.clone()).with_current_subscriber();
+        let handle = handle_conn(conn, log.clone()).in_current_span();
         request_handlers
             .build_task()
             .name("president msg conn")
@@ -208,8 +209,7 @@ pub async fn president(
     loop {
         let term = wait_till_pres(&mut orders, &mut tx).await;
         let _drop_guard = curr_pres.set(chart.our_id());
-
-        info!("id: {} became president, term: {term}", chart.our_id());
+        info!("became president, term: {term}");
 
         let (broadcast, _) = broadcast::channel(16);
         let (tx, commit_notify) = mpsc::channel(16);
@@ -234,7 +234,6 @@ pub async fn president(
         }
 
         let load_notify = MockStatusNotifier;
-        info!("id: {} became president, term: {term}", chart.our_id());
 
         let instruct = subjects::instruct(
             &mut chart,
@@ -243,7 +242,7 @@ pub async fn president(
             load_notify,
             state.clone(),
             term,
-            true,
+            false,
         );
 
         tokio::select! {
@@ -262,6 +261,7 @@ pub struct TestAppendNode {
 
 impl TestAppendNode {
     /// the returned mpsc::tx must be recv-ed from actively
+    #[instrument(skip(curr_pres))]
     pub async fn new(
         id: u64,
         cluster_size: u16,
@@ -301,13 +301,15 @@ impl TestAppendNode {
             .spawn(discovery::maintain(chart.clone()));
 
         let handle_incoming =
-            raft::handle_incoming(pres_listener, state.clone()).with_current_subscriber();
+            raft::handle_incoming(pres_listener, state.clone()).in_current_span();
         tasks.build_task().name("incoming").spawn(handle_incoming);
+
         let succesion =
-            raft::succession(chart.clone(), cluster_size, state.clone()).with_current_subscriber();
+            raft::succession(chart.clone(), cluster_size, state.clone()).in_current_span();
         tasks.build_task().name("succesion").spawn(succesion);
+
         let president = president(chart, state, order_rx, debug_tx, curr_pres, req_listener)
-            .with_current_subscriber();
+            .in_current_span();
         tasks.build_task().name("president").spawn(president);
 
         Ok((
