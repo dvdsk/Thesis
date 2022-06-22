@@ -1,6 +1,7 @@
 use std::net::SocketAddr;
 use std::ops::Range;
 use std::path::PathBuf;
+use std::time::Duration;
 
 use time::OffsetDateTime;
 use serde::{Deserialize, Serialize};
@@ -54,6 +55,17 @@ pub struct Lease {
     pub area: Range<u64>,
 }
 
+impl Lease {
+    pub fn expires_in(&self) -> Duration {
+        let dur = self.expires - OffsetDateTime::now_utc();
+        if dur.is_negative() {
+            Duration::from_secs(0)
+        } else {
+            dur.unsigned_abs()
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub enum Response {
     List(Vec<PathBuf>),
@@ -78,23 +90,3 @@ pub enum Response {
     /// Highest commit index
     HighestCommited(Idx),
 }
-
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
-
-//     #[test]
-//     fn serialized_request_size() {
-//         use Request::*;
-
-//         let test_cases = vec![
-//             (20, OpenReadOnly("test".into(), Existence::Needed)),
-//             (25, OpenReadOnly("test/test".into(), Existence::Allowed)),
-//         ];
-
-//         for (size, obj) in test_cases {
-//             let v: Vec = bincode::serialize(&obj).unwrap();
-//             assert_eq!(size, v.len())
-//         }
-//     }
-// }

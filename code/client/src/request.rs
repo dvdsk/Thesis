@@ -1,12 +1,12 @@
 use std::io;
 use std::net::SocketAddr;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use futures::{SinkExt, TryStreamExt};
 use protocol::connection::{self, MsgStream};
 use protocol::{Request, Response};
 use tokio::net::TcpStream;
-use tracing::warn;
+use tracing::{warn, info, instrument};
 
 use super::Ministry;
 use crate::random_node::RandomNode;
@@ -44,6 +44,7 @@ async fn connect(initial_addr: Option<SocketAddr>, nodes: &impl RandomNode) -> C
 }
 
 impl<T: RandomNode> super::Client<T> {
+    #[instrument(skip(self))]
     async fn send_request(
         &mut self,
         path: &Path,
@@ -80,6 +81,7 @@ impl<T: RandomNode> super::Client<T> {
         }
     }
 
+    #[instrument(skip(self))]
     pub async fn follow_up_on_ticket(&mut self, path: &Path) -> Result<(), RequestError> {
         let msg = self.conn.as_mut().unwrap().stream.try_next().await;
         match msg {
@@ -116,19 +118,18 @@ impl<T: RandomNode> super::Client<T> {
         }
     }
 
-    pub(super) async fn request(
+    #[instrument(skip(self))]
+    pub(super) async fn request<R: FromResponse>(
         &mut self,
         path: &Path,
         req: Request,
         needs_minister: bool,
-    ) -> Result<(), RequestError> {
+    ) -> Result<R, RequestError> {
         loop {
             let ministry = self.send_request(path, &req, needs_minister).await;
             let response = self.conn.as_mut().unwrap().stream.try_next().await;
             match response {
-                Ok(Some(Response::Committed)) => return Ok(()),
                 Ok(Some(Response::NotCommitted)) => (), // will trigger a retry
-                Ok(Some(Response::Done)) => return Ok(()),
                 Ok(Some(Response::Ticket { idx })) => {
                     self.ticket = Some(Ticket {
                         idx,
@@ -136,11 +137,12 @@ impl<T: RandomNode> super::Client<T> {
                         path: path.to_owned(),
                     });
                     match self.follow_up_on_ticket(path).await {
-                        Ok(_) => return Ok(()),
+                        Ok(_) => return Ok(R::from_response(Response::Done)),
                         Err(_) => continue, // send the request again
                     }
                 }
                 Ok(Some(Response::Redirect { addr, subtree })) => {
+                    info!("redirected to: {addr:?}");
                     self.map.insert(Ministry {
                         minister: Some(addr),
                         clerk: None,
@@ -148,6 +150,7 @@ impl<T: RandomNode> super::Client<T> {
                     });
                     continue;
                 }
+                Ok(Some(response)) => return Ok(R::from_response(response)),
                 Ok(None) => {
                     warn!("Connection was closed ");
                     if let Some(mut updated) = ministry {
@@ -166,3 +169,33 @@ impl<T: RandomNode> super::Client<T> {
         }
     }
 }
+
+pub(super) trait FromResponse {
+    fn from_response(resp: Response) -> Self;
+}
+
+macro_rules! from_response {
+    ([$( $re:ident ),+], $ret:ty) => {
+        impl FromResponse for $ret {
+            fn from_response(resp: Response) -> Self {
+                match resp {
+                    $(Response::$re(inner) => inner,)+
+                    _ => panic!("invalid response, expected Done got: {resp:?}"),
+                }
+            }
+        }
+    };
+}
+
+impl FromResponse for () {
+    fn from_response(resp: Response) -> Self {
+        if let Response::Done = resp {
+            ()
+        } else {
+            panic!("invalid response, expected Done got: {resp:?}");
+        }
+    }
+}
+
+from_response!([List], Vec<PathBuf>);
+from_response!([WriteLease, ReadLease], protocol::Lease);
