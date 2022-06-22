@@ -14,15 +14,16 @@ use tokio::task::JoinSet;
 use tracing::debug;
 use tracing::info;
 use tracing::instrument;
+use tracing::instrument::WithSubscriber;
 use tracing::warn;
 
-use crate::Id;
-use crate::president::Order;
 use crate::president::subjects;
-use crate::raft::LogWriter;
+use crate::president::Order;
 use crate::raft;
+use crate::raft::LogWriter;
 use crate::raft::State;
 use crate::util;
+use crate::Id;
 use crate::Idx;
 
 use super::util as test_util;
@@ -122,24 +123,15 @@ impl TestVoteNode {
             .name("discovery")
             .spawn(discovery::maintain(chart.clone()));
 
-        tasks
-            .build_task()
-            .name("incoming")
-            .spawn(raft::handle_incoming(listener, state.clone()));
-        tasks
-            .build_task()
-            .name("succession")
-            .spawn(raft::succession(chart.clone(), cluster_size, state.clone()));
-        tasks
-            .build_task()
-            .name("president")
-            .spawn(heartbeat_while_pres(
-                chart.clone(),
-                state,
-                order_rx,
-                debug_tx,
-                curr_pres,
-            ));
+        let handle_incoming =
+            raft::handle_incoming(listener, state.clone()).with_current_subscriber();
+        tasks.build_task().name("incoming").spawn(handle_incoming);
+        let succesion =
+            raft::succession(chart.clone(), cluster_size, state.clone()).with_current_subscriber();
+        tasks.build_task().name("succession").spawn(succesion);
+        let president = heartbeat_while_pres(chart.clone(), state, order_rx, debug_tx, curr_pres)
+            .with_current_subscriber();
+        tasks.build_task().name("president").spawn(president);
 
         Ok((
             Self {
@@ -157,7 +149,6 @@ async fn test_req(
     log: &mut LogWriter<Order>,
     stream: &mut MsgStream<Msg, Reply>,
 ) -> Option<Reply> {
-
     debug!("appending Test({n}) to log");
     let ticket = match partial {
         Some(idx) => log.re_append(Order::Test(n), idx).await,
@@ -178,7 +169,10 @@ async fn handle_conn(stream: TcpStream, mut _log: LogWriter<Order>) {
         let final_reply = match msg {
             ClientReq(_) => Some(GoAway),
             #[cfg(test)]
-            Test { n, follow_up: partial } => test_req(n, partial, &mut _log, &mut stream).await,
+            Test {
+                n,
+                follow_up: partial,
+            } => test_req(n, partial, &mut _log, &mut stream).await,
         };
 
         if let Some(reply) = final_reply {
@@ -194,8 +188,11 @@ pub async fn handle_incoming(listener: &mut TcpListener, log: LogWriter<Order>) 
     let mut request_handlers = JoinSet::new();
     loop {
         let (conn, _addr) = listener.accept().await.unwrap();
-        let handle = handle_conn(conn, log.clone());
-        request_handlers.build_task().name("president msg conn").spawn(handle);
+        let handle = handle_conn(conn, log.clone()).with_current_subscriber();
+        request_handlers
+            .build_task()
+            .name("president msg conn")
+            .spawn(handle);
     }
 }
 
@@ -302,23 +299,16 @@ impl TestAppendNode {
             .build_task()
             .name("discovery")
             .spawn(discovery::maintain(chart.clone()));
-        tasks
-            .build_task()
-            .name("incoming")
-            .spawn(raft::handle_incoming(pres_listener, state.clone()));
-        tasks.build_task().name("succesion").spawn(raft::succession(
-            chart.clone(),
-            cluster_size,
-            state.clone(),
-        ));
-        tasks.build_task().name("president").spawn(president(
-            chart,
-            state,
-            order_rx,
-            debug_tx,
-            curr_pres,
-            req_listener,
-        ));
+
+        let handle_incoming =
+            raft::handle_incoming(pres_listener, state.clone()).with_current_subscriber();
+        tasks.build_task().name("incoming").spawn(handle_incoming);
+        let succesion =
+            raft::succession(chart.clone(), cluster_size, state.clone()).with_current_subscriber();
+        tasks.build_task().name("succesion").spawn(succesion);
+        let president = president(chart, state, order_rx, debug_tx, curr_pres, req_listener)
+            .with_current_subscriber();
+        tasks.build_task().name("president").spawn(president);
 
         Ok((
             Self {
@@ -376,7 +366,6 @@ impl TestAppendNode {
         order: Order,
         partial: Option<Idx>,
     ) -> Result<IncompleteOrder, &'static str> {
-
         let stream = TcpStream::connect(("127.0.0.1", self.req_port))
             .await
             .unwrap();
