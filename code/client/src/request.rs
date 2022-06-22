@@ -1,11 +1,13 @@
 use std::io;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use futures::{SinkExt, TryStreamExt};
 use protocol::connection::{self, MsgStream};
 use protocol::{Request, Response};
 use tokio::net::TcpStream;
+use tokio::time::sleep;
 use tracing::{warn, info, instrument};
 
 use super::Ministry;
@@ -75,6 +77,7 @@ impl<T: RandomNode> super::Client<T> {
                 Ok(_) => return ministry.cloned(),
                 Err(e) => {
                     warn!("Could not send request, error: {e:?}");
+                    sleep(Duration::from_millis(100)).await;
                     continue;
                 }
             }

@@ -65,7 +65,7 @@ impl<'a, T: RandomNode> ReadableFile<'a, T> {
                         path: self.path.clone(),
                         range: self.pos..buf.len() as u64,
                     },
-                    true,
+                    false,
                 )
                 .await
                 .unwrap();
@@ -156,7 +156,7 @@ impl<T: RandomNode> Client<T> {
     /// committed the ticket member will be set to allow future resuming,
     /// in case of node failure.
     pub async fn list(&mut self, path: PathBuf) -> Vec<PathBuf> {
-        self.request(&path, Request::List(path.clone()), true)
+        self.request(&path, Request::List(path.clone()), false)
             .await
             .unwrap()
     }
