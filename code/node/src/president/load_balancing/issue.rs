@@ -1,6 +1,7 @@
 use crate::Id;
 use std::cmp::Ordering;
 use std::collections::{BinaryHeap, HashMap, HashSet};
+use std::fmt;
 use std::path::PathBuf;
 
 /// the shared raft log/state determines the correct cluster state
@@ -16,12 +17,20 @@ pub struct Issues {
     by_employee: HashMap<Id, Issue>,
 }
 
+impl fmt::Debug for Issues {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_list()
+            .entries(self.by_priority.iter())
+            .finish()
+    }
+}
+
 impl Issues {
-    pub fn add(&mut self, issue: Issue) {
+    pub(super) fn add(&mut self, issue: Issue) {
         self.by_priority.push(issue.clone());
         self.active.insert(issue);
     }
-    pub fn remove_worst(&mut self) -> Option<Issue> {
+    pub(super) fn remove_worst(&mut self) -> Option<Issue> {
         let mut worst = self.by_priority.pop()?;
         while !self.active.remove(&worst) {
             worst = self.by_priority.pop()?;
@@ -29,13 +38,17 @@ impl Issues {
         Some(worst)
     }
     /// returns true
-    pub fn solved_by_up(&mut self, employee: Id) -> bool {
+    pub(super) fn solved_by_up(&mut self, employee: Id) -> bool {
         if let Some(issue) = self.by_employee.remove(&employee) {
             assert!(self.active.remove(&issue));
             true
         } else {
             false
         }
+    }
+
+    pub(super) fn is_empty(&self) -> bool {
+        self.active.is_empty()
     }
 }
 

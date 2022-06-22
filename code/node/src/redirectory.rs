@@ -80,7 +80,6 @@ fn insert_sorted(trees: &mut Vec<(PathBuf, Staff)>, path: PathBuf, staff: Staff)
     trees.insert(idx, (path, staff));
 }
 
-// TODO iedereen moet een redirectory
 impl ReDirectory {
     pub fn from_committed(state: &State<Order>) -> Self {
         let mut trees = Vec::new();

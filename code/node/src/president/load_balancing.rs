@@ -1,6 +1,8 @@
 use async_trait::async_trait;
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::time::Duration;
+use tokio::time::timeout;
 
 use tokio::sync::mpsc;
 use tracing::{info, instrument, warn};
@@ -80,6 +82,7 @@ impl LoadBalancer {
 impl LoadBalancer {
     async fn initialize(mut self, state: &raft::State<Order>) -> Init {
         let staffing = self.organise_staffing(state).await;
+
         Init {
             chart: self.chart,
             log_writer: self.log_writer,
@@ -87,7 +90,7 @@ impl LoadBalancer {
             staffing,
             idle: HashMap::new(),
             _policy: self.policy,
-            issues: Default::default(),
+            issues: Issues::default(),
         }
     }
 
@@ -155,6 +158,8 @@ struct Init {
 
 impl Init {
     pub async fn run(&mut self) {
+        self.check_staffing().await;
+
         loop {
             // wait for a change to be able to solve existing issues or
             // for new issues to appear
@@ -164,6 +169,32 @@ impl Init {
             //   ( will need to join state_change with wait for new policy change )
             // OR
             self.solve_worst_issue().await;
+        }
+    }
+
+    async fn check_staffing(&mut self) {
+        let ministers = self.staffing.ministers.iter();
+        let clerks = self.staffing.clerks.iter();
+
+        // start with the assumption that all nodes are down
+        let needed: Vec<_> = ministers.chain(clerks).map(|(id, _)| id).copied().collect();
+        for id in needed {
+            self.node_down(id);
+        }
+
+        async fn process_current_state(init: &mut Init) {
+            while !init.issues.is_empty() {
+                init.process_state_changes().await;
+            }
+        }
+
+        const STARTUP_DUR: Duration = Duration::from_millis(200);
+        let res = timeout(STARTUP_DUR, process_current_state(self)).await;
+        if res.is_err() {
+            warn!(
+                "Not all needed nodes are up after startup, resulting issues: {:?}",
+                self.issues
+            )
         }
     }
 
@@ -195,6 +226,7 @@ impl Init {
         }
     }
 
+    /// cancel safe
     #[instrument(skip(self))]
     async fn process_state_changes(&mut self) {
         let event = self
