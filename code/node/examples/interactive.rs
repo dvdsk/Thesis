@@ -3,10 +3,10 @@ use std::net::{IpAddr, Ipv4Addr};
 use std::path::PathBuf;
 use std::str::FromStr;
 
-use color_eyre::eyre::Result;
+use color_eyre::eyre::{eyre, ContextCompat, Result};
 use mktemp::Temp;
 use node::util::runtime_dir;
-use node::Config;
+use node::{Config, WrapErr};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::task;
@@ -56,9 +56,6 @@ async fn local_cluster() -> Result<HashMap<u64, Task>> {
 }
 
 async fn manage_cluster() {
-    // console_subscriber::init();
-    util::setup_errors();
-
     let mut cluster = local_cluster().await.unwrap();
     let listener = TcpListener::bind("127.0.0.1:4242").await.unwrap();
     loop {
@@ -99,34 +96,37 @@ async fn manage_cluster() {
 
 type Client = client::Client<client::ChartNodes<3, 2>>;
 
-async fn client_action(client: &mut Client, buffer: String) {
+async fn client_action(client: &mut Client, buffer: String) -> Result<()> {
     let mut args = buffer.split(" ");
     let cmd = args.next();
     let path = args
         .next()
         .map(str::trim)
         .map(PathBuf::from)
-        .expect("each argument needs a path");
+        .wrap_err("each argument needs a path")?;
     let bytes = args
         .next()
+        .map(str::trim)
         .map(usize::from_str)
-        .map(|r| r.expect("bytes needs to be an unsigned int"));
+        .map(|r| r.wrap_err("bytes needs to be an unsigned int"));
 
     match cmd {
         Some("list") => println!("list: {:?}", client.list(path).await),
         Some("create") => client.create_file(path).await,
         Some("read") => {
             let mut file = client.open_readable(path).await;
-            let mut data = vec![0u8; bytes.expect("read needs bytes as third arg")];
-            file.read(&mut data).await;
+            let bytes = bytes.ok_or_else(|| eyre!("read needs bytes as third arg"))??;
+            // let mut data = vec![0u8; bytes];
+            file.read(&mut vec![0u8; bytes]).await;
         }
         Some("write") => {
             let mut file = client.open_writeable(path).await;
-            let data = vec![42u8; bytes.expect("write needs bytes as third arg")];
-            file.write(&data).await;
+            let bytes = bytes.ok_or_else(|| eyre!("read needs bytes as third arg"))??;
+            file.write(&vec![42u8; bytes]).await;
         }
         _ => panic!("invalid command: {cmd:?}"),
     }
+    Ok(())
 }
 
 async fn cluster_action(conn: &mut TcpStream, buffer: String) {
@@ -140,7 +140,9 @@ async fn control_cluster() -> Result<()> {
     let nodes = client::ChartNodes::<3, 2>::new(8080);
     let mut client = client::Client::new(nodes);
 
-    let mut conn = TcpStream::connect("127.0.0.1:4242").await.unwrap();
+    let mut conn = TcpStream::connect("127.0.0.1:4242")
+        .await
+        .wrap_err("Could not connect to cluster manager")?;
 
     loop {
         println!(
@@ -161,7 +163,7 @@ async fn control_cluster() -> Result<()> {
         let stdin = std::io::stdin(); // We get `Stdin` here.
         stdin.read_line(&mut buffer)?;
         if buffer.contains(" ") {
-            client_action(&mut client, buffer).await;
+            client_action(&mut client, buffer).await?;
         } else {
             cluster_action(&mut conn, buffer).await;
         }
@@ -169,12 +171,14 @@ async fn control_cluster() -> Result<()> {
 }
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<()> {
+    color_eyre::install().unwrap();
+
     let arg = match std::env::args().nth(1) {
         Some(arg) => arg,
         None => {
             println!("pass one argument, c (cluster) or r (remote)");
-            return;
+            return Ok(());
         }
     };
 
@@ -188,4 +192,5 @@ async fn main() {
         "r" => control_cluster().await.unwrap(),
         _ => println!("pass one argument, c (cluster) or r (remote)"),
     }
+    Ok(())
 }
