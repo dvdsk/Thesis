@@ -19,8 +19,8 @@ use super::{State, HB_PERIOD};
 
 mod source;
 pub use source::{Source, SourceNotify};
-mod comitted;
-use comitted::Commited;
+mod committed;
+use committed::Committed;
 mod request_gen;
 use request_gen::RequestGen;
 
@@ -187,7 +187,7 @@ struct Subjects<O: Order, N: StatusNotifier> {
 }
 
 impl<O: Order, N: StatusNotifier + 'static> Subjects<O, N> {
-    fn add(&mut self, id: Id, addr: SocketAddr, commit_idx: &mut Commited<'_, O>) {
+    fn add(&mut self, id: Id, addr: SocketAddr, commit_idx: &mut Committed<'_, O>) {
         let broadcast_rx = self.orders.subscribe();
         let append_updates = commit_idx.track_subject();
 
@@ -231,7 +231,7 @@ pub async fn instruct<O: Order>(
     state: State<O>,
     term: Term,
 ) {
-    let mut commit_idx = Commited::new(commit_notify, &state);
+    let mut commit_idx = Committed::new(commit_notify, &state);
     let mut subjects = Subjects {
         subjects: JoinSet::new(),
         subject_added: Notify::new(),
