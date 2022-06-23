@@ -54,7 +54,7 @@ async fn check_subtree(
 ) -> Result<(), Response> {
     use Request::*;
     match req {
-        List(path) => {
+        List(path) | Read { path, .. }=> {
             let (staff, subtree) = redirect.to_staff(path).await;
             Err(Response::Redirect {
                 staff: staff.for_client(),

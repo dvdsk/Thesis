@@ -107,7 +107,10 @@ async fn client_action(client: &mut Client, buffer: String) -> Result<()> {
     let bytes = args
         .next()
         .map(str::trim)
-        .map(usize::from_str)
+        .map(|s| {
+            let s = s.replace("_", "");
+            usize::from_str(&s)
+        })
         .map(|r| r.wrap_err("bytes needs to be an unsigned int"));
 
     match cmd {
@@ -154,8 +157,8 @@ async fn control_cluster() -> Result<()> {
     interact with the cluster
     list <path>: list files in this dir and any subdir
     create <path>: makes a new file on the cluster
-    read <path> <bytes>: makes a new file on the cluster
-    write <path> <bytes>: makes a new file on the cluster
+    read <path> <bytes>: (simulate) reading, use `_` for readability
+    write <path> <bytes>: (simulate) writing, use `_` for readability
         "
         );
 

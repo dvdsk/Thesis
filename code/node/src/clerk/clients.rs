@@ -35,8 +35,8 @@ impl Readers {
 
     async fn add(&self, key: AccessKey, notify: Arc<Notify>) {
         let mut map = self.0.lock().await;
-        map.insert(key, notify)
-            .expect("key inserted multiple times");
+        let existing = map.insert(key, notify);
+        assert!(existing.is_none(), "key inserted multiple times");
     }
 }
 
@@ -114,7 +114,7 @@ async fn handle_conn(
                 Ok(Response::Done)
             }
             Lock { path, range, key } => {
-                // for consistency this has to happen first, if we did it later new 
+                // for consistency this has to happen first, if we did it later new
                 // reads could be added while we are revoking the existing
                 locks.add(&mut dir, path.clone(), range.clone(), key).await;
                 let overlapping = dir.get_overlapping_reads(&path, &range).unwrap();
@@ -167,22 +167,22 @@ async fn read_lease(
     loop {
         let peek = stream.as_mut().peek();
         let revoked = notify.notified();
-        let timeout = sleep(raft::HB_TIMEOUT);
+        let timeout = sleep(protocol::LEASE_TIMEOUT);
 
-        let msg = tokio::select! {
+        let peeked_msg = tokio::select! {
             _ = revoked => break,
             _ = timeout => break,
             msg = peek => msg,
         };
 
-        match msg {
+        match peeked_msg {
             // recieving this before timeout means we dont drop it which
             // equals refreshing the lease
             Some(Ok(Request::RefreshLease)) => {
                 stream.next().await; // take the refresh cmd out
             }
             _e => {
-                warn!("error while holding read lease {_e:?}");
+                debug!("client canceld lease");
                 break;
             }
         }

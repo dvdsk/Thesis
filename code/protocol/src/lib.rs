@@ -9,6 +9,9 @@ use serde::{Deserialize, Serialize};
 pub mod connection;
 pub type Idx = u32;
 
+pub const LEASE_TIMEOUT: Duration = Duration::from_millis(100); // TODO move all raft timings here,
+                                                                // better yet make them non const
+
 pub trait Message<'de>: Serialize + Deserialize<'de> {
     fn from_buf(buf: &'de [u8]) -> Self {
         bincode::deserialize(buf).unwrap()

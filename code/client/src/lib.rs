@@ -1,16 +1,21 @@
+use std::ops::Range;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use protocol::{Lease, Request};
+use protocol::Request;
 
+mod lease;
 mod map;
 mod random_node;
 mod request;
 
+use lease::Lease;
 use map::{Map, Ministry};
 pub use random_node::{ChartNodes, RandomNode};
+
 use request::Connection;
 use tokio::time::{sleep, timeout};
+use tracing::instrument;
 
 const CLIENT_TIMEOUT: Duration = Duration::from_millis(500);
 
@@ -24,14 +29,45 @@ pub struct Client<T: RandomNode> {
     pub ticket: Option<Ticket>,
     map: Map,
     nodes: T,
-    conn: Option<Connection>,
+    pub conn: Option<Connection>,
 }
 
 pub struct ReadableFile<'a, T: RandomNode> {
     client: &'a mut Client<T>,
     path: PathBuf,
     pos: u64,
-    n_read: u64,
+}
+
+// speed in bytes per millisec
+async fn mock_data_plane_interaction(buf: &[u8], n_done: &mut usize, speed: usize) {
+    let block_dur: usize = 50; //milli seconds
+    let block_size: usize = speed * block_dur;
+    loop {
+        let left = buf.len() - *n_done;
+        if left == 0 {
+            return; // done (simulating) reading
+        }
+
+        let block = left.min(block_size);
+        let read_dur = block / speed;
+
+        // simulate reading a block by sleeping
+        sleep(Duration::from_millis(read_dur as u64)).await;
+        // todo simulate reading / writing by copying some bytes around
+        *n_done += block;
+    }
+}
+
+#[instrument(skip(buf))]
+async fn mock_read(buf: &mut [u8], n_read: &mut usize) {
+    let read_speed: usize = 500_000_000 / 1000; // 500 mb/s in bytes per millisec
+    mock_data_plane_interaction(buf, n_read, read_speed).await;
+}
+
+#[instrument(skip(buf))]
+async fn mock_write(buf: &[u8], n_written: &mut usize) {
+    let write_speed: usize = 200_000_000 / 1000; // 500 mb/s in bytes per millisec
+    mock_data_plane_interaction(buf, n_written, write_speed).await;
 }
 
 impl<'a, T: RandomNode> ReadableFile<'a, T> {
@@ -39,43 +75,23 @@ impl<'a, T: RandomNode> ReadableFile<'a, T> {
         self.pos = pos;
     }
 
-    async fn mock_read(&mut self, buf: &mut [u8]) {
-        const BLOCK_DUR: u64 = 50; //milli seconds
-        const READ_SPEED: u64 = 500_000_000 / 1000; // 500 mb/s in bytes per millisec
-        const BLOCK_SIZE: u64 = READ_SPEED * BLOCK_DUR;
-        loop {
-            // simulate reading a block by sleeping
-            let left = buf.len() as u64 - self.n_read;
-            let block = left.min(BLOCK_SIZE);
-            let read_dur = block / READ_SPEED;
-
-            sleep(Duration::from_millis(read_dur)).await;
-            self.n_read += block;
-        }
-    }
-
     pub async fn read(&mut self, buf: &mut [u8]) {
-        self.n_read = 0;
-
+        let mut n_read = 0;
         loop {
-            let lease = self.client.request(
-                &self.path,
-                Request::Read {
-                    path: self.path.clone(),
-                    range: self.pos..buf.len() as u64,
-                },
-                false,
-            );
-            let lease: Lease = timeout(CLIENT_TIMEOUT, lease)
+            let range = Range {
+                start: self.pos + (n_read as u64),
+                end: buf.len() as u64,
+            };
+            let lease = Lease::get_read(self.client, &self.path, range);
+            let lease: Lease<_> = timeout(CLIENT_TIMEOUT, lease)
                 .await
                 .expect("client timed out")
                 .unwrap();
 
-            let time_left = lease.expires_in();
-            match timeout(time_left, self.mock_read(buf)).await {
-                Err(_) => (),    // timeout
-                Ok(_) => return, // read done
-            };
+            tokio::select! {
+                _ = lease.hold() => (),
+                _ = mock_read(buf, &mut n_read) => return,
+            }
         }
     }
 }
@@ -84,7 +100,6 @@ pub struct WritableFile<'a, T: RandomNode> {
     client: &'a mut Client<T>,
     path: PathBuf,
     pos: u64,
-    n_read: u64,
 }
 
 impl<'a, T: RandomNode> WritableFile<'a, T> {
@@ -92,41 +107,23 @@ impl<'a, T: RandomNode> WritableFile<'a, T> {
         self.pos = pos;
     }
 
-    async fn mock_write(&mut self, buf: &[u8]) {
-        const BLOCK_DUR: u64 = 50; //milli seconds
-        const WRITE_SPEED: u64 = 200_000_000 / 1000; // 200 mb/s in bytes per millisec
-        const BLOCK_SIZE: u64 = WRITE_SPEED * BLOCK_DUR;
-        loop {
-            // simulate reading a block by sleeping
-            let left = buf.len() as u64 - self.n_read;
-            let block = left.min(BLOCK_SIZE);
-            let read_dur = block / WRITE_SPEED;
-
-            sleep(Duration::from_millis(read_dur)).await;
-            self.n_read += block;
-        }
-    }
-
     pub async fn write(&mut self, buf: &[u8]) {
+        let mut n_written = 0;
         loop {
-            let lease = self.client.request(
-                &self.path,
-                Request::Read {
-                    path: self.path.clone(),
-                    range: self.pos..buf.len() as u64,
-                },
-                true,
-            );
-            let lease: Lease = timeout(CLIENT_TIMEOUT, lease)
+            let range = Range {
+                start: self.pos + (n_written as u64),
+                end: buf.len() as u64,
+            };
+            let lease = Lease::get_write(self.client, &self.path, range);
+            let lease: Lease<_> = timeout(CLIENT_TIMEOUT, lease)
                 .await
                 .expect("client timed out")
                 .unwrap();
 
-            let time_left = lease.expires_in();
-            match timeout(time_left, self.mock_write(buf)).await {
-                Err(_) => (),    // timeout
-                Ok(_) => return, // read done
-            };
+            tokio::select! {
+                _ = lease.hold() => (),
+                _ = mock_write(buf, &mut n_written) => return,
+            }
         }
     }
 }
@@ -171,7 +168,6 @@ impl<T: RandomNode> Client<T> {
             client: self,
             path,
             pos: 0,
-            n_read: 0,
         }
     }
     pub async fn open_readable<'a>(&'a mut self, path: PathBuf) -> ReadableFile<'a, T> {
@@ -179,7 +175,6 @@ impl<T: RandomNode> Client<T> {
             client: self,
             path,
             pos: 0,
-            n_read: 0,
         }
     }
 }

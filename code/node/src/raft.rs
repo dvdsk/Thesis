@@ -33,6 +33,7 @@ use self::state::{append, vote};
 use super::Chart;
 use succession::ElectionResult;
 
+// WARNING these should be synced with protocol
 const MUL: u64 = 5; // goverens duration of most timings, five seems to be the minimum
 pub(super) const CONN_RETRY_PERIOD: Duration = Duration::from_millis(20 * MUL);
 /// heartbeat timeout
