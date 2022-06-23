@@ -66,11 +66,17 @@ impl Lease {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct Staff {
+    pub minister: Option<SocketAddr>,
+    pub clerks: Vec<SocketAddr>,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub enum Response {
     List(Vec<PathBuf>),
     /// wrong subtree redirect client to correct clerk/minister
-    Redirect { subtree: PathBuf, addr: SocketAddr },
+    Redirect { subtree: PathBuf, staff: Staff },
     /// change not yet done, starting comit with index
     Ticket { idx: Idx },
     /// affirming awnser to `Request::IsCommitted`

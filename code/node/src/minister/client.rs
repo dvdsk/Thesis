@@ -12,7 +12,7 @@ use protocol::{Request, Response};
 use time::OffsetDateTime;
 use tokio::task::JoinSet;
 use tokio::time::{sleep_until, timeout, timeout_at, Instant};
-use tracing::{debug, warn};
+use tracing::{debug, warn, instrument};
 
 use crate::directory::{self, Directory};
 use crate::raft::{self, LogWriter, HB_TIMEOUT};
@@ -57,14 +57,16 @@ async fn check_subtree(
         List(path) => {
             let (staff, subtree) = redirect.to_staff(path).await;
             Err(Response::Redirect {
-                addr: staff.minister.client_addr(),
+                staff: staff.for_client(),
                 subtree,
             })
         }
-        Create(path) | IsCommitted { path, .. } if !path.starts_with(&our_subtree) => {
+        Create(path) | Write { path, .. } | IsCommitted { path, .. }
+            if !path.starts_with(&our_subtree) =>
+        {
             let (staff, subtree) = redirect.to_staff(path).await;
             Err(Response::Redirect {
-                addr: staff.minister.client_addr(),
+                staff: staff.for_client(),
                 subtree,
             })
         }
@@ -88,7 +90,7 @@ async fn handle_conn(
     let stream = stream.peekable();
     pin_mut!(stream);
     while let Ok(Some(req)) = stream.try_next().await {
-        debug!("minister got request: {req:?}");
+        debug!("got request: {req:?}");
         let res = check_subtree(&our_subtree, &req, &redirect).await;
         let final_response = match res {
             Err(redirect) => Ok(redirect),
@@ -137,6 +139,7 @@ impl<'a> Drop for WriteLease<'a> {
 
 /// offers a write lease for some period, the client should immediatly queue
 /// for another write lease to keep it
+#[instrument(err)]
 async fn write_lease(
     path: PathBuf,
     mut stream: ClientStream<'_>,
@@ -187,6 +190,7 @@ async fn write_lease(
     Ok(Response::LeaseDropped)
 }
 
+#[instrument(err)]
 async fn create_file(
     path: PathBuf,
     stream: &mut ClientStream<'_>,

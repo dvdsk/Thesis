@@ -71,6 +71,7 @@ impl Directory {
         }
     }
 
+    #[instrument(skip(self))]
     pub fn update(&mut self, order: minister::Order) {
         use crate::minister::Order::*;
 

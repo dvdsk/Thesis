@@ -52,21 +52,20 @@ impl<T: RandomNode> super::Client<T> {
         path: &Path,
         req: &Request,
         needs_minister: bool,
-    ) -> Option<Ministry> {
+    ) {
         let Self {
             map, conn, nodes, ..
         } = self;
         loop {
-            let ministry = map.ministry_for(path);
             let node = match needs_minister {
-                true => ministry.map(|m| m.minister).flatten(),
-                false => ministry.map(|m| m.clerk).flatten(),
+                true => map.minister_for(path),
+                false => map.clerk_for(path),
             };
 
             let conn = match (node, conn.as_mut()) {
                 (None, Some(conn)) => conn,
                 (Some(addr), Some(conn)) if conn.peer == addr => conn,
-                (addr, _) => {
+                (addr, _) => { // hint addr is not bound, covers None case
                     *conn = Some(connect(addr, nodes).await);
                     conn.as_mut().unwrap()
                 }
@@ -74,9 +73,10 @@ impl<T: RandomNode> super::Client<T> {
 
             let res = conn.stream.send(req.clone()).await;
             match res {
-                Ok(_) => return ministry.cloned(),
+                Ok(_) => return,
                 Err(e) => {
                     warn!("Could not send request, error: {e:?}");
+                    map.invalidate(path, conn.peer);
                     sleep(Duration::from_millis(100)).await;
                     continue;
                 }
@@ -99,22 +99,18 @@ impl<T: RandomNode> super::Client<T> {
             idx: ticket.idx,
         };
         loop {
-            let ministry = self.send_request(path, &req, ticket.needs_minister).await;
+            self.send_request(path, &req, ticket.needs_minister).await;
             let response = self.conn.as_mut().unwrap().stream.try_next().await;
             match response {
                 Ok(Some(Response::NotCommitted)) => return Err(RequestError::Uncommitted),
                 Ok(Some(Response::Committed)) => return Ok(()),
                 Ok(None) => {
                     warn!("Connection was closed ");
-                    let mut updated = ministry.unwrap();
-                    updated.minister = None;
-                    self.map.insert(updated);
+                    self.map.invalidate(path, self.conn.as_ref().unwrap().peer);
                 }
                 Err(e) => {
                     warn!("Error connecting: {e:?}");
-                    let mut updated = ministry.unwrap();
-                    updated.minister = None;
-                    self.map.insert(updated);
+                    self.map.invalidate(path, self.conn.as_ref().unwrap().peer);
                 }
                 _ => unreachable!(),
             }
@@ -129,7 +125,7 @@ impl<T: RandomNode> super::Client<T> {
         needs_minister: bool,
     ) -> Result<R, RequestError> {
         loop {
-            let ministry = self.send_request(path, &req, needs_minister).await;
+            self.send_request(path, &req, needs_minister).await;
             let response = self.conn.as_mut().unwrap().stream.try_next().await;
             match response {
                 Ok(Some(Response::NotCommitted)) => (), // will trigger a retry
@@ -144,11 +140,10 @@ impl<T: RandomNode> super::Client<T> {
                         Err(_) => continue, // send the request again
                     }
                 }
-                Ok(Some(Response::Redirect { addr, subtree })) => {
-                    info!("redirected to: {addr:?}");
+                Ok(Some(Response::Redirect { staff, subtree })) => {
+                    info!("updateing staff: {staff:?}");
                     self.map.insert(Ministry {
-                        minister: Some(addr),
-                        clerk: None,
+                        staff,
                         subtree,
                     });
                     continue;
@@ -156,17 +151,11 @@ impl<T: RandomNode> super::Client<T> {
                 Ok(Some(response)) => return Ok(R::from_response(response)),
                 Ok(None) => {
                     warn!("Connection was closed ");
-                    if let Some(mut updated) = ministry {
-                        updated.minister = None;
-                        self.map.insert(updated);
-                    }
+                    self.map.invalidate(path, self.conn.as_ref().unwrap().peer);
                 }
                 Err(e) => {
                     warn!("Error connecting: {e:?}");
-                    if let Some(mut updated) = ministry {
-                        updated.minister = None;
-                        self.map.insert(updated);
-                    }
+                    self.map.invalidate(path, self.conn.as_ref().unwrap().peer);
                 }
             }
         }

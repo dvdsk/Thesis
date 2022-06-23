@@ -84,7 +84,7 @@ async fn handle_conn(
     let stream = stream.peekable();
     pin_mut!(stream);
     while let Ok(Some(req)) = stream.try_next().await {
-        debug!("clerk got request: {req:?}");
+        debug!("got request: {req:?}");
 
         let final_response = match req {
             List(path) => Ok(Response::List(dir.list(&path))),
@@ -100,7 +100,7 @@ async fn handle_conn(
             IsCommitted { path, .. } | Write { path, .. } | Create(path) | Read { path, .. } => {
                 let (staff, subtree) = redirect.to_staff(&path).await;
                 Ok(Response::Redirect {
-                    addr: staff.minister.client_addr(),
+                    staff: staff.for_client(),
                     subtree,
                 })
             }

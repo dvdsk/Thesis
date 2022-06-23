@@ -23,6 +23,13 @@ impl Staff {
     pub fn len(&self) -> usize {
         self.clerks.len() + 1
     }
+
+    pub(crate) fn for_client(self) -> protocol::Staff {
+        protocol::Staff {
+            minister: Some(self.minister.client_addr()),
+            clerks: self.clerks.into_iter().map(|n| n.client_addr()).collect(),
+        }
+    }
 }
 
 #[derive(Derivative, Debug, Clone, Serialize, Deserialize)]
