@@ -1,5 +1,6 @@
 use instance_chart::{discovery, Chart, ChartBuilder};
 use rand::prelude::*;
+use tracing::instrument;
 use std::net::SocketAddr;
 use tokio::task::JoinSet;
 
@@ -37,6 +38,7 @@ impl<const N: usize, const IDX: usize> ChartNodes<N, IDX> {
 
 #[async_trait::async_trait]
 impl<const N: usize, const IDX: usize> RandomNode for ChartNodes<N, IDX> {
+    #[instrument(skip_all, ret)]
     async fn random_node(&self) -> SocketAddr {
         let mut notify = self.chart.notify(); // needed in case chart is empty
         let adresses = self.chart.nth_addr_vec::<IDX>();

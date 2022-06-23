@@ -30,6 +30,7 @@ impl Connection {
     }
 }
 
+#[instrument(skip(nodes))]
 async fn connect(initial_addr: Option<SocketAddr>, nodes: &impl RandomNode) -> Connection {
     let mut addr = match initial_addr {
         Some(addr) => addr,
@@ -62,21 +63,21 @@ impl<T: RandomNode> super::Client<T> {
                 false => map.clerk_for(path),
             };
 
-            let conn = match (node, conn.as_mut()) {
-                (None, Some(conn)) => conn,
-                (Some(addr), Some(conn)) if conn.peer == addr => conn,
+            match (node, conn.as_mut()) {
+                (None, Some(_conn)) => (),
+                (Some(addr), Some(conn)) if conn.peer == addr => (),
                 (addr, _) => { // hint addr is not bound, covers None case
                     *conn = Some(connect(addr, nodes).await);
-                    conn.as_mut().unwrap()
                 }
             };
 
-            let res = conn.stream.send(req.clone()).await;
+            let res = conn.as_mut().unwrap().stream.send(req.clone()).await;
             match res {
                 Ok(_) => return,
                 Err(e) => {
                     warn!("Could not send request, error: {e:?}");
-                    map.invalidate(path, conn.peer);
+                    let broken = conn.take().unwrap();
+                    map.invalidate(path, broken.peer);
                     sleep(Duration::from_millis(100)).await;
                     continue;
                 }
@@ -106,11 +107,13 @@ impl<T: RandomNode> super::Client<T> {
                 Ok(Some(Response::Committed)) => return Ok(()),
                 Ok(None) => {
                     warn!("Connection was closed ");
-                    self.map.invalidate(path, self.conn.as_ref().unwrap().peer);
+                    let broken = self.conn.take().unwrap();
+                    self.map.invalidate(path, broken.peer);
                 }
                 Err(e) => {
                     warn!("Error connecting: {e:?}");
-                    self.map.invalidate(path, self.conn.as_ref().unwrap().peer);
+                    let broken = self.conn.take().unwrap();
+                    self.map.invalidate(path, broken.peer);
                 }
                 _ => unreachable!(),
             }
@@ -151,11 +154,13 @@ impl<T: RandomNode> super::Client<T> {
                 Ok(Some(response)) => return Ok(R::from_response(response)),
                 Ok(None) => {
                     warn!("Connection was closed ");
-                    self.map.invalidate(path, self.conn.as_ref().unwrap().peer);
+                    let broken = self.conn.take().unwrap();
+                    self.map.invalidate(path, broken.peer);
                 }
                 Err(e) => {
                     warn!("Error connecting: {e:?}");
-                    self.map.invalidate(path, self.conn.as_ref().unwrap().peer);
+                    let broken = self.conn.take().unwrap();
+                    self.map.invalidate(path, broken.peer);
                 }
             }
         }

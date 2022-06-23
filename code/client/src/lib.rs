@@ -12,13 +12,14 @@ pub use random_node::{ChartNodes, RandomNode};
 use request::Connection;
 use tokio::time::{sleep, timeout};
 
+const CLIENT_TIMEOUT: Duration = Duration::from_millis(500);
+
 pub struct Ticket {
     idx: protocol::Idx,
     needs_minister: bool,
     path: PathBuf,
 }
 
-// TODO instance chart for same cluster discovery?
 pub struct Client<T: RandomNode> {
     pub ticket: Option<Ticket>,
     map: Map,
@@ -57,17 +58,17 @@ impl<'a, T: RandomNode> ReadableFile<'a, T> {
         self.n_read = 0;
 
         loop {
-            let lease: Lease = self
-                .client
-                .request(
-                    &self.path,
-                    Request::Read {
-                        path: self.path.clone(),
-                        range: self.pos..buf.len() as u64,
-                    },
-                    false,
-                )
+            let lease = self.client.request(
+                &self.path,
+                Request::Read {
+                    path: self.path.clone(),
+                    range: self.pos..buf.len() as u64,
+                },
+                false,
+            );
+            let lease: Lease = timeout(CLIENT_TIMEOUT, lease)
                 .await
+                .expect("client timed out")
                 .unwrap();
 
             let time_left = lease.expires_in();
@@ -83,7 +84,7 @@ pub struct WritableFile<'a, T: RandomNode> {
     client: &'a mut Client<T>,
     path: PathBuf,
     pos: u64,
-    n_read: u64
+    n_read: u64,
 }
 
 impl<'a, T: RandomNode> WritableFile<'a, T> {
@@ -108,17 +109,17 @@ impl<'a, T: RandomNode> WritableFile<'a, T> {
 
     pub async fn write(&mut self, buf: &[u8]) {
         loop {
-            let lease: Lease = self
-                .client
-                .request(
-                    &self.path,
-                    Request::Read {
-                        path: self.path.clone(),
-                        range: self.pos..buf.len() as u64,
-                    },
-                    true,
-                )
+            let lease = self.client.request(
+                &self.path,
+                Request::Read {
+                    path: self.path.clone(),
+                    range: self.pos..buf.len() as u64,
+                },
+                true,
+            );
+            let lease: Lease = timeout(CLIENT_TIMEOUT, lease)
                 .await
+                .expect("client timed out")
                 .unwrap();
 
             let time_left = lease.expires_in();
@@ -146,8 +147,10 @@ impl<T: RandomNode> Client<T> {
     /// committed the ticket member will be set to allow future resuming,
     /// in case of node failure.
     pub async fn create_file(&mut self, path: PathBuf) {
-        self.request(&path, Request::Create(path.clone()), true)
+        let create = self.request(&path, Request::Create(path.clone()), true);
+        timeout(CLIENT_TIMEOUT, create)
             .await
+            .expect("client timed out")
             .unwrap()
     }
 
@@ -156,8 +159,10 @@ impl<T: RandomNode> Client<T> {
     /// committed the ticket member will be set to allow future resuming,
     /// in case of node failure.
     pub async fn list(&mut self, path: PathBuf) -> Vec<PathBuf> {
-        self.request(&path, Request::List(path.clone()), false)
+        let list = self.request(&path, Request::List(path.clone()), false);
+        timeout(CLIENT_TIMEOUT, list)
             .await
+            .expect("client timed out")
             .unwrap()
     }
 
