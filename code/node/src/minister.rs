@@ -91,7 +91,7 @@ pub(crate) async fn work(
         id: our_id,
         ..
     } = state;
-    info!("started work as minister");
+    info!("started work as minister: {our_id}");
 
     let (register, mut clerks, clerks_copy) = clerks::Map::new(clerks, *our_id);
 
@@ -116,7 +116,6 @@ pub(crate) async fn work(
         subjects::EmptyNotifier,
         state.clone(),
         term,
-        true,
     )
     .in_current_span();
 

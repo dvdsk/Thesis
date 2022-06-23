@@ -44,6 +44,7 @@ async fn handle_pres_orders(
     }
 }
 
+#[instrument(skip_all)]
 async fn handle_minister_orders(orders: &mut ObserverLog<minister::Order>, mut dir: Directory) {
     loop {
         let order = orders.recv().await;

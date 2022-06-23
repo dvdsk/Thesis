@@ -19,8 +19,8 @@ use super::{State, HB_PERIOD};
 
 mod source;
 pub use source::{Source, SourceNotify};
-mod commited;
-use commited::Commited;
+mod comitted;
+use comitted::Commited;
 mod request_gen;
 use request_gen::RequestGen;
 
@@ -72,7 +72,6 @@ async fn manage_subject<O: Order>(
     mut appended: mpsc::Sender<u32>,
     mut req_gen: RequestGen<O>,
     status_notify: impl StatusNotifier,
-    send_heartbeats: bool,
 ) -> Id {
     loop {
         let mut stream = match timeout(SUBJECT_CONN_TIMEOUT, connect(&address)).await {
@@ -95,7 +94,6 @@ async fn manage_subject<O: Order>(
             &mut appended,
             &mut req_gen,
             &mut stream,
-            send_heartbeats,
         )
         .await;
         status_notify.subject_down(subject_id).await;
@@ -147,7 +145,6 @@ async fn replicate_orders<O: Order>(
     appended: &mut mpsc::Sender<u32>,
     req_gen: &mut RequestGen<O>,
     stream: &mut MsgStream<Reply, Msg<O>>,
-    no_heartbeats: bool,
 ) {
     let mut next_hb = Instant::now() + HB_PERIOD;
     sleep_until(next_hb).await;
@@ -158,9 +155,6 @@ async fn replicate_orders<O: Order>(
         let to_send = if req_gen.misses_logs() {
             debug!("sending missing logs at idx: {}", req_gen.next_idx);
             req_gen.append()
-        } else if no_heartbeats {
-            sleep_until(next_hb).await;
-            continue;
         } else {
             trace!("sending heartbeat");
             req_gen.heartbeat()
@@ -190,7 +184,6 @@ struct Subjects<O: Order, N: StatusNotifier> {
     orders: broadcast::Sender<O>,
     base_msg: RequestGen<O>,
     status_notify: N,
-    hold_heartbeats: bool,
 }
 
 impl<O: Order, N: StatusNotifier + 'static> Subjects<O, N> {
@@ -205,7 +198,6 @@ impl<O: Order, N: StatusNotifier + 'static> Subjects<O, N> {
             append_updates,
             self.base_msg.clone(),
             self.status_notify.clone(),
-            self.hold_heartbeats,
         )
         .in_current_span();
 
@@ -238,7 +230,6 @@ pub async fn instruct<O: Order>(
     status_notify: impl StatusNotifier + Clone + Sync + Send + 'static,
     state: State<O>,
     term: Term,
-    hold_heartbeats: bool,
 ) {
     let mut commit_idx = Commited::new(commit_notify, &state);
     let mut subjects = Subjects {
@@ -247,7 +238,6 @@ pub async fn instruct<O: Order>(
         orders,
         base_msg: RequestGen::new(state.clone(), term, members),
         status_notify,
-        hold_heartbeats,
     };
 
     let mut notify = members.notify();

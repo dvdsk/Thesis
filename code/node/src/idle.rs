@@ -69,7 +69,7 @@ async fn handle_conn(stream: TcpStream, redirect: ReDirectory) {
             | Read { path, .. } => {
                 let (staff, subtree) = redirect.to_staff(&path).await;
                 Response::Redirect {
-                    addr: staff.minister.client_addr(),
+                    staff: staff.for_client(),
                     subtree,
                 }
             }

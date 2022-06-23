@@ -65,7 +65,6 @@ async fn heartbeat_while_pres(
             status_notifier,
             state.clone(),
             term,
-            false,
         );
 
         tokio::select! {
@@ -242,7 +241,6 @@ pub async fn president(
             load_notify,
             state.clone(),
             term,
-            false,
         );
 
         tokio::select! {
