@@ -31,7 +31,7 @@ enum RequestErr {
 #[instrument(err(Debug))]
 async fn request_commit_idx(clerk: Node) -> Result<(Node, Idx), RequestErr> {
     use RequestErr::*;
-    let stream = TcpStream::connect(clerk.client_addr())
+    let stream = TcpStream::connect(clerk.client_addr().untyped())
         .await
         .map_err(Connect)?;
     let mut stream: connection::MsgStream<Response, Request> = connection::wrap(stream);

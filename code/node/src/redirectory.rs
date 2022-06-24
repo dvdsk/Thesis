@@ -1,3 +1,4 @@
+use std::hash;
 use std::net::{IpAddr, SocketAddr};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -26,8 +27,12 @@ impl Staff {
 
     pub(crate) fn for_client(self) -> protocol::Staff {
         protocol::Staff {
-            minister: Some(self.minister.client_addr()),
-            clerks: self.clerks.into_iter().map(|n| n.client_addr()).collect(),
+            minister: Some(self.minister.client_addr().untyped()),
+            clerks: self
+                .clerks
+                .into_iter()
+                .map(|n| n.client_addr().untyped())
+                .collect(),
         }
     }
 }
@@ -46,6 +51,34 @@ pub struct Node {
     president_port: u16,
 }
 
+pub trait Addr: Into<SocketAddr> + hash::Hash + Clone + PartialEq + PartialOrd + Eq {}
+
+macro_rules! addr_type {
+    ($name:ident, $port:ident) => {
+        #[derive(Debug)]
+        pub struct $name(SocketAddr);
+
+        impl $name {
+            fn new(ip: IpAddr, port: u16) -> Self {
+                $name(SocketAddr::new(ip, port))
+            }
+            pub fn untyped(self) -> SocketAddr {
+                self.0
+            }
+        }
+
+        impl From<Node> for $name {
+            fn from(node: Node) -> Self {
+                $name::new(node.ip, node.$port)
+            }
+        }
+    };
+}
+
+addr_type!(ClientAddr, client_port);
+addr_type!(MinisterAddr, minister_port);
+addr_type!(PresidentAddr, president_port);
+
 impl Node {
     pub fn from_chart(id: Id, chart: &Chart) -> Self {
         let addresses = chart.get_addr_list(id).expect("id not in chart");
@@ -59,14 +92,14 @@ impl Node {
             president_port,
         }
     }
-    pub fn client_addr(&self) -> SocketAddr {
-        SocketAddr::new(self.ip, self.client_port)
+    pub fn client_addr(&self) -> ClientAddr {
+        ClientAddr::new(self.ip, self.client_port)
     }
-    pub fn minister_addr(&self) -> SocketAddr {
-        SocketAddr::new(self.ip, self.minister_port)
+    pub fn minister_addr(&self) -> MinisterAddr {
+        MinisterAddr::new(self.ip, self.minister_port)
     }
-    pub fn president_addr(&self) -> SocketAddr {
-        SocketAddr::new(self.ip, self.president_port)
+    pub fn president_addr(&self) -> PresidentAddr {
+        PresidentAddr::new(self.ip, self.president_port)
     }
 }
 

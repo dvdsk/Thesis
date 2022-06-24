@@ -3,7 +3,7 @@ use std::net::SocketAddr;
 use tokio::sync::mpsc;
 
 use crate::raft::subjects::{Source, SourceNotify};
-use crate::redirectory::Node;
+use crate::redirectory::{Node, ClientAddr};
 use crate::Id;
 
 // TODO need a way to drop subjects too
@@ -39,7 +39,7 @@ impl Source for Map {
         self.current
             .iter()
             .cloned()
-            .map(|c| (c.id, c.minister_addr()))
+            .map(|c| (c.id, c.minister_addr().untyped()))
             .collect()
     }
     fn forget_impl(&self, _id: Id) {
@@ -59,10 +59,10 @@ impl Register {
         let newly_added = new_assignment.difference(&self.current);
         for clerk in newly_added {
             self.raft_notify
-                .try_send((clerk.id, clerk.minister_addr()))
+                .try_send((clerk.id, clerk.minister_addr().untyped()))
                 .unwrap();
             self.lock_notify
-                .try_send((clerk.id, clerk.minister_addr()))
+                .try_send((clerk.id, clerk.client_addr().untyped()))
                 .unwrap();
         }
     }

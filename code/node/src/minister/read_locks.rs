@@ -15,7 +15,10 @@ use tracing::{error, instrument, warn};
 
 use crate::raft::subjects::{Source, SourceNotify};
 use crate::raft::{CONN_RETRY_PERIOD, HB_TIMEOUT};
+use crate::redirectory::ClientAddr;
 use protocol::AccessKey;
+
+use super::clerks;
 
 #[derive(Debug, Clone)]
 pub enum LockReq {
@@ -189,7 +192,7 @@ impl LockManager {
 /// look for new subjects in the chart and register them
 #[instrument(skip_all)]
 pub async fn maintain_file_locks(
-    mut members: super::clerks::Map,
+    mut members: clerks::Map,
     mut lock_req: mpsc::Receiver<(LockReq, oneshot::Sender<Result<(), FanOutError>>)>,
 ) -> ! {
     let mut locks = Locks::new();
