@@ -55,8 +55,8 @@ pub trait Addr: Into<SocketAddr> + hash::Hash + Clone + PartialEq + PartialOrd +
 
 macro_rules! addr_type {
     ($name:ident, $port:ident) => {
-        #[derive(Debug)]
-        pub struct $name(SocketAddr);
+        #[derive(Debug, Clone, Hash, Eq, PartialEq, Copy)]
+        pub struct $name(pub SocketAddr);
 
         impl $name {
             fn new(ip: IpAddr, port: u16) -> Self {
@@ -64,6 +64,9 @@ macro_rules! addr_type {
             }
             pub fn untyped(self) -> SocketAddr {
                 self.0
+            }
+            pub fn as_untyped(&self) -> &SocketAddr {
+                &self.0
             }
         }
 

@@ -3,7 +3,7 @@ use std::net::SocketAddr;
 use tokio::sync::mpsc;
 
 use crate::raft::subjects::{Source, SourceNotify};
-use crate::redirectory::{Node, ClientAddr};
+use crate::redirectory::Node;
 use crate::Id;
 
 // TODO need a way to drop subjects too

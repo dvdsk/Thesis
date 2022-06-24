@@ -4,7 +4,6 @@ use futures::{SinkExt, TryStreamExt};
 use protocol::connection::MsgStream;
 use protocol::{connection, Request, Response};
 use std::collections::{HashMap, HashSet};
-use std::net::SocketAddr;
 use std::ops::Range;
 use std::path::PathBuf;
 use tokio::net::TcpStream;
@@ -16,6 +15,7 @@ use tracing::{error, instrument, warn};
 use crate::raft::subjects::{Source, SourceNotify};
 use crate::raft::{CONN_RETRY_PERIOD, HB_TIMEOUT};
 use crate::redirectory::ClientAddr;
+use crate::Id;
 use protocol::AccessKey;
 
 use super::clerks;
@@ -43,10 +43,10 @@ impl LockReq {
 }
 
 #[instrument]
-async fn connect(address: &SocketAddr) -> MsgStream<Response, Request> {
+async fn connect(address: &ClientAddr) -> MsgStream<Response, Request> {
     use std::io::ErrorKind;
     loop {
-        match TcpStream::connect(address).await {
+        match TcpStream::connect(address.as_untyped()).await {
             Ok(stream) => {
                 let stream = connection::wrap(stream);
                 break stream;
@@ -122,7 +122,7 @@ async fn send_initial_locks(
 
 #[instrument(skip(broadcast, lock_list))]
 async fn manage_clerks_locks(
-    address: SocketAddr,
+    address: ClientAddr,
     mut broadcast: broadcast::Receiver<(AckSender, LockReq)>,
     lock_list: Vec<LockReq>,
 ) {
@@ -208,7 +208,12 @@ pub async fn maintain_file_locks(
     };
 
     let mut notify = members.notify();
-    let mut adresses: HashSet<_> = members.adresses().into_iter().collect();
+    let mut adresses: HashSet<(Id, ClientAddr)> = members
+        .adresses()
+        .into_iter()
+        .map(|(id, addr)| (id, ClientAddr(addr)))
+        .collect();
+
     for (_, addr) in adresses.iter().cloned() {
         add_clerk(addr, &locks, &mut clerks)
     }
@@ -216,6 +221,7 @@ pub async fn maintain_file_locks(
     loop {
         if clerks.is_empty() {
             let (id, addr) = notify.recv_new().await.unwrap();
+            let addr = ClientAddr(addr);
             let is_new = adresses.insert((id, addr));
             if is_new {
                 add_clerk(addr, &locks, &mut clerks);
@@ -234,6 +240,7 @@ pub async fn maintain_file_locks(
             },
             recoverd = notify.recv_new() => {
                 let (id, addr) = recoverd.unwrap();
+                let addr = ClientAddr(addr);
                 let is_new = adresses.insert((id, addr));
                 if is_new {
                     add_clerk(addr, &locks, &mut clerks);
