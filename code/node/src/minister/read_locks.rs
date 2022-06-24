@@ -11,7 +11,7 @@ use tokio::net::TcpStream;
 use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio::task::JoinSet;
 use tokio::time::{sleep, timeout};
-use tracing::{error, warn};
+use tracing::{error, instrument, warn};
 
 use crate::raft::subjects::{Source, SourceNotify};
 use crate::raft::{CONN_RETRY_PERIOD, HB_TIMEOUT};
@@ -39,6 +39,7 @@ impl LockReq {
     }
 }
 
+#[instrument]
 async fn connect(address: &SocketAddr) -> MsgStream<Response, Request> {
     use std::io::ErrorKind;
     loop {
@@ -51,6 +52,7 @@ async fn connect(address: &SocketAddr) -> MsgStream<Response, Request> {
                 ErrorKind::ConnectionReset
                 | ErrorKind::ConnectionRefused
                 | ErrorKind::ConnectionAborted => {
+                    warn!("Can not connect to clerk");
                     sleep(CONN_RETRY_PERIOD).await;
                     continue;
                 }
@@ -61,6 +63,7 @@ async fn connect(address: &SocketAddr) -> MsgStream<Response, Request> {
 }
 
 type AckSender = mpsc::Sender<Result<(), ()>>;
+#[instrument(skip_all)]
 async fn keep_client_up_to_date(
     broadcast: &mut broadcast::Receiver<(AckSender, LockReq)>,
     stream: &mut MsgStream<Response, Request>,
@@ -77,22 +80,29 @@ async fn keep_client_up_to_date(
 
         match timeout(HB_TIMEOUT, stream.try_next()).await {
             Err(..) => (), // clerk must be down, we no longer contact it
-            Ok(Ok(Some(Response::Done))) => return ack_tx.try_send(Result::Ok(())).unwrap(),
-            Ok(Ok(_)) => unreachable!("incorrect reply from clerk"),
+            Ok(Ok(Some(Response::Done))) => {
+                ack_tx.try_send(Result::Ok(())).unwrap();
+                continue;
+            }
+            Ok(Ok(Some(r))) => unreachable!("incorrect reply from clerk: {r:?}"),
+            Ok(Ok(None)) => warn!("lost connection to client"),
             Ok(Err(e)) => warn!("error in transport: {e:?}"),
         }
 
         ack_tx.try_send(Result::Err(())).unwrap();
+        return;
     }
     // clerk must be down
 }
 
+#[instrument(skip(stream), err)]
 async fn send_initial_locks(
     stream: &mut MsgStream<Response, Request>,
     list: Vec<LockReq>,
 ) -> color_eyre::Result<()> {
     stream.send(Request::UnlockAll).await?;
     for lock in list {
+        dbg!("sending lock: {lock:?}");
         stream.send(lock.into_request()).await?;
 
         match timeout(HB_TIMEOUT, stream.try_next()).await {
@@ -107,6 +117,7 @@ async fn send_initial_locks(
     Ok(())
 }
 
+#[instrument(skip(broadcast, lock_list))]
 async fn manage_clerks_locks(
     address: SocketAddr,
     mut broadcast: broadcast::Receiver<(AckSender, LockReq)>,
@@ -176,6 +187,7 @@ impl LockManager {
 }
 
 /// look for new subjects in the chart and register them
+#[instrument(skip_all)]
 pub async fn maintain_file_locks(
     mut members: super::clerks::Map,
     mut lock_req: mpsc::Receiver<(LockReq, oneshot::Sender<Result<(), FanOutError>>)>,
@@ -184,7 +196,7 @@ pub async fn maintain_file_locks(
     let (mut lock_broadcast, _) = broadcast::channel(16);
     let broadcast_subscriber = lock_broadcast.clone();
 
-    let mut clerks = JoinSet::new();
+    let mut clerks = JoinSet::new(); // TODO refactor some things out
     let add_clerk = |addr, locks: &Locks, clerks: &mut JoinSet<_>| {
         let broadcast_rx = broadcast_subscriber.subscribe();
 

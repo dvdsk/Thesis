@@ -73,12 +73,7 @@ async fn manage_subject<O: Order>(
     mut req_gen: RequestGen<O>,
     status_notify: impl StatusNotifier,
 ) -> Id {
-    loop {
-        let mut stream = match timeout(SUBJECT_CONN_TIMEOUT, connect(&address)).await {
-            Ok(stream) => stream,
-            Err(_) => break,
-        };
-
+    while let Ok(mut stream) = timeout(SUBJECT_CONN_TIMEOUT, connect(&address)).await {
         let init_msg = req_gen.heartbeat();
 
         // send empty msg aka heartbeat
@@ -89,13 +84,7 @@ async fn manage_subject<O: Order>(
 
         info!("subject up");
         status_notify.subject_up(subject_id).await;
-        replicate_orders(
-            &mut broadcast,
-            &mut appended,
-            &mut req_gen,
-            &mut stream,
-        )
-        .await;
+        replicate_orders(&mut broadcast, &mut appended, &mut req_gen, &mut stream).await;
         status_notify.subject_down(subject_id).await;
         warn!("subject down");
     }

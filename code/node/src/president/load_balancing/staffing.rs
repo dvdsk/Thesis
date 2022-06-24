@@ -22,17 +22,14 @@ impl Staffing {
     pub fn process_order(&mut self, order: president::Order) {
         use president::Order::*;
 
-        match order {
-            AssignMinistry { subtree, staff } => {
-                // TODO detect changes that make a ministry to
-                // small (understaffed err)
-                self.by_ministry.insert(subtree.clone(), staff.clone());
-                self.ministers.insert(staff.minister.id, subtree.clone());
-                let tagged_clerks = staff.clerks.iter().map(|c| (c.id, subtree.clone()));
-                self.clerks
-                    .extend(tagged_clerks.map(|(clerk, path)| (clerk, path)));
-            }
-            _ => (),
+        if let AssignMinistry { subtree, staff } = order {
+            // TODO detect changes that make a ministry to
+            // small (understaffed err)
+            self.by_ministry.insert(subtree.clone(), staff.clone());
+            self.ministers.insert(staff.minister.id, subtree.clone());
+            let tagged_clerks = staff.clerks.iter().map(|c| (c.id, subtree.clone()));
+            self.clerks
+                .extend(tagged_clerks.map(|(clerk, path)| (clerk, path)));
         }
     }
 

@@ -34,7 +34,7 @@ impl<O: Order> Log<O> {
         info!("opening a normal raft log");
 
         Ok(Self {
-            state: state.clone(),
+            state,
             orders,
             _handle_incoming: util::spawn_cancel_on_drop(handle_incoming, "log_handle_incoming"),
             _succession: util::spawn_cancel_on_drop(succession, "succession"),

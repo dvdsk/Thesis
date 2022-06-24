@@ -139,7 +139,7 @@ impl<'a> Drop for WriteLease<'a> {
 
 /// offers a write lease for some period, the client should immediatly queue
 /// for another write lease to keep it
-#[instrument(err)]
+#[instrument(skip(dir, stream), err)]
 async fn write_lease(
     path: PathBuf,
     mut stream: ClientStream<'_>,

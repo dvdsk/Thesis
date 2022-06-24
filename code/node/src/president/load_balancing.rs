@@ -211,8 +211,8 @@ impl Init {
 
             info!("trying to solve: {issue:?}");
             let solved = match &issue {
-                LeaderLess { subtree, .. } => self.promote_clerk(&subtree).await,
-                UnderStaffed { subtree, down } => self.try_assign(&subtree, &down).await,
+                LeaderLess { subtree, .. } => self.promote_clerk(subtree).await,
+                UnderStaffed { subtree, down } => self.try_assign(subtree, down).await,
                 Overloaded { .. } => todo!(),
             };
 
