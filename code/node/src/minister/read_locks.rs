@@ -12,7 +12,6 @@ use tokio::task::JoinSet;
 use tokio::time::{sleep, timeout};
 use tracing::{error, instrument, warn};
 
-use crate::raft::subjects::{Source, SourceNotify};
 use crate::raft::{CONN_RETRY_PERIOD, HB_TIMEOUT};
 use crate::redirectory::ClientAddr;
 use crate::Id;
@@ -192,7 +191,7 @@ impl LockManager {
 /// look for new subjects in the chart and register them
 #[instrument(skip_all)]
 pub async fn maintain_file_locks(
-    mut members: clerks::Map,
+    mut members: clerks::ClientAddrMap,
     mut lock_req: mpsc::Receiver<(LockReq, oneshot::Sender<Result<(), FanOutError>>)>,
 ) -> ! {
     let mut locks = Locks::new();
@@ -211,7 +210,7 @@ pub async fn maintain_file_locks(
     let mut adresses: HashSet<(Id, ClientAddr)> = members
         .adresses()
         .into_iter()
-        .map(|(id, addr)| (id, ClientAddr(addr)))
+        .map(|(id, addr)| (id, addr))
         .collect();
 
     for (_, addr) in adresses.iter().cloned() {
@@ -220,8 +219,7 @@ pub async fn maintain_file_locks(
 
     loop {
         if clerks.is_empty() {
-            let (id, addr) = notify.recv_new().await.unwrap();
-            let addr = ClientAddr(addr);
+            let (id, addr) = notify.recv().await.unwrap();
             let is_new = adresses.insert((id, addr));
             if is_new {
                 add_clerk(addr, &locks, &mut clerks);
@@ -238,9 +236,8 @@ pub async fn maintain_file_locks(
                 }
 
             },
-            recoverd = notify.recv_new() => {
+            recoverd = notify.recv() => {
                 let (id, addr) = recoverd.unwrap();
-                let addr = ClientAddr(addr);
                 let is_new = adresses.insert((id, addr));
                 if is_new {
                     add_clerk(addr, &locks, &mut clerks);
@@ -249,10 +246,18 @@ pub async fn maintain_file_locks(
             req = lock_req.recv() => {
                 let (req, ack) = req.unwrap();
                 locks.apply(req.clone());
-                let res = fan_out_lock_req(&mut lock_broadcast, req).await;
-                ack.send(res).unwrap();
+                match &req {
+                    LockReq::Lock {..} => {
+                        let res = fan_out_lock_req(&mut lock_broadcast, req).await;
+                        ack.send(res).unwrap();
+                    }
+                    LockReq::Unlock {..} => {
+                        fan_out_lock_req(&mut lock_broadcast, req).await.unwrap();
+                        // minsters do not wait for an ack on unlocks
+                    },
+                }
             },
-        };
+        }
     }
 }
 

@@ -93,7 +93,7 @@ pub(crate) async fn work(
     } = state;
     info!("started work as minister: {our_id}");
 
-    let (register, mut clerks, clerks_copy) = clerks::Map::new(clerks, *our_id);
+    let (register, mut clerks, clerks_copy) = clerks::RaftMap::new(clerks, *our_id);
 
     let ObserverLog { state, .. } = min_orders;
 
