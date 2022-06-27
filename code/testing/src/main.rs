@@ -1,9 +1,8 @@
 use std::collections::HashMap;
 use std::net::{IpAddr, Ipv4Addr};
 use std::path::PathBuf;
-use std::str::FromStr;
 
-use color_eyre::eyre::{eyre, ContextCompat, Result};
+use color_eyre::eyre::Result;
 use mktemp::Temp;
 use node::util::runtime_dir;
 use node::{Config, WrapErr};
@@ -14,6 +13,8 @@ use tokio::task;
 use node::util;
 use tracing::log::error;
 use tracing::warn;
+
+mod action;
 
 type Task = task::JoinHandle<()>;
 
@@ -94,44 +95,6 @@ async fn manage_cluster() {
     }
 }
 
-type Client = client::Client<client::ChartNodes<3, 2>>;
-
-async fn client_action(client: &mut Client, buffer: String) -> Result<()> {
-    let mut args = buffer.split(" ");
-    let cmd = args.next();
-    let path = args
-        .next()
-        .map(str::trim)
-        .map(PathBuf::from)
-        .wrap_err("each argument needs a path")?;
-    let bytes = args
-        .next()
-        .map(str::trim)
-        .map(|s| {
-            let s = s.replace("_", "");
-            usize::from_str(&s)
-        })
-        .map(|r| r.wrap_err("bytes needs to be an unsigned int"));
-
-    match cmd {
-        Some("list") => println!("list: {:?}", client.list(path).await),
-        Some("create") => client.create_file(path).await,
-        Some("read") => {
-            let mut file = client.open_readable(path).await;
-            let bytes = bytes.ok_or_else(|| eyre!("read needs bytes as third arg"))??;
-            // let mut data = vec![0u8; bytes];
-            file.read(&mut vec![0u8; bytes]).await;
-        }
-        Some("write") => {
-            let mut file = client.open_writeable(path).await;
-            let bytes = bytes.ok_or_else(|| eyre!("read needs bytes as third arg"))??;
-            file.write(&vec![42u8; bytes]).await;
-        }
-        _ => panic!("invalid command: {cmd:?}"),
-    }
-    Ok(())
-}
-
 async fn cluster_action(conn: &mut TcpStream, buffer: String) {
     let command = buffer.chars().next().unwrap();
     let id: u8 = buffer.trim()[1..].parse().unwrap();
@@ -154,19 +117,25 @@ async fn control_cluster() -> Result<()> {
     r<id>: ressurect the node with id (must be killed first!)
     a<id>: add a new node with id (make sure its a unique id!)
     
-    interact with the cluster
+    interact with the cluster [all form the same client]
     list <path>: list files in this dir and any subdir
     create <path>: makes a new file on the cluster
     read <path> <bytes>: (simulate) reading, use `_` for readability
     write <path> <bytes>: (simulate) writing, use `_` for readability
+
+    test the cluster using many clients
+    bench_leases <#readers> <#writers>: sim. read and write from many clients
+    bench_meta <#creaters> <#listers>: sim. creating and listing from many clients
         "
         );
 
         let mut buffer = String::new();
         let stdin = std::io::stdin(); // We get `Stdin` here.
         stdin.read_line(&mut buffer)?;
-        if buffer.contains(" ") {
-            client_action(&mut client, buffer).await?;
+        if buffer.contains("_") {
+            action::bench(&mut client, buffer).await?;
+        } else if buffer.contains(" ") {
+            action::client(&mut client, buffer).await?;
         } else {
             cluster_action(&mut conn, buffer).await;
         }
@@ -187,7 +156,7 @@ async fn main() -> Result<()> {
 
     println!("setting up log analyzer/collector (jeager)");
     start_jeager::start_if_not_running(runtime_dir()).await;
-    crate::util::setup_tracing(arg.clone(), IpAddr::V4(Ipv4Addr::LOCALHOST), 10);
+    util::setup_tracing(arg.clone(), IpAddr::V4(Ipv4Addr::LOCALHOST), 10);
     println!("logging setup completed");
 
     match arg.as_str() {

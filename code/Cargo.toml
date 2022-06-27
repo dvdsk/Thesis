@@ -3,7 +3,8 @@ members = [
 	"node",
 	"protocol",
 	"start-jeager",
-	"client"
+	"client",
+	"testing"
 ]
 
 [patch.crates-io]
