@@ -1,10 +1,28 @@
-(mathy) conditions from 
-note all are ranged just range > file for unranged
-mocking
-async
-find amds: 
-	- use sorted loadbalance db
-	- find suffix that matches end part of target path
-subset of \ac{posix} that is implemented
+Here we will go over the implementation of the design, which is implemented in \textit{Rust}. I begin by motivating the choice for \textit{Rust}. Following that I will go over the concurrency model. Then I will use small extracts of source code to discuss the structure of the implementation. Next we take a more detailed look at my implementation of the Raft (see: \cref{sec:raft}) and discuss why I did not use existing implementations.
 
-use rust borrow to enforce correctness (ElectionDataGuard)
+\subsection{Language}
+Distributed systems are notoriously hard to implement with many opportunities for subtle bugs to slip in. Therefore, it is important to choose a language with features that aid our implementation and make it harder to introduce bugs. Let's look at a feature that can help us and one that could become problematic.
+
+A strongly typed language with algebraic data types makes it possible to express properties of the design in the type system. An example: \textit{Clerks} are listing for messages from the \textit{President} or \textit{Minister}, we keep these separate by listening on different ports. Normally a port is expressed as a number. If we make the President's port a different type then the Ministers the type checker will never allow us to switch these around. This is known as \ac{tdd}.
+
+Timing is critical in this design, if the president does not send heartbeats in time elections will pop up. Languages using \ac{gc} pause program execution once every while to clean up memory. This can cause timing problems, also known as the \textit{stop the world problem}. It is possible but hard to mitigate this by carefully tweaking the \ac{gc} to keep its pauses long. If possible we should use a language without \ac{gc}.
+
+Only the \textit{Rust} language has such a type system without using \ac{gc}.
+
+\subsection{Concurrency}
+While sending and receiving data over a network most time is spent waiting. Blocking the implementation while waiting is not at all efficient. Instead, we can use the valuable time to start and or finish sending and receiving other data concurrently. One way of doing this is using \textit{non-blocking IO}. Organizing a single thread of execution to use of IO quickly becomes highly complex. We use a modern solution to this organizing problem: \textit{Async/await}\footnote{see \cref{app:async} for a introduction to Async/await}. \textit{Rust} has native support for the needed syntax however requires a third party framework to provide the actual IO implementation, here I use the \textit{tokio} project~\cite{tokio}.
+
+There is a trend in distributed systems to take scalability as the holy grail of performance~\cite{scaling}. While the design of the system focuses on scalability in my implementing I try to optimally use the underlying hardware. While \textit{Moors~Law} might by dying single machine performance will keep scaling horizontally~\cite{moore}. This means the implementation must take full advantage of the available task parallelism.
+
+
+
+% (mathy) conditions from 
+% note all are ranged just range > file for unranged
+% mocking
+% async
+% find amds: 
+% 	- use sorted loadbalance db
+% 	- find suffix that matches end part of target path
+% subset of \ac{posix} that is implemented
+%
+% use rust borrow to enforce correctness (ElectionDataGuard)

@@ -16,6 +16,8 @@
 \usepackage{ragged2e}
 \usepackage[nameinlink]{cleveref}
 \usepackage[nolist]{acronym}
+\usepackage{listings}
+\usepackage{listings-rust}
 
 \raggedright
 \colortheme{skdoc}
@@ -63,6 +65,8 @@
 	\acro{posix}[\textacro{POSIX}]{portable operation system interface}
 	\acro{hpc}[\textacro{HPC}]{high performance computing}
 	\acro{praft}[\textacro{pRaft}]{Presidential Raft}
+	\acro{gc}[\textacro{GC}]{Garbage Collection}
+	\acro{tdd}[\textacro{TDD}]{Type Driven Development}
 \end{acronym}
 
 \input{figs/diagrams/styles.tex}
@@ -84,8 +88,13 @@
 \input{content/design/architecture.tex}
 \input{content/design/operations.tex}
 
+\section{Implementation}
+\input{content/implementation.tex}
+
 \clearpage
 \appendix
+\section{Introduction to Async} \label{app:async}
+\input{content/async.tex}
 \printbibliography
 
 \end{document}
