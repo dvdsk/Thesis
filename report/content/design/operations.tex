@@ -10,7 +10,7 @@ For all requests a client needs to find an official (a minister or clerk) to tal
 	\label{fig:find_aMDS}
 \end{figure}
 %
-\subsection*{Capabilities} 
+\subsection*{Capabilities} \label{sec:lease}
 A client needing write-capability on a file contacts the minister. It in turn checks if the lease can be given out and asks its clerks to revoke outstanding read leases that conflict. A read lease conflict when its region overlaps with the region needed for the write capability. If a clerk lost contact with a client it can not revoke the lease and has to wait till the lease expires. The process is illustrated in \Cref{fig:write}. 
 
 If the client needs read capabilities it sends its requests to a clerk. The clerk checks against the \raft{} log if the leases would conflict with an outstanding write lease. If no conflict is found the lease is issued and the connection to the client kept active. Keeping an active connection makes it possible to revoke the lease or quickly refresh it.
