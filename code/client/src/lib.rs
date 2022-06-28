@@ -144,10 +144,8 @@ impl<T: RandomNode> Client<T> {
     /// committed the ticket member will be set to allow future resuming,
     /// in case of node failure.
     pub async fn create_file(&mut self, path: PathBuf) {
-        let create = self.request(&path, Request::Create(path.clone()), true);
-        timeout(CLIENT_TIMEOUT, create)
+        self.request(&path, Request::Create(path.clone()), true)
             .await
-            .expect("client timed out")
             .unwrap()
     }
 
@@ -156,10 +154,8 @@ impl<T: RandomNode> Client<T> {
     /// committed the ticket member will be set to allow future resuming,
     /// in case of node failure.
     pub async fn list(&mut self, path: PathBuf) -> Vec<PathBuf> {
-        let list = self.request(&path, Request::List(path.clone()), false);
-        timeout(CLIENT_TIMEOUT, list)
+        self.request(&path, Request::List(path.clone()), false)
             .await
-            .expect("client timed out")
             .unwrap()
     }
 

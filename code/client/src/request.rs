@@ -8,7 +8,7 @@ use protocol::connection::{self, MsgStream};
 use protocol::{Request, Response};
 use tokio::net::TcpStream;
 use tokio::time::sleep;
-use tracing::{warn, info, instrument};
+use tracing::{info, instrument, warn};
 
 use super::Ministry;
 use crate::random_node::RandomNode;
@@ -48,12 +48,7 @@ async fn connect(initial_addr: Option<SocketAddr>, nodes: &impl RandomNode) -> C
 
 impl<T: RandomNode> super::Client<T> {
     #[instrument(skip(self))]
-    async fn send_request(
-        &mut self,
-        path: &Path,
-        req: &Request,
-        needs_minister: bool,
-    ) {
+    async fn send_request(&mut self, path: &Path, req: &Request, needs_minister: bool) {
         let Self {
             map, conn, nodes, ..
         } = self;
@@ -66,7 +61,8 @@ impl<T: RandomNode> super::Client<T> {
             match (node, conn.as_mut()) {
                 (None, Some(_conn)) => (),
                 (Some(addr), Some(conn)) if conn.peer == addr => (),
-                (addr, _) => { // hint addr is not bound, covers None case
+                (addr, _) => {
+                    // hint addr is not bound, covers None case
                     *conn = Some(connect(addr, nodes).await);
                 }
             };
@@ -120,6 +116,19 @@ impl<T: RandomNode> super::Client<T> {
         }
     }
 
+    /// recieve the response from the fs, if it is leasedropped eat that
+    /// response and wait for another
+    #[instrument(skip(self), ret)]
+    async fn recieve(&mut self) -> Result<Option<Response>, io::Error> {
+        loop {
+            let msg = self.conn.as_mut().unwrap().stream.try_next().await;
+            if let Ok(Some(Response::LeaseDropped)) = msg {
+                continue;
+            }
+            return msg;
+        }
+    }
+
     #[instrument(skip(self))]
     pub(super) async fn request<R: FromResponse>(
         &mut self,
@@ -129,7 +138,7 @@ impl<T: RandomNode> super::Client<T> {
     ) -> Result<R, RequestError> {
         loop {
             self.send_request(path, &req, needs_minister).await;
-            let response = self.conn.as_mut().unwrap().stream.try_next().await;
+            let response = self.recieve().await;
             match response {
                 Ok(Some(Response::NotCommitted)) => (), // will trigger a retry
                 Ok(Some(Response::Ticket { idx })) => {
@@ -145,10 +154,7 @@ impl<T: RandomNode> super::Client<T> {
                 }
                 Ok(Some(Response::Redirect { staff, subtree })) => {
                     info!("updateing staff: {staff:?}");
-                    self.map.insert(Ministry {
-                        staff,
-                        subtree,
-                    });
+                    self.map.insert(Ministry { staff, subtree });
                     continue;
                 }
                 Ok(Some(response)) => return Ok(R::from_response(response)),
@@ -193,6 +199,16 @@ impl FromResponse for () {
         }
     }
 }
+
+// impl FromResponse for Option<protocol::Lease> {
+//     fn from_response(resp: Response) -> Self {
+//         if let Response::Done = resp {
+//             ()
+//         } else {
+//             panic!("invalid response, expected Done got: {resp:?}");
+//         }
+//     }
+// }
 
 from_response!([List], Vec<PathBuf>);
 from_response!([WriteLease, ReadLease], protocol::Lease);
