@@ -24,6 +24,59 @@ Whenever an \textit{async} function has to await IO it returns control to the sc
 Task handles instruct the framework to cancel their task when they are dropped. A group of tasks can be canceled by dropping the data structure that contains the task handles. By organizing concurrent tasks as a tree with the root the \textsl{main function} cancelling and cleaning up a branch is as easy as dropping the task handle for the root of that branch. Concretely if we abort the \textsl{president} task we automatically end any tasks it created.
 
 \subsection{Structure}
+Nodes in \name switch between the role of \textit{president}, \textit{minister}, \textit{clerk} and \textit{idle}. The roles are separate functions. When a node switches role it returns from one function and enters the one corresponding with its new role. The switching is implemented in the state machine seen in \cref{lst:state}. In Rust expressions return a value, the \lstinline[language=rust]{match} statement in line 2 returns the \lstinline[language=rust]{role} for the next iteration. The different \lstinline[language=rust]{work} functions set up the async tasks needed before waiting for an exit condition.
+
+Let's take a look at the president work function. It is called when a node enters the \textit{president} branch of the \lstinline[language=rust]{match} statement. This in turn is the result of the current node winning an election while it was fulfilling one of the other roles. We return from the president work function when we receive a message that another node has become president and that president has a higher term. 
+
+
+\begin{lstlisting}[float,language=rust,style=boxed,tabsize=2,caption={The state machine switching between a nodes different roles},label=lst:state]
+let mut role = Role::Idle;
+loop {
+	role = match role {
+		Role::Idle => idle::work(&mut state).await.unwrap(),
+		Role::Clerk { subtree } => {
+			clerk::work(&mut state, subtree).await.unwrap()
+		}
+		Role::Minister {
+			subtree,
+			clerks,
+			term,
+		} => minister::work(&mut state, subtree, clerks, term)
+			.await
+			.unwrap(),
+		Role::President { term } => {
+			president::work(&mut state, &mut chart, term).await
+		}
+	}
+}
+\end{lstlisting}
+
+
+\begin{lstlisting}[float,language=rust,style=boxed,tabsize=2,caption={The president work function, it performs all the tasks of the president. In this code snippet brackets and parenthesis containing whitespace mean the corrosponding structs and functions have there arguments hidden for brevity},label=lst:president]
+pub(super) async fn work( ) -> crate::Role {
+	let Log { orders, state, .. } = pres_orders;
+	let (broadcast, _) = broadcast::channel(16);
+	let (tx, notify_rx) = mpsc::channel(16);
+
+	let log_writer = LogWriter { };
+
+	let (load_balancer, load_notifier) = LoadBalancer::new( );
+	let instruct_subjects = subjects::instruct( );
+	let load_balancing = load_balancer.run( );
+
+	tokio::select! {
+		() = load_balancing => unreachable!(),
+		() = instruct_subjects => unreachable!(),
+		() = msgs::handle_incoming(client_lstnr, log_writer) => {
+			unreachable!(),
+		}
+		res = recieve_own_order(orders, load_notifier) => {
+			Role::Idle
+		}
+	}
+}
+\end{lstlisting}
+
 
 % (mathy) conditions from 
 % note all are ranged just range > file for unranged
