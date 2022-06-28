@@ -16,7 +16,7 @@ use protocol::{Request, Response};
 use tokio::sync::{Mutex, Notify};
 use tokio::task::JoinSet;
 use tokio::time::sleep;
-use tracing::{debug, warn};
+use tracing::{debug, instrument, trace, warn};
 
 use super::locks::Locks;
 use crate::directory::Directory;
@@ -24,19 +24,31 @@ use crate::redirectory::ReDirectory;
 use crate::{minister, raft};
 
 #[derive(Default, Clone)]
-struct Readers(Arc<Mutex<HashMap<AccessKey, Arc<Notify>>>>);
+struct Readers(Arc<Mutex<HashMap<AccessKey, Vec<Arc<Notify>>>>>);
 
 impl Readers {
+    /// revokes access to range
+    #[instrument(level = "debug", skip(self))]
     pub async fn revoke(&mut self, key: &AccessKey) {
         let mut map = self.0.lock().await;
-        let notify = map.remove(key).expect("multiple revokes issued");
-        notify.notify_one();
+        let notifies = map.remove(key).expect("multiple revokes issued");
+        for notify in notifies {
+            notify.notify_one();
+        }
     }
 
+    #[instrument(level = "debug", skip(self))]
     async fn add(&self, key: AccessKey, notify: Arc<Notify>) {
         let mut map = self.0.lock().await;
-        let existing = map.insert(key, notify);
-        assert!(existing.is_none(), "key inserted multiple times");
+        match map.get_mut(&key) {
+            Some(notifies) => {
+                trace!("adding more readers"); // FIXME
+                notifies.push(notify);
+            }
+            None => {
+                map.insert(key, vec![notify]);
+            }
+        };
     }
 }
 
@@ -117,7 +129,7 @@ async fn handle_conn(
                 // for consistency this has to happen first, if we did it later new
                 // reads could be added while we are revoking the existing
                 locks.add(&mut dir, path.clone(), range.clone(), key).await;
-                let overlapping = dir.get_overlapping_reads(&path, &range).unwrap();
+                let overlapping = dir.remove_overlapping_reads(&path, &range).unwrap();
                 for key in overlapping {
                     readers.revoke(&key).await;
                 }

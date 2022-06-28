@@ -172,17 +172,23 @@ impl Directory {
     }
 
     #[instrument(skip(self), err)]
-    pub(crate) fn get_overlapping_reads(
+    pub(crate) fn remove_overlapping_reads(
         &self,
         path: &PathBuf,
         range: &Range<u64>,
     ) -> Result<Vec<AccessKey>> {
-        let bytes = self
-            .tree
-            .get(dbkey(path))
+        let mut overlapping = Vec::new();
+        self.tree
+            .update_and_fetch(dbkey(path), |bytes| {
+                let mut entry = Entry::from_bytes(bytes?);
+                overlapping = entry.overlapping_reads(range);
+                for key in &overlapping {
+                    entry.revoke_access(*key);
+                }
+                Some(entry.to_bytes())
+            })
             .wrap_err("internal db error")?
             .ok_or_else(|| eyre!("no entry for path"))?;
-        let entry = Entry::from_bytes(&bytes);
-        Ok(entry.overlapping_reads(range))
+        Ok(overlapping)
     }
 }
