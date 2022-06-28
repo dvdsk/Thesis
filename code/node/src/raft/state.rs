@@ -71,6 +71,7 @@ mod db {
 #[derive(Debug, Clone)]
 pub struct State<O> {
     pub election_office: Arc<Mutex<ElectionOffice>>,
+    /// sends orders to ObserverLog or Log where they can be consumed
     tx: mpsc::Sender<O>,
     db: sled::Tree,
     vars: Arc<Vars>,
