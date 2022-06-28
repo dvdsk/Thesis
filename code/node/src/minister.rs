@@ -28,8 +28,8 @@ async fn handle_pres_orders(
 
     loop {
         let order = pres_orders.recv().await;
-        redirectory.update(&order).await;
-        match order {
+        redirectory.update(&order.order).await;
+        match order.order.clone() {
             None => todo!(),
             Assigned(_) => todo!(),
             BecomePres { term } => return Ok(Role::President { term }),
@@ -50,6 +50,10 @@ async fn handle_pres_orders(
             }
             #[cfg(test)]
             Test(_) => todo!(),
+        }
+
+        if order.perished() {
+            return Err(order.error());
         }
     }
 }

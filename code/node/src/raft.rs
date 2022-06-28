@@ -3,7 +3,7 @@ use std::net::SocketAddr;
 use std::time::Duration;
 
 use color_eyre::{eyre, Result};
-use futures::{pin_mut, TryStreamExt, SinkExt};
+use futures::{pin_mut, SinkExt, TryStreamExt};
 use protocol::connection;
 use rand::{Rng, SeedableRng};
 use serde::de::DeserializeOwned;
@@ -24,8 +24,7 @@ mod tests;
 
 pub use log::{Log, ObserverLog};
 pub use log_writer::LogWriter;
-pub use state::LogEntry;
-pub use state::State;
+pub use state::{PerishableOrder, LogEntry, State};
 
 use crate::Term;
 
@@ -45,7 +44,7 @@ pub(super) const ELECTION_TIMEOUT: Duration = Duration::from_millis(40 * MUL);
 pub(super) const MIN_ELECTION_SETUP: Duration = Duration::from_millis(40 * MUL);
 pub(super) const MAX_ELECTION_SETUP: Duration = Duration::from_secs(8);
 /// time allowed to try and (re-)connect to a node before giving up
-pub(super) const SUBJECT_CONN_TIMEOUT: Duration = Duration::from_secs(8); 
+pub(super) const SUBJECT_CONN_TIMEOUT: Duration = Duration::from_secs(8);
 
 pub trait Order:
     Serialize + DeserializeOwned + fmt::Debug + Clone + Send + Sync + Unpin + 'static + PartialEq
@@ -80,7 +79,7 @@ async fn handle_conn<O: Order>(
         let reply = match msg.clone() {
             None => {
                 debug!("Connection closed");
-                break
+                break;
             }
             Some(CriticalError(err)) => {
                 return Err(eyre::eyre!(
@@ -188,7 +187,7 @@ async fn succession<O: Order>(chart: Chart, cluster_size: u16, state: State<O>) 
                 res = run_for_office => match res {
                     ElectionResult::Lost => continue,
                     ElectionResult::Won => {
-                        state.order(Order::elected(our_term)).await;
+                        state.insert_unlogged_order(Order::elected(our_term)).await;
                         break term_increased;
                     }
                 }
@@ -197,6 +196,6 @@ async fn succession<O: Order>(chart: Chart, cluster_size: u16, state: State<O>) 
 
         term_increased.await;
         debug!("President saw higher term, resigning");
-        state.order(Order::resign()).await
+        state.insert_unlogged_order(Order::resign()).await
     } // outer loop
 }

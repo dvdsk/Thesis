@@ -1,6 +1,8 @@
+use color_eyre::{eyre, Help, Report};
 use instance_chart::Id;
 use std::sync::atomic::AtomicU32;
 use std::sync::Arc;
+use std::time::Instant;
 use tokio::sync::Mutex;
 
 use tokio::sync::{mpsc, Notify};
@@ -11,7 +13,7 @@ use crate::{Idx, Term};
 pub use self::append::LogEntry;
 use self::vote::ElectionOffice;
 
-use super::Order;
+use super::{Order, HB_PERIOD};
 type LogIdx = u32;
 
 pub mod append;
@@ -68,17 +70,38 @@ mod db {
     }
 }
 
+#[derive(Debug)]
+pub struct PerishableOrder<O> {
+    pub order: O,
+    pub process_by: Instant,
+}
+
+impl<O: std::fmt::Debug> PerishableOrder<O> {
+    #[instrument(skip_all, fields(_order, _time_left))]
+    pub fn perished(&self) -> bool { // TODO return result instead
+        let _time_left = self.process_by.saturating_duration_since(Instant::now());
+        let _order = format!("{:?}", self.order);
+        !self.process_by.elapsed().is_zero()
+    }
+    pub fn error(&self) -> Report {
+        eyre::eyre!("order processed too slow")
+            .with_note(|| format!("{:?} too late", self.process_by.elapsed()))
+            .with_note(|| format!("order was: {:?}", self.order))
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct State<O> {
     pub election_office: Arc<Mutex<ElectionOffice>>,
     /// sends orders to ObserverLog or Log where they can be consumed
-    tx: mpsc::Sender<O>,
+    /// should be consumed within one HB period or state becomes inconsistent
+    tx: mpsc::Sender<PerishableOrder<O>>,
     db: sled::Tree,
     vars: Arc<Vars>,
 }
 
 impl<O: Order> State<O> {
-    pub fn new(tx: mpsc::Sender<O>, db: sled::Tree) -> Self {
+    pub fn new(tx: mpsc::Sender<PerishableOrder<O>>, db: sled::Tree) -> Self {
         let election_office = ElectionOffice::from_tree(&db);
         election_office.init_election_data();
         let state = Self {
@@ -175,8 +198,14 @@ impl<O: Order> State<O> {
         }
     }
 
-    pub(super) async fn order(&self, ord: O) {
-        self.tx.send(ord).await.unwrap();
+    /// insert an order to the user facing facade (Log or ObserverLog)
+    /// this order need not have come through the raft log
+    pub(super) async fn insert_unlogged_order(&self, ord: O) {
+        let unlogged = PerishableOrder {
+            process_by: Instant::now() + HB_PERIOD,
+            order: ord,
+        };
+        self.tx.send(unlogged).await.unwrap();
     }
 
     pub(crate) fn committed(&self) -> Vec<O> {

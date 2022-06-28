@@ -18,8 +18,8 @@ async fn handle_pres_orders(
 ) -> Result<Role> {
     loop {
         let order = pres_orders.recv().await;
-        redirectory.update(&order).await;
-        match order {
+        redirectory.update(&order.order).await;
+        match order.order.clone() {
             Order::AssignMinistry { subtree, staff } => {
                 if staff.minister.id == id {
                     return Ok(Role::Minister {
@@ -40,7 +40,10 @@ async fn handle_pres_orders(
                     .with_section(move || format!("{m:?}").header("Msg:"))
             }
         }
-    }
+        if order.perished() {
+            return Err(order.error());
+        }
+    } // loop
 }
 
 pub async fn redirect_clients(listener: &mut TcpListener, redirect: ReDirectory) {

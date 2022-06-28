@@ -2,16 +2,19 @@ use color_eyre::eyre::eyre;
 use color_eyre::Result;
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::Ordering;
+use std::time::Instant;
 use tokio::sync::mpsc::error::TrySendError;
 use tracing::{instrument, warn};
 
 use super::{db, LogIdx, Order, State};
+use crate::raft::HB_PERIOD;
 use crate::util::TypedSled;
 use crate::{Id, Idx, Term};
 
 impl<O: Order> State<O> {
     #[instrument(level="debug", skip(self), ret)]
     pub async fn append_req(&self, req: Request<O>) -> Result<Reply> {
+        let process_by = Instant::now() + HB_PERIOD;
         let nothing_to_append;
         {
             // lock scope of election_office
@@ -53,7 +56,7 @@ impl<O: Order> State<O> {
             }
         } // end lock scope
 
-        self.apply_comitted()?;
+        self.apply_comitted(process_by)?;
 
         Ok(match nothing_to_append {
             true => Reply::HeartBeatOk,
@@ -61,11 +64,11 @@ impl<O: Order> State<O> {
         })
     }
 
-    pub fn apply_comitted(&self) -> Result<()> {
+    pub fn apply_comitted(&self, process_by: Instant) -> Result<()> {
         let last_applied = self.last_applied();
         if self.commit_index() > last_applied {
             let to_apply = self.increment_last_applied();
-            self.apply_log(to_apply)?;
+            self.apply_log(to_apply, process_by)?;
         }
         Ok(())
     }
@@ -131,13 +134,13 @@ impl<O: Order> State<O> {
     }
 
     #[instrument(skip(self))]
-    pub(super) fn apply_log(&self, idx: Idx) -> Result<()> {
+    pub(super) fn apply_log(&self, idx: Idx, process_by: Instant) -> Result<()> {
         let LogEntry { order, .. } = self
             .db
             .get_val(db::log_key(idx))
             .expect("there should be an item in the log");
         tracing::trace!("applied log: {idx}");
-        match self.tx.try_send(order) {
+        match self.tx.try_send(super::PerishableOrder{order, process_by}) {
             Ok(..) => Ok(()),
             Err(TrySendError::Full(..)) => Err(eyre!("Orders are not consumed (fast) enough")),
             Err(TrySendError::Closed(..)) => unreachable!("Log closed the recieving mpsc"),

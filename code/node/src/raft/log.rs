@@ -6,14 +6,14 @@ use tracing::{info, instrument, Instrument};
 
 use crate::{Chart, util};
 
-use super::state::State;
+use super::state::{State, PerishableOrder};
 use super::{handle_incoming, succession, Order};
 
 /// abstraction over raft that allows us to wait on
 /// new committed log entries, while transparently holding elections
 /// if we become president we recieve log entry: `Order::BecomePres`
 pub struct Log<O> {
-    pub orders: Receiver<O>, // commited entries can be recoverd from here
+    pub orders: Receiver<PerishableOrder<O>>, // commited entries can be recoverd from here
     pub state: State<O>,
     _handle_incoming: util::CancelOnDropTask<()>,
     _succession: util::CancelOnDropTask<()>,
@@ -27,7 +27,7 @@ impl<O: Order> Log<O> {
         db: sled::Tree,
         listener: TcpListener,
     ) -> Result<Self> {
-        let (tx, orders) = mpsc::channel(8);
+        let (tx, orders) = mpsc::channel(512);
         let state = State::new(tx, db);
         let handle_incoming = handle_incoming(listener, state.clone()).in_current_span();
         let succession = succession(chart, cluster_size, state.clone()).in_current_span();
@@ -41,7 +41,7 @@ impl<O: Order> Log<O> {
         })
     }
 
-    pub(crate) async fn recv(&mut self) -> O {
+    pub(crate) async fn recv(&mut self) -> PerishableOrder<O> {
         self.orders
             .recv()
             .await
@@ -52,7 +52,7 @@ impl<O: Order> Log<O> {
 /// abstraction over raft that allows us to wait on
 /// new committed log entries, without taking part in elections
 pub struct ObserverLog<O> {
-    pub orders: Receiver<O>, // commited entries can be recoverd from here
+    pub orders: Receiver<PerishableOrder<O>>, // commited entries can be recoverd from here
     pub state: State<O>,
     _handle_incoming: JoinHandle<()>,
 }
@@ -60,7 +60,7 @@ pub struct ObserverLog<O> {
 impl<O: Order> ObserverLog<O> {
     #[instrument(name = "ObeserverLog::open", skip_all)]
     pub(crate) fn open(db: sled::Tree, listener: TcpListener) -> Result<Self> {
-        let (tx, orders) = mpsc::channel(8);
+        let (tx, orders) = mpsc::channel(512);
         let state = State::new(tx, db);
         let handle_incoming = handle_incoming(listener, state.clone()).in_current_span();
         info!("opening a oberver only raft log");
@@ -74,7 +74,7 @@ impl<O: Order> ObserverLog<O> {
         })
     }
 
-    pub(crate) async fn recv(&mut self) -> O {
+    pub(crate) async fn recv(&mut self) -> PerishableOrder<O> {
         self.orders
             .recv()
             .await

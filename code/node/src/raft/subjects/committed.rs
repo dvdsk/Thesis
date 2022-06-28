@@ -1,9 +1,10 @@
 use futures::stream;
 use std::sync::Arc;
+use std::time::Instant;
 use tokio::sync::{mpsc, Notify};
 use tracing::{debug, instrument};
 
-use crate::raft::{State, Order};
+use crate::raft::{State, Order, HB_PERIOD};
 use crate::Idx;
 
 struct Waiters {
@@ -113,7 +114,8 @@ impl<'a, O: Order> Committed<'a, O> {
                         debug!("commit index increased: {old} -> {new}");
                     }
                     self.state.set_commit_index(new);
-                    self.state.apply_comitted().unwrap();
+                    let deadline = Instant::now() + HB_PERIOD;
+                    self.state.apply_comitted(deadline).unwrap();
                 }
                 () = self.waiters.maintain() => (),
             }

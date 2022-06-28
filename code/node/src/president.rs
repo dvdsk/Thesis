@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use tokio::sync::{broadcast, mpsc};
-use tracing::{info, Instrument, instrument};
+use tracing::{info, instrument, Instrument};
 
 mod load_balancing;
 mod messages;
@@ -53,15 +53,23 @@ impl raft::Order for Order {
     }
 }
 
-async fn recieve_own_order(orders: &mut mpsc::Receiver<Order>, load_notifier: LoadNotifier) {
+use crate::raft::PerishableOrder;
+async fn recieve_own_order(
+    orders: &mut mpsc::Receiver<PerishableOrder<Order>>,
+    load_notifier: LoadNotifier,
+) -> color_eyre::Result<()> {
     loop {
-        match orders.recv().await {
-            Some(Order::ResignPres) => break,
-            Some(other) => load_notifier.committed(other).await,
-            None => panic!(
-                "channel was dropped,
-                           this means another thread panicked. Joining the panic"
-            ),
+        let order = orders
+            .recv()
+            .await
+            .expect("channel was dropped, this means another thread panicked. Joining the panic");
+        match order.order.clone() {
+            Order::ResignPres => return Ok(()),
+            other => load_notifier.committed(other).await,
+        }
+
+        if order.perished() {
+            return Err(order.error());
         }
     }
 }
@@ -104,7 +112,8 @@ pub(super) async fn work(state: &mut super::State, chart: &mut Chart, term: Term
         () = load_balancing => unreachable!(),
         () = instruct_subjects => unreachable!(),
         () = messages::handle_incoming(client_listener, log_writer) => unreachable!(),
-        () = recieve_own_order(orders, load_notifier) => {
+        res = recieve_own_order(orders, load_notifier) => {
+            res.unwrap();
             info!("President {id} resigned");
             crate::Role::Idle
         }

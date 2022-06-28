@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use color_eyre::Result;
-use tracing::{instrument, info};
+use tracing::{info, instrument};
 
 use crate::directory::Directory;
 use crate::raft::{Log, ObserverLog};
@@ -20,8 +20,8 @@ async fn handle_pres_orders(
     loop {
         use president::Order;
         let order = pres_orders.recv().await;
-        redirectory.update(&order).await;
-        match order {
+        redirectory.update(&order.order).await;
+        match order.order.clone() {
             Order::None => todo!(),
             Order::Assigned(_) => todo!(),
             Order::BecomePres { term } => return Ok(Role::President { term }),
@@ -41,14 +41,25 @@ async fn handle_pres_orders(
             #[cfg(test)]
             Order::Test(_) => todo!(),
         }
+
+        if order.perished() {
+            return Err(order.error());
+        }
     }
 }
 
 #[instrument(skip_all)]
-async fn handle_minister_orders(orders: &mut ObserverLog<minister::Order>, mut dir: Directory) {
+async fn handle_minister_orders(
+    orders: &mut ObserverLog<minister::Order>,
+    mut dir: Directory,
+) -> Result<()> {
     loop {
         let order = orders.recv().await;
-        dir.update(order)
+        dir.update(order.order.clone());
+
+        if order.perished() {
+            return Err(order.error());
+        }
     }
 }
 
