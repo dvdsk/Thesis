@@ -1,9 +1,11 @@
 use std::{path::PathBuf, str::FromStr, time::Duration};
 
 use tokio::time::sleep;
+use tracing::instrument;
 
 use super::Client;
 
+#[instrument(skip(client))]
 async fn prep_dir(client: &mut Client, readers: usize, writers: usize, spread: usize) {
     let n_files = readers.max(writers);
 
@@ -37,6 +39,7 @@ async fn do_writes((id, spread, mut client): (usize, usize, Client)) {
 }
 
 /// bench reading and/or writing, spreads load across `spread` directories
+#[instrument(skip(client))]
 pub async fn leases(client: &mut Client, readers: usize, writers: usize, spread: usize) {
     use futures::stream::{FuturesUnordered, StreamExt};
 
@@ -86,6 +89,7 @@ async fn do_list((id, spread, mut client): (usize, usize, Client)) {
     }
 }
 
+#[instrument]
 pub async fn meta(creators: usize, listers: usize, spread: usize) {
     use futures::stream::{FuturesUnordered, StreamExt};
 

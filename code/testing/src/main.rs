@@ -1,16 +1,18 @@
 use std::collections::HashMap;
 use std::net::{IpAddr, Ipv4Addr};
 use std::path::PathBuf;
+use std::time::Duration;
 
 use color_eyre::eyre::Result;
 use mktemp::Temp;
 use node::util::runtime_dir;
-use node::{Config, WrapErr};
+use node::Config;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::task;
 
 use node::util;
+use tokio::time::sleep;
 use tracing::log::error;
 use tracing::warn;
 
@@ -106,9 +108,13 @@ async fn control_cluster() -> Result<()> {
     let nodes = client::ChartNodes::<3, 2>::new(8080);
     let mut client = client::Client::new(nodes);
 
-    let mut conn = TcpStream::connect("127.0.0.1:4242")
-        .await
-        .wrap_err("Could not connect to cluster manager")?;
+    println!("waiting for connectin to cluster");
+    let mut conn = loop {
+        if let Ok(conn) = TcpStream::connect("127.0.0.1:4242").await {
+            break conn;
+        }
+        sleep(Duration::from_millis(100)).await;
+    };
 
     loop {
         println!(
