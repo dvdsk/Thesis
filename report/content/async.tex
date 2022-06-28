@@ -1,9 +1,9 @@
-Before I can describe my implementation I need to introduce \textsc{Async} a syntactic language feature that allows for easy construction of asynchronous non-blocking functions. \textit{Asynchronous} programming lets us write concurrent, not parallel, tasks while looking awfully similar to normal blocking programming. It is a good alternative to \textit{event-driven} programming which tends to be verbose and hard to follow. All \textsc{Async} systems are build around special function that do not return a value but rather a \textit{promise} of a \textit{future} value. When we need the value we tell the program not to continue until the promise is fulfilled. Let's look at the example of downloading 2 files:
+\textit{Async} is a syntactic language feature that allows for easy construction of asynchronous non-blocking functions. \textit{Asynchronous} programming lets us write concurrent, not parallel, tasks while looking awfully similar to normal blocking programming. It is a good alternative to \textit{event-driven} programming which tends to be verbose and hard to follow. All \textsc{Async} systems are build around special function that do not return a value but rather a \textit{promise} of a \textit{future} value. When we need the value we tell the program not to continue until the promise is fulfilled. Let's look at the example of downloading 2 files:
 
 \begin{lstlisting}[language=rust, style=boxed, tabsize=2]
 async fn get_two_sites_async() {
 	// Create two different "futures" which, when run to 
-	// completion, will asynchronously download the webpages.
+	// completion, will asynchronously download the web pages.
 	let future_one = download_async("https://www.foo.com");
 	let future_two = download_async("https://www.bar.com");
 
@@ -15,7 +15,7 @@ async fn get_two_sites_async() {
 }
 \end{lstlisting}
 
-Notice the \texttt{async} keyword in front of the function definition it means the function will return a promise to complete in the future. The \texttt{join!} statement on line 8 combines the two promises for a future answer to a single promise for two answers. In line 10 we await or 'block' the program until \texttt{futures\_joined} turns into two value. Those can then be used in normal and async functions.
+Notice the \texttt{async} keyword in front of the function definition, it means the function will return a promise to complete in the future. The \texttt{join!} statement on line 8 combines the two promises for a future answer to a single promise for two answers. In line 10 we await or 'block' the program until \texttt{futures\_joined} turns into two value. Those can then be used in normal and async functions.
 
 The caller of our \texttt{async} \textit{get\_two\_sites\_async} function will need to be another async function that can await \textit{get\_two\_sites\_async}, or it can be an executor. An executor allows a normal function to await async functions.
 

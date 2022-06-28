@@ -7,13 +7,23 @@ A strongly typed language with algebraic data types makes it possible to express
 
 Timing is critical in this design, if the president does not send heartbeats in time elections will pop up. Languages using \ac{gc} pause program execution once every while to clean up memory. This can cause timing problems, also known as the \textit{stop the world problem}. It is possible but hard to mitigate this by carefully tweaking the \ac{gc} to keep its pauses long. If possible we should use a language without \ac{gc}.
 
-Only the \textit{Rust} language has such a type system without using \ac{gc}.
+Only the \textit{Rust} language has such a type system without using \ac{gc}. The language guarantees an absence of data races which makes a concurrent implementation far easier.
 
 \subsection{Concurrency}
 While sending and receiving data over a network most time is spent waiting. Blocking the implementation while waiting is not at all efficient. Instead, we can use the valuable time to start and or finish sending and receiving other data concurrently. Usually this is solved by spawning a thread for each connection. Another way of doing this is using \textit{non-blocking IO}, however organizing a single thread of execution to use of non-blocking-IO becomes highly complex at scale. 
 Maintaining file leases requires us to hold many concurrent connections~\cref{sec:lease}. Using one thread for each connection could limit the number of connections, therefore we can only rely on Non-blocking IO. To get around the problamitic complexity we use: \textit{Async/await}\footnote{see \cref{app:async} for a introduction to Async/await}. Async/await is a language feature which allows us to construct and combine non-blocking functions as if they were normal functions. \textit{Rust} has native support for the needed syntax however requires a third party framework to provide the actual IO implementation, here I use the \textit{Tokio} project~\cite{tokio}.
 
 There is a trend in distributed systems to take scalability as the holy grail of performance~\cite{scaling}. While the design of the system focuses on scalability in my implementing I try to optimally use the underlying hardware. While \textit{Moors~Law} might by dying single machine performance will keep scaling horizontally~\cite{moore}. This means the implementation must take full advantage of the available task parallelism. Fortunately the above-mentioned framework \textit{Tokio} provides tasks which combine organized non-blocking-IO with parallel execution. All tasks are divided into groups with each group running on a single OS-thread. Creating and destroying tasks is fast compared to OS threads.
+
+Concurrency is mostly achieved by passing messages between tasks. Where needed these messages include a method to communicate back completion. There is also some shared state to keep track of the Raft lock, however it is contained to the \textsl{raft} module. By using message passing less time is spent waiting on locks and deadlocking bugs are contained to sections using shared state. 
+
+\subsubsection*{Cancelling tasks}
+In \name's design we frequently need to abort a concurrently running task. Clerks for example handle client requests in a concurrently running task. When a clerk becomes president it needs to stop handling those requests. If we were using threads we would do this by changing a shared variable from the outside. The task would be written such that it frequently checks if the variable is changed and when it is the task returns. 
+
+Whenever an \textit{async} function has to await IO it returns control to the scheduler. When IO is ready the scheduler can choose to continue the function. We can ask it not to and instead cancel the task. As Rust enforces \acf{raii}~\cite[p.~389]{raii}~\footnote{A programming idiom where acquiring a resource is done when creating an object. When the object is destroyed code runs that release or cleans up the object"} the framework must drop all the objects in the scope of canceled tasks. 
+Task handles instruct the framework to cancel their task when they are dropped. A group of tasks can be canceled by dropping the data structure that contains the task handles. By organizing concurrent tasks as a tree with the root the \textsl{main function} cancelling and cleaning up a branch is as easy as dropping the task handle for the root of that branch. Concretely if we abort the \textsl{president} task we automatically end any tasks it created.
+
+\subsection{Structure}
 
 % (mathy) conditions from 
 % note all are ranged just range > file for unranged
