@@ -71,21 +71,41 @@ mod db {
 }
 
 #[derive(Debug)]
+enum OrderAge {
+    Fresh { process_by: Instant },
+    Old,
+}
+
+#[derive(Debug)]
 pub struct PerishableOrder<O> {
     pub order: O,
-    pub process_by: Instant,
+    age: OrderAge,
 }
 
 impl<O: std::fmt::Debug> PerishableOrder<O> {
-    #[instrument(skip_all, fields(_order, _time_left))]
-    pub fn perished(&self) -> bool { // TODO return result instead
-        let _time_left = self.process_by.saturating_duration_since(Instant::now());
-        let _order = format!("{:?}", self.order);
-        !self.process_by.elapsed().is_zero()
+    pub fn new_fresh(order: O, process_by: Instant) -> PerishableOrder<O> {
+        PerishableOrder { order, age: OrderAge::Fresh { process_by } }
     }
+
+    #[instrument(skip_all, fields(_order, _time_left))]
+    pub fn perished(&self) -> bool {
+        let process_by = match self.age {
+            OrderAge::Old => return true,
+            OrderAge::Fresh { process_by } => process_by,
+        };
+
+        let _time_left = process_by.saturating_duration_since(Instant::now());
+        let _order = format!("{:?}", self.order);
+        !process_by.elapsed().is_zero()
+    }
+
     pub fn error(&self) -> Report {
+        let elapsed_note = match self.age {
+            OrderAge::Fresh { process_by } => format!("{:?} too late", process_by.elapsed()),
+            OrderAge::Old => String::from("Old order"),
+        };
         eyre::eyre!("order processed too slow")
-            .with_note(|| format!("{:?} too late", self.process_by.elapsed()))
+            .note(elapsed_note)
             .with_note(|| format!("order was: {:?}", self.order))
     }
 }
@@ -201,10 +221,7 @@ impl<O: Order> State<O> {
     /// insert an order to the user facing facade (Log or ObserverLog)
     /// this order need not have come through the raft log
     pub(super) async fn insert_unlogged_order(&self, ord: O) {
-        let unlogged = PerishableOrder {
-            process_by: Instant::now() + HB_PERIOD,
-            order: ord,
-        };
+        let unlogged = PerishableOrder::new_fresh(ord, Instant::now()+HB_PERIOD);
         self.tx.send(unlogged).await.unwrap();
     }
 

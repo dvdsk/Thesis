@@ -4,7 +4,7 @@ use std::time::Instant;
 use tokio::sync::{mpsc, Notify};
 use tracing::{debug, instrument};
 
-use crate::raft::{State, Order, HB_PERIOD};
+use crate::raft::{Order, State, HB_PERIOD};
 use crate::Idx;
 
 struct Waiters {
@@ -51,10 +51,7 @@ pub struct Committed<'a, O: Order> {
 }
 
 impl<'a, O: Order> Committed<'a, O> {
-    pub fn new(
-        notify_rx: mpsc::Receiver<(Idx, Arc<Notify>)>,
-        state: &'a State<O>,
-    ) -> Self {
+    pub fn new(notify_rx: mpsc::Receiver<(Idx, Arc<Notify>)>, state: &'a State<O>) -> Self {
         Self {
             streams: stream::SelectAll::new(),
             highest: Vec::new(),
@@ -109,13 +106,16 @@ impl<'a, O: Order> Committed<'a, O> {
                     let new = self.majority_appended();
 
                     let old = self.state.commit_index();
-                    if old < new {
-                        self.waiters.notify(new);
-                        debug!("commit index increased: {old} -> {new}");
+                    if new < old {
+                        continue
                     }
+
+                    self.waiters.notify(new);
+                    debug!("commit index increased: {old} -> {new}");
                     self.state.set_commit_index(new);
                     let deadline = Instant::now() + HB_PERIOD;
-                    self.state.apply_comitted(deadline).unwrap();
+                    let n_entries = new - old; // number of entries that can be committed now
+                    self.state.apply_comitted(deadline, n_entries, new).unwrap();
                 }
                 () = self.waiters.maintain() => (),
             }

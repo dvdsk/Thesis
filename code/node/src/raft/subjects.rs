@@ -128,7 +128,7 @@ async fn recieve_reply<O: Order>(
 }
 
 /// replicate orders untill connection is lost
-#[instrument(skip(_broadcast, appended, req_gen, stream))]
+#[instrument(skip_all)]
 async fn replicate_orders<O: Order>(
     _broadcast: &mut broadcast::Receiver<O>,
     appended: &mut mpsc::Sender<u32>,
@@ -246,7 +246,7 @@ pub async fn instruct<O: Order>(
             },
             down = subjects.join_one() => {
                 let down = down.expect("manage subject panicked!");
-                members.forget_impl(down);
+                members.forget(down);
             }
             _ = commit_idx.maintain() => unreachable!(),
         }

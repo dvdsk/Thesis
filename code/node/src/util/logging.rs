@@ -29,6 +29,7 @@ where
     let tracer = opentelemetry_jaeger::new_pipeline()
         .with_trace_config(config)
         .with_agent_endpoint((endpoint, 6831))
+        .with_auto_split_batch(true)
         .with_service_name("raft-fs")
         .install_batch(opentelemetry::runtime::Tokio)
         .unwrap();

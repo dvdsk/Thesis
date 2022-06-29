@@ -86,6 +86,7 @@ impl<T: RandomNode> super::Client<T> {
         let msg = self.conn.as_mut().unwrap().stream.try_next().await;
         match msg {
             Ok(Some(Response::Done)) => return Ok(()),
+            Ok(None) => warn!("Connection closed while following up on ticket"),
             Ok(msg) => panic!("unexpected msg while following up on ticket: {msg:?}"),
             Err(e) => warn!("Connection lost while following up on ticket: {e:?}"),
         }

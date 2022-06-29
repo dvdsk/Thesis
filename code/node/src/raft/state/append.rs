@@ -6,15 +6,16 @@ use std::time::Instant;
 use tokio::sync::mpsc::error::TrySendError;
 use tracing::{instrument, warn};
 
-use super::{db, LogIdx, Order, State};
+use super::{db, LogIdx, Order, OrderAge, State};
 use crate::raft::HB_PERIOD;
 use crate::util::TypedSled;
 use crate::{Id, Idx, Term};
 
 impl<O: Order> State<O> {
-    #[instrument(level="debug", skip(self), ret)]
+    #[instrument(level = "debug", skip(self), ret)]
     pub async fn append_req(&self, req: Request<O>) -> Result<Reply> {
         let process_by = Instant::now() + HB_PERIOD;
+        let n_entries;
         let nothing_to_append;
         {
             // lock scope of election_office
@@ -40,7 +41,7 @@ impl<O: Order> State<O> {
                 return Ok(Reply::InconsistentLog);
             }
 
-            let n_entries = req.entries.len() as u32;
+            n_entries = req.entries.len() as u32;
             nothing_to_append = req.entries.is_empty();
             for (i, order) in req.entries.into_iter().enumerate() {
                 let index = req.prev_log_idx + i as u32 + 1;
@@ -56,7 +57,7 @@ impl<O: Order> State<O> {
             }
         } // end lock scope
 
-        self.apply_comitted(process_by)?;
+        self.apply_comitted(process_by, n_entries, req.leader_commit)?;
 
         Ok(match nothing_to_append {
             true => Reply::HeartBeatOk,
@@ -64,11 +65,24 @@ impl<O: Order> State<O> {
         })
     }
 
-    pub fn apply_comitted(&self, process_by: Instant) -> Result<()> {
+    #[instrument(skip(self), err)]
+    pub fn apply_comitted(
+        &self,
+        process_by: Instant,
+        n_entries: u32,
+        leader_commit: u32,
+    ) -> Result<()> {
+        // log entries with index larger then fresh index have been issued
+        // in the last heartbeat and must be processed in time (process_by)
         let last_applied = self.last_applied();
         if self.commit_index() > last_applied {
+            let fresh_idx = leader_commit - n_entries;
             let to_apply = self.increment_last_applied();
-            self.apply_log(to_apply, process_by)?;
+            if to_apply >= fresh_idx {
+                self.apply_log(to_apply, OrderAge::Fresh { process_by })?;
+            } else {
+                self.apply_log(to_apply, OrderAge::Old)?;
+            }
         }
         Ok(())
     }
@@ -134,13 +148,14 @@ impl<O: Order> State<O> {
     }
 
     #[instrument(skip(self))]
-    pub(super) fn apply_log(&self, idx: Idx, process_by: Instant) -> Result<()> {
+    pub(super) fn apply_log(&self, idx: Idx, age: OrderAge) -> Result<()> {
         let LogEntry { order, .. } = self
             .db
             .get_val(db::log_key(idx))
             .expect("there should be an item in the log");
         tracing::trace!("applied log: {idx}");
-        match self.tx.try_send(super::PerishableOrder{order, process_by}) {
+        let order = super::PerishableOrder { order, age };
+        match self.tx.try_send(order) {
             Ok(..) => Ok(()),
             Err(TrySendError::Full(..)) => Err(eyre!("Orders are not consumed (fast) enough")),
             Err(TrySendError::Closed(..)) => unreachable!("Log closed the recieving mpsc"),

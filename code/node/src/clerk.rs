@@ -63,6 +63,8 @@ async fn handle_minister_orders(
     }
 }
 
+// TODO FIXME if this is a fresh clerk it can NOT serve client requests until it's
+// log is up to date
 #[instrument(skip(state))]
 pub(crate) async fn work(state: &mut super::State, our_subtree: PathBuf) -> Result<Role> {
     let super::State {
@@ -91,9 +93,12 @@ pub(crate) async fn work(state: &mut super::State, our_subtree: PathBuf) -> Resu
     let pres_orders = handle_pres_orders(pres_orders, *id, our_subtree, redirectory);
     let minister_orders = handle_minister_orders(min_orders, directory);
 
+    // TODO delay this until log is up to date
+    // OR
+    // TODO adjust client requests so it stops serving when no longer up to date (atomicbool)
     tokio::select! {
         new_role = pres_orders => new_role,
-        _ = client_requests => unreachable!(),
-        _ = minister_orders => unreachable!(),
+        res = client_requests => unreachable!("no error should happen: {res:?}"),
+        res = minister_orders => unreachable!("no error should happen: {res:?}"),
     }
 }

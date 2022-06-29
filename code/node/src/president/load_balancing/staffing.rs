@@ -10,7 +10,7 @@ use crate::redirectory::Staff;
 
 use super::issue::Issue;
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub(super) struct Staffing {
     by_ministry: HashMap<PathBuf, Staff>,
     pub ministers: HashMap<Id, PathBuf>,
@@ -23,13 +23,12 @@ impl Staffing {
         use president::Order::*;
 
         if let AssignMinistry { subtree, staff } = order {
-            // TODO detect changes that make a ministry to
-            // small (understaffed err)
             self.by_ministry.insert(subtree.clone(), staff.clone());
             self.ministers.insert(staff.minister.id, subtree.clone());
             let tagged_clerks = staff.clerks.iter().map(|c| (c.id, subtree.clone()));
             self.clerks
                 .extend(tagged_clerks.map(|(clerk, path)| (clerk, path)));
+            self.reset_down(&subtree);
         }
     }
 
@@ -54,6 +53,22 @@ impl Staffing {
         self.by_ministry.get(ministry).unwrap().clerks.len()
     }
 
+    fn reset_down(&mut self, ministry: &Path) {
+        self.clerks_down.remove(ministry);
+    }
+
+    fn clerks_add_down(&mut self, ministry: &Path, id: Id) {
+        match self.clerks_down.get_mut(ministry) {
+            Some(down) => {
+                down.push(id);
+            }
+            None => {
+                let existing = self.clerks_down.insert(ministry.to_owned(), vec![id]);
+                assert_eq!(existing, None);
+            }
+        }
+    }
+
     #[instrument(skip(self), ret)]
     pub fn register_node_down(&mut self, id: Id) -> Vec<Issue> {
         let mut issues = Vec::new();
@@ -65,24 +80,19 @@ impl Staffing {
             });
             ministry
         } else if let Some(ministry) = self.clerks.remove(&id) {
+            self.clerks_add_down(&ministry, id);
             ministry
         } else {
-            return Vec::new(); // node that went down was idle node
+            return Vec::new();
         };
 
-        let down = match self.clerks_down.get_mut(&ministry) {
-            Some(down) => {
-                down.push(id);
-                down.clone()
-            }
-            None => {
-                let existing = self.clerks_down.insert(ministry.clone(), vec![id]);
-                assert_eq!(existing, None);
-                vec![id]
-            }
-        };
-
-        if self.n_clerks(&ministry) - down.len() < 2 {
+        let down = self
+            .clerks_down
+            .get(&ministry)
+            .cloned()
+            .unwrap_or_else(|| Vec::new());
+        let clerks_left = self.n_clerks(&ministry) - down.len();
+        if clerks_left < 2 {
             issues.push(Issue::UnderStaffed {
                 subtree: ministry,
                 down,
