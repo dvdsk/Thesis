@@ -1,0 +1,24 @@
+\begin{tikzpicture}[node distance=0.5cm and 1.0cm, auto]
+	\node (root) [base] {main function};
+
+	\node (maintain_disc) [base, below left=of root] {discover nodes};
+
+	\node (succesion) [base, below right=of root] {president succesion};
+	\node (handle_raft_pres) [base, right=of succesion] {president raft requests};
+	\begin{pgfonlayer}{background}
+		\node [fill=black!8, fit=(succesion) (handle_raft_pres)] {};
+	\end{pgfonlayer}
+
+	\node (handle_raft_min) [base, below=of handle_raft_pres] {minister raft requests};
+	\begin{pgfonlayer}{background}
+		\node [fill=black!8, fit=(handle_raft_min)] {};
+	\end{pgfonlayer}
+
+	\node (role) [base, below=of root] {role};
+	\node (idle) [base, below=of role] {idle};
+	\node (clerk) [base, below=of idle] {clerk};
+	\node (minister) [base, below=of clerk] {minister};
+	\node (president) [base, below=of minister] {president};
+
+
+\end{tikzpicture}
