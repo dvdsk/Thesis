@@ -24,11 +24,8 @@ Whenever an \textit{async} function has to await IO it returns control to the sc
 Task handles instruct the framework to cancel their task when they are dropped. A group of tasks can be canceled by dropping the data structure that contains the task handles. By organizing concurrent tasks as a tree with the root the \textsl{main function} cancelling and cleaning up a branch is as easy as dropping the task handle for the root of that branch. Concretely if we abort the \textsl{president} task we automatically end any tasks it created.
 
 \subsection{Structure}
-Nodes in \name switch between the role of \textit{president}, \textit{minister}, \textit{clerk} and \textit{idle}. The roles are separate functions. When a node switches role it returns from one function and enters the one corresponding with its new role. The switching is implemented in the state machine seen in \cref{lst:state}. In Rust expressions return a value, the \lstinline[language=rust]{match} statement in line 2 returns the \lstinline[language=rust]{role} for the next iteration. The different \lstinline[language=rust]{work} functions set up the async tasks needed before waiting for an exit condition.
-
-Let's take a look at the president work function. It is called when a node enters the \textit{president} branch of the \lstinline[language=rust]{match} statement. This in turn is the result of the current node winning an election while it was fulfilling one of the other roles. We return from the president work function when we receive a message that another node has become president and that president has a higher term. 
-
-
+Nodes in \name{} switch between the role of \textit{president}, \textit{minister}, \textit{clerk} and \textit{idle}. The roles are separate functions. When a node switches role it returns from one function and enters the one corresponding with its new role. The switching is implemented in the state machine seen in \cref{lst:state}. In Rust expressions return a value, the \lstinline[language=rust]{match} statement in line 2 returns the \lstinline[language=rust]{role} for the next iteration. The different \lstinline[language=rust]{work} functions set up the async tasks needed before waiting for an exit condition.
+%
 \begin{lstlisting}[float,language=rust,style=boxed,tabsize=2,caption={The state machine switching between a nodes different roles},label=lst:state]
 let mut role = Role::Idle;
 loop {
@@ -50,9 +47,24 @@ loop {
 	}
 }
 \end{lstlisting}
+\clearpage
+%
+Before nodes enter the state machine we set up two \raft{} logs. The president log handles messages, timing out on inactivity and holding elections in a background task. The minister log handles only receiving messages. In both cases newly committed log entries (or orders) are made available through a queue to a \raft{} Log object. Election losses and wins are also communicated through the queue.
 
+Let us now take a look at the president work function see~\cref{lst:pres}. We enter it if we are elected president while in one of the other roles.
+%
+The function takes a number of arguments one of which is the presidential \raft{} Log. It is destructed into its parts: the queue, and the \raft{} state. A LogWriter is created which allows appending to the raft log and waiting till the appended order is committed. Finally, we create the LoadBalancer. The created objects are passed to the async functions or tasks: 
+\begin{itemize}
+	\item \textsl{load\_balancing}: issues orders using the LogWriter assigning nodes and file subtrees to ministries, re-assigns based on events such as: nodes going down, coming back online, new being added and ministry load.
+	\item \textsl{instruct\_subjects}: run the leader part of the \raft{} algorithm. Shares log entries with all other nodes and tracks which can be committed then applying them locally.
+	\item \textsl{handle\_incoming}: handle requests, redirecting clients to ministries.
+	\item \textsl{recieve\_own\_order}: apply committed orders from the \raft{} Log queue to the programs state.
+\end{itemize}
+%
+These are then selected on, that is run concurrently until one of them finishes. Specifically here they run until \textsl{recieve\_own\_order} ends. This happens when the \raft{} background task inserts a \lstinline[language=rust]{ResignPres} order indicating a higher termed president was noticed. At this point the president work function finishes returning the next role: Idle.
 
-\begin{lstlisting}[float,language=rust,style=boxed,tabsize=2,caption={The president work function, it performs all the tasks of the president. In this code snippet brackets and parenthesis containing whitespace mean the corrosponding structs and functions have there arguments hidden for brevity},label=lst:president]
+%
+\begin{lstlisting}[float,language=rust,style=boxed,tabsize=2,caption={The president work function, it performs all the tasks of the president. In this code snippet brackets and parenthesis containing whitespace mean the corrosponding structs and functions have there arguments hidden for brevity},label=lst:pres]
 pub(super) async fn work( ) -> crate::Role {
 	let Log { orders, state, .. } = pres_orders;
 	let (broadcast, _) = broadcast::channel(16);
@@ -77,7 +89,14 @@ pub(super) async fn work( ) -> crate::Role {
 }
 \end{lstlisting}
 
+The other work functions similarly select on multiple async tasks. The tasks themselves often create yet other tasks. This way the program builds up a tree of concurrently working functions. The tree is illustrated in \cref{fig:tree}.
 
+\begin{figure}[htbp]
+	\centering
+	\input{figs/diagrams/structure.tex}
+	\caption{Structure of the program visualized as a tree of all concurrently running tasks}
+	\label{fig:tree}
+\end{figure}
 % (mathy) conditions from 
 % note all are ranged just range > file for unranged
 % mocking
