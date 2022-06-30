@@ -23,13 +23,13 @@ impl<O: Order> State<O> {
 
         if req.term < term {
             trace!("term to low");
-            return None; // TODO: drops lock
+            return None;
         }
 
         if req.term > term {
             term = req.term;
             voted_for = None;
-            election_office.set_term(req.term); // TODO use db update to check term
+            election_office.set_term(req.term);
         }
 
         if let Some(id) = voted_for {

@@ -38,9 +38,6 @@ impl Source for RaftMap {
     fn our_id(&self) -> Id {
         self.our_id
     }
-    /// TODO this is used in read lock management but wont work there
-    /// because read lock management needs the `client_addr`. To solve
-    /// this: make map generic over addr then wrap map again with generics recolved ?
     fn adresses(&mut self) -> Vec<(Id, SocketAddr)> {
         self.current
             .iter()
@@ -58,8 +55,6 @@ pub struct ClientAddrMap {
     current: HashSet<Node>,
     recv: Option<mpsc::Receiver<(Id, ClientAddr)>>,
 }
-// TODO split off to seperate map obj that does NOT implement Source
-// TODO reciever will be a type alias for Reciever and not a RegistrationNotify
 impl ClientAddrMap {
     pub fn adresses(&self) -> Vec<(Id, ClientAddr)> {
         self.current
