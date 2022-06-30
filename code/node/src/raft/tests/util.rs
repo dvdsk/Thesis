@@ -4,6 +4,7 @@ use tokio::sync::{mpsc, Notify};
 use tracing::{trace, instrument};
 
 use crate::president::Order;
+use crate::raft::Perishable;
 use crate::raft::tests::TEST_TIMEOUT;
 use crate::{Term, Id};
 
@@ -17,11 +18,11 @@ pub async fn discoverd_majority(signal: mpsc::Sender<()>, chart: Chart, cluster_
 
 #[instrument(skip_all)]
 pub async fn wait_till_pres(
-    orders: &mut mpsc::Receiver<Order>,
+    orders: &mut mpsc::Receiver<Perishable<Order>>,
     debug_tx: &mut mpsc::Sender<Order>,
 ) -> Term {
     loop {
-        match orders.recv().await {
+        match orders.recv().await.map(|o| o.order) {
             Some(order) => {
                 trace!("got applied order: {order:?}");
                 debug_tx.try_send(order.clone()).unwrap();

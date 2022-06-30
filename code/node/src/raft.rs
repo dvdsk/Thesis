@@ -24,7 +24,7 @@ mod tests;
 
 pub use log::{Log, ObserverLog};
 pub use log_writer::LogWriter;
-pub use state::{LogEntry, PerishableOrder, State};
+pub use state::{LogEntry, Perishable, State};
 
 use crate::Term;
 

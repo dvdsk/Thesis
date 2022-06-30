@@ -11,16 +11,17 @@ use tokio::net::TcpStream;
 use tokio::sync::broadcast;
 use tokio::sync::mpsc;
 use tokio::task::JoinSet;
-use tracing::Instrument;
 use tracing::debug;
 use tracing::info;
 use tracing::instrument;
 use tracing::warn;
+use tracing::Instrument;
 
 use crate::president::subjects;
 use crate::president::Order;
 use crate::raft;
 use crate::raft::LogWriter;
+use crate::raft::Perishable;
 use crate::raft::State;
 use crate::util;
 use crate::Id;
@@ -44,7 +45,7 @@ impl crate::raft::subjects::StatusNotifier for MockStatusNotifier {
 async fn heartbeat_while_pres(
     mut chart: Chart,
     state: State<Order>,
-    mut orders: mpsc::Receiver<Order>,
+    mut orders: mpsc::Receiver<Perishable<Order>>,
     mut tx: mpsc::Sender<Order>,
     mut curr_pres: CurrPres,
 ) {
@@ -69,7 +70,7 @@ async fn heartbeat_while_pres(
 
         tokio::select! {
             () = instruct => unreachable!(),
-            usurper = orders.recv() => match usurper {
+            usurper = orders.recv() => match usurper.map(|o| o.order) {
                 Some(Order::ResignPres) => info!("president {} resigned", chart.our_id()),
                 Some(_other) => unreachable!("The president should never recieve
                                              an order expect resign, recieved: {_other:?}"),
@@ -105,7 +106,7 @@ impl TestVoteNode {
         let tree = db.open_tree("pres").unwrap();
         let (order_tx, order_rx) = mpsc::channel(16);
         let (debug_tx, debug_rx) = mpsc::channel(16);
-        let state = State::new(order_tx, tree.clone());
+        let state: State<Order> = State::new(order_tx, tree.clone());
 
         let (signal, found_majority) = mpsc::channel(1);
 
@@ -123,8 +124,7 @@ impl TestVoteNode {
             .name("discovery")
             .spawn(discovery::maintain(chart.clone()));
 
-        let handle_incoming =
-            raft::handle_incoming(listener, state.clone()).in_current_span();
+        let handle_incoming = raft::handle_incoming(listener, state.clone()).in_current_span();
         tasks.build_task().name("incoming").spawn(handle_incoming);
         let succesion =
             raft::succession(chart.clone(), cluster_size, state.clone()).in_current_span();
@@ -200,7 +200,7 @@ pub async fn handle_incoming(listener: &mut TcpListener, log: LogWriter<Order>) 
 pub async fn president(
     mut chart: Chart,
     state: State<Order>,
-    mut orders: mpsc::Receiver<Order>,
+    mut orders: mpsc::Receiver<Perishable<Order>>,
     mut tx: mpsc::Sender<Order>,
     mut curr_pres: CurrPres,
     mut listener: TcpListener,
@@ -219,9 +219,9 @@ pub async fn president(
             notify_tx: tx,
         };
 
-        async fn keep_log_update(orders: &mut mpsc::Receiver<Order>) {
+        async fn keep_log_update(orders: &mut mpsc::Receiver<Perishable<Order>>) {
             loop {
-                match orders.recv().await {
+                match orders.recv().await.map(|o| o.order) {
                     Some(Order::ResignPres) => break,
                     Some(other) => debug!("order added: {other:?}"),
                     None => panic!(
@@ -298,16 +298,15 @@ impl TestAppendNode {
             .name("discovery")
             .spawn(discovery::maintain(chart.clone()));
 
-        let handle_incoming =
-            raft::handle_incoming(pres_listener, state.clone()).in_current_span();
+        let handle_incoming = raft::handle_incoming(pres_listener, state.clone()).in_current_span();
         tasks.build_task().name("incoming").spawn(handle_incoming);
 
         let succesion =
             raft::succession(chart.clone(), cluster_size, state.clone()).in_current_span();
         tasks.build_task().name("succesion").spawn(succesion);
 
-        let president = president(chart, state, order_rx, debug_tx, curr_pres, req_listener)
-            .in_current_span();
+        let president =
+            president(chart, state, order_rx, debug_tx, curr_pres, req_listener).in_current_span();
         tasks.build_task().name("president").spawn(president);
 
         Ok((

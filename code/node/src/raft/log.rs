@@ -6,14 +6,14 @@ use tracing::{info, instrument, Instrument};
 
 use crate::{Chart, util};
 
-use super::state::{State, PerishableOrder};
+use super::state::{State, Perishable};
 use super::{handle_incoming, succession, Order};
 
 /// abstraction over raft that allows us to wait on
 /// new committed log entries, while transparently holding elections
 /// if we become president we recieve log entry: `Order::BecomePres`
 pub struct Log<O> {
-    pub orders: Receiver<PerishableOrder<O>>, // commited entries can be recoverd from here
+    pub orders: Receiver<Perishable<O>>, // commited entries can be recoverd from here
     pub state: State<O>,
     _handle_incoming: util::CancelOnDropTask<()>,
     _succession: util::CancelOnDropTask<()>,
@@ -41,7 +41,7 @@ impl<O: Order> Log<O> {
         })
     }
 
-    pub(crate) async fn recv(&mut self) -> PerishableOrder<O> {
+    pub(crate) async fn recv(&mut self) -> Perishable<O> {
         self.orders
             .recv()
             .await
@@ -52,7 +52,7 @@ impl<O: Order> Log<O> {
 /// abstraction over raft that allows us to wait on
 /// new committed log entries, without taking part in elections
 pub struct ObserverLog<O> {
-    pub orders: Receiver<PerishableOrder<O>>, // commited entries can be recoverd from here
+    pub orders: Receiver<Perishable<O>>, // commited entries can be recoverd from here
     pub state: State<O>,
     _handle_incoming: JoinHandle<()>,
 }
@@ -74,7 +74,7 @@ impl<O: Order> ObserverLog<O> {
         })
     }
 
-    pub(crate) async fn recv(&mut self) -> PerishableOrder<O> {
+    pub(crate) async fn recv(&mut self) -> Perishable<O> {
         self.orders
             .recv()
             .await

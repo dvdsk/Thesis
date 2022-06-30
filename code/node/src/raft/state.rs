@@ -70,21 +70,21 @@ mod db {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 enum OrderAge {
     Fresh { process_by: Instant },
     Old,
 }
 
-#[derive(Debug)]
-pub struct PerishableOrder<O> {
+#[derive(Debug, Clone)]
+pub struct Perishable<O> {
     pub order: O,
     age: OrderAge,
 }
 
-impl<O: std::fmt::Debug> PerishableOrder<O> {
-    pub fn new_fresh(order: O, process_by: Instant) -> PerishableOrder<O> {
-        PerishableOrder { order, age: OrderAge::Fresh { process_by } }
+impl<O: std::fmt::Debug> Perishable<O> {
+    pub fn new_fresh(order: O, process_by: Instant) -> Perishable<O> {
+        Perishable { order, age: OrderAge::Fresh { process_by } }
     }
 
     #[instrument(skip_all, fields(_order, _time_left))]
@@ -115,13 +115,13 @@ pub struct State<O> {
     pub election_office: Arc<Mutex<ElectionOffice>>,
     /// sends orders to ObserverLog or Log where they can be consumed
     /// should be consumed within one HB period or state becomes inconsistent
-    tx: mpsc::Sender<PerishableOrder<O>>,
+    tx: mpsc::Sender<Perishable<O>>,
     db: sled::Tree,
     vars: Arc<Vars>,
 }
 
 impl<O: Order> State<O> {
-    pub fn new(tx: mpsc::Sender<PerishableOrder<O>>, db: sled::Tree) -> Self {
+    pub fn new(tx: mpsc::Sender<Perishable<O>>, db: sled::Tree) -> Self {
         let election_office = ElectionOffice::from_tree(&db);
         election_office.init_election_data();
         let state = Self {
@@ -221,7 +221,7 @@ impl<O: Order> State<O> {
     /// insert an order to the user facing facade (Log or ObserverLog)
     /// this order need not have come through the raft log
     pub(super) async fn insert_unlogged_order(&self, ord: O) {
-        let unlogged = PerishableOrder::new_fresh(ord, Instant::now()+HB_PERIOD);
+        let unlogged = Perishable::new_fresh(ord, Instant::now()+HB_PERIOD);
         self.tx.send(unlogged).await.unwrap();
     }
 

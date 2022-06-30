@@ -4,7 +4,7 @@ use tokio::sync::{mpsc, Barrier};
 use tokio::task::JoinSet;
 
 use crate::raft::state::append::Reply;
-use crate::raft::State;
+use crate::raft::{State, Perishable};
 use crate::president::Order;
 use crate::{util, Id, Term};
 
@@ -89,7 +89,7 @@ impl RequestGen {
 //  - a request sending Order::Test
 //  - invalid requests for the above ^
 
-fn setup() -> (RequestGen, State<Order>, mpsc::Receiver<Order>) {
+fn setup() -> (RequestGen, State<Order>, mpsc::Receiver<Perishable<Order>>) {
     const ID: u64 = 2;
     let gen = RequestGen::new(ID);
 
@@ -112,7 +112,7 @@ async fn only_correct_entries() {
     let reply = state.append_req(gen.heartbeat()).await.unwrap();
     assert_eq!(reply, Reply::HeartBeatOk);
     let order = order_rx.recv().await.unwrap();
-    assert_eq!(order, Order::Test(1));
+    assert_eq!(order.order, Order::Test(1));
 
     let reply = state.append_req(gen.correct(2)).await.unwrap();
     assert_eq!(reply, Reply::AppendOk);
@@ -121,7 +121,7 @@ async fn only_correct_entries() {
     let reply = state.append_req(gen.correct(3)).await.unwrap();
     assert_eq!(reply, Reply::AppendOk);
     let order = order_rx.recv().await.unwrap();
-    assert_eq!(order, Order::Test(2));
+    assert_eq!(order.order, Order::Test(2));
 }
 
 #[tokio::test]
@@ -144,7 +144,7 @@ async fn some_incorrect_entries() {
     assert_eq!(reply, Reply::AppendOk);
 
     let order = order_rx.recv().await.unwrap();
-    assert_eq!(order, Order::Test(10));
+    assert_eq!(order.order, Order::Test(10));
 
     // zombi leader sends an order
     let reply = state.append_req(zombi_gen.correct(14)).await.unwrap();
@@ -155,7 +155,7 @@ async fn some_incorrect_entries() {
     assert_eq!(reply, Reply::HeartBeatOk);
 
     let order = order_rx.recv().await.unwrap();
-    assert_eq!(order, Order::Test(21));
+    assert_eq!(order.order, Order::Test(21));
 }
 
 async fn append_correct(
@@ -208,7 +208,7 @@ async fn append_multiple_simultaneous() {
         assert_eq!(reply, Reply::HeartBeatOk);
 
         let order = order_rx.recv().await.unwrap();
-        assert_eq!(order, Order::Test(n as u8));
+        assert_eq!(order.order, Order::Test(n as u8));
     }
 }
 

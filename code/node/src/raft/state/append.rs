@@ -154,7 +154,7 @@ impl<O: Order> State<O> {
             .get_val(db::log_key(idx))
             .expect("there should be an item in the log");
         tracing::trace!("applied log: {idx}");
-        let order = super::PerishableOrder { order, age };
+        let order = super::Perishable { order, age };
         match self.tx.try_send(order) {
             Ok(..) => Ok(()),
             Err(TrySendError::Full(..)) => Err(eyre!("Orders are not consumed (fast) enough")),

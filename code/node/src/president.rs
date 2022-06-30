@@ -53,9 +53,9 @@ impl raft::Order for Order {
     }
 }
 
-use crate::raft::PerishableOrder;
+use crate::raft::Perishable;
 async fn recieve_own_order(
-    orders: &mut mpsc::Receiver<PerishableOrder<Order>>,
+    orders: &mut mpsc::Receiver<Perishable<Order>>,
     load_notifier: LoadNotifier,
 ) -> color_eyre::Result<()> {
     loop {
