@@ -98,7 +98,7 @@ async fn handle_conn<O: Order>(
                 // usually this is not a big problem, a president could have
                 // resigned, closing the connection
                 warn!(
-                    "error sending reply to presidents request: \n{req:?}, \n{e:?}",
+                    "error sending reply to raft request: \n{req:?}, \n{e:?}",
                     req = msg.unwrap()
                 );
                 return Ok(());

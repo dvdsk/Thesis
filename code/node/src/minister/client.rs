@@ -12,7 +12,7 @@ use protocol::{Request, Response};
 use time::OffsetDateTime;
 use tokio::task::JoinSet;
 use tokio::time::{sleep_until, timeout, timeout_at, Instant};
-use tracing::{debug, warn, instrument};
+use tracing::{debug, instrument, warn, error};
 
 use crate::directory::{self, Directory};
 use crate::raft::{self, LogWriter, HB_TIMEOUT};
@@ -54,7 +54,7 @@ async fn check_subtree(
 ) -> Result<(), Response> {
     use Request::*;
     match req {
-        List(path) | Read { path, .. }=> {
+        List(path) | Read { path, .. } => {
             let (staff, subtree) = redirect.to_staff(path).await;
             Err(Response::Redirect {
                 staff: staff.for_client(),
@@ -104,7 +104,13 @@ async fn handle_conn(
                     false => Ok(Response::NotCommitted),
                 },
                 RefreshLease => Ok(Response::LeaseDropped),
-                _ => unreachable!("pattern should have been checked in `check_subtree`"),
+                List(_) | Read { .. } => {
+                    unreachable!("pattern should have been checked in `check_subtree`")
+                }
+                Lock { .. } | Unlock { .. } | UnlockAll | HighestCommited => {
+                    error!("requests should not be send to a minister: {req:?}");
+                    return;
+                }
             },
         };
 
