@@ -1,0 +1,24 @@
+The current implementation, while functional, is far from optimal. There are bottlenecks which restrict performance and the system is unstable. It is not feasible for a master’s thesis to build a system as fast and as performant and stable as \ceph{} or \ac{hdfs}. Here I explored whether an architecture using ministries and ranged based file locking offers an advantage to existing solutions. We can still answer that question. 
+
+Before we can design experiments that work around the limitations we need to be clear on what those are:
+
+\begin{itemize}
+	\item The \raft{} implementation sends only a single log entry at the time and log entries are sent each heartbeat period instead of whenever data becomes available. Effectively imposing a rate limit on the number of changes made to metadata.
+	\item Load balancing only replaces nodes that went down, it does not do runtime subtree partitioning (see:~\cref{sec:subtree}).
+	\item When making a large amount of requests changing metadata nodes become unresponsive. This means it starts missing heartbeats which triggers re-elections. % NEEDS to be solved
+\end{itemize}
+
+None of these impact range based file locking. We can work around them testing the architecture. To check if the results would change without these limitations I profile the system highlighting any bottlenecks that would impact performance.
+
+\subsubsection*{Ministry Architecture}
+Here we test the impact of varying amount of ministries on performance. If more ministries lead to a significant performance increase then the design is a success. 
+
+Given the limitation of unimplemented live subtree partitioning we need to manually configure the file system. Without prior data the load balancer will initialize a single ministry responsible for the root directory. For this test we modify it to initialize n ministries one hosting the root the others the directories 0 till n-1 each located in the root.
+
+If there was no rate limit\footnote{Imposed by the suboptimal \raft{} implementation} then load could increase until the node could no longer keep up. Effectively the node's hardware would impose a (high) rate limit. This assumes that there are no other bottlenecks, possible inherent to the design, in the system. The latter we investigate by profiling the nodes, see:~\cref{sec:profile}.
+
+% TODO actual results
+
+\subsubsection*{Range based file locking}
+
+\subsubsection*{Profiling} \label{sec:profile}
