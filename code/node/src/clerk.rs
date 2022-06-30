@@ -11,6 +11,9 @@ use crate::{minister, president, Id, Role};
 mod clients;
 mod locks;
 
+/// # Note:
+/// This function is NOT CANCEL SAFE. It can be canceld in redirectory.update
+/// leading to the order never being processed
 async fn handle_pres_orders(
     pres_orders: &mut Log<president::Order>,
     our_id: Id,
@@ -49,7 +52,7 @@ async fn handle_pres_orders(
 }
 
 #[instrument(skip_all)]
-async fn handle_minister_orders(
+async fn keep_dir_updated(
     orders: &mut ObserverLog<minister::Order>,
     mut dir: Directory,
 ) -> Result<()> {
@@ -63,8 +66,34 @@ async fn handle_minister_orders(
     }
 }
 
-// TODO FIXME if this is a fresh clerk it can NOT serve client requests until it's
-// log is up to date
+#[instrument(skip_all)]
+async fn update_dir(orders: &mut ObserverLog<minister::Order>, dir: &mut Directory) -> Result<()> {
+    loop {
+        let order = orders.recv().await;
+        dir.update(order.order.clone());
+
+        // reached fresh orders => now up to date
+        if !order.perished() {
+            return Ok(());
+        }
+    }
+}
+
+async fn update_then_handle_requests(
+    client_requests: impl futures::Future<Output = ()>,
+    min_orders: &mut ObserverLog<minister::Order>,
+    mut directory: Directory,
+) {
+    let update_dir = update_dir(min_orders, &mut directory);
+    update_dir.await.unwrap();
+
+    let keep_dir_updated = keep_dir_updated(min_orders, directory);
+    tokio::select! {
+        res = client_requests => unreachable!("no error should happen: {res:?}"),
+        res = keep_dir_updated => unreachable!("no error should happen: {res:?}"),
+    }
+}
+
 #[instrument(skip(state))]
 pub(crate) async fn work(state: &mut super::State, our_subtree: PathBuf) -> Result<Role> {
     let super::State {
@@ -90,15 +119,11 @@ pub(crate) async fn work(state: &mut super::State, our_subtree: PathBuf) -> Resu
         redirectory.clone(),
         directory.clone(),
     );
-    let pres_orders = handle_pres_orders(pres_orders, *id, our_subtree, redirectory);
-    let minister_orders = handle_minister_orders(min_orders, directory);
 
-    // TODO delay this until log is up to date
-    // OR
-    // TODO adjust client requests so it stops serving when no longer up to date (atomicbool)
+    let pres_orders = handle_pres_orders(pres_orders, *id, our_subtree, redirectory);
+    let update_then_requests = update_then_handle_requests(client_requests, min_orders, directory);
     tokio::select! {
         new_role = pres_orders => new_role,
-        res = client_requests => unreachable!("no error should happen: {res:?}"),
-        res = minister_orders => unreachable!("no error should happen: {res:?}"),
+        res = update_then_requests => unreachable!("no error should happen: {res:?}"),
     }
 }
