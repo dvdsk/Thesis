@@ -10,7 +10,7 @@ Before we can design experiments that work around the limitations we need to be 
 
 None of these impact range based file locking. We can work around them testing the architecture. To check if the results would change without these limitations I profile the system highlighting any bottlenecks that would impact performance.
 
-\subsubsection*{Ministry Architecture}
+\subsection{Ministry Architecture}
 Here we test the impact of varying amount of ministries on performance. If more ministries lead to a significant performance increase then the design is a success. 
 
 Given the limitation of unimplemented live subtree partitioning we need to manually configure the file system. Without prior data the load balancer will initialize a single ministry responsible for the root directory. For this test we modify it to initialize n ministries one hosting the root the others the directories 0 till n-1 each located in the root.
@@ -19,6 +19,6 @@ If there was no rate limit\footnote{Imposed by the suboptimal \raft{} implementa
 
 % TODO actual results
 
-\subsubsection*{Range based file locking}
+\subsection{Range based file locking}
 
-\subsubsection*{Profiling} \label{sec:profile}
+\subsection{Profiling} \label{sec:profile}
