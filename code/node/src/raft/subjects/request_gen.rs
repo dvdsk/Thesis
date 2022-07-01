@@ -1,3 +1,5 @@
+use tracing::instrument;
+
 use super::super::state::append::Request;
 use super::Source;
 use crate::raft::state::LogMeta;
@@ -12,6 +14,7 @@ pub struct RequestGen<O> {
 }
 
 impl<O: Order> RequestGen<O> {
+    #[instrument(skip_all, level="trace")]
     pub fn heartbeat(&self) -> Request<O> {
         Request {
             leader_commit: self.state.commit_index(),
@@ -26,12 +29,14 @@ impl<O: Order> RequestGen<O> {
         self.next_idx += 1;
     }
 
+    #[instrument(skip_all, level="trace")]
     pub fn decrement_idx(&mut self) {
         self.next_idx -= 1;
         let prev_entry = self.state.entry_at(self.next_idx - 1).unwrap();
         self.base.prev_log_term = prev_entry.term;
     }
 
+    #[instrument(skip_all, level="trace")]
     pub fn append(&mut self) -> Request<O> {
         let entry = self.state.entry_at(self.next_idx).unwrap();
         let req = Request {
@@ -44,6 +49,7 @@ impl<O: Order> RequestGen<O> {
         req
     }
 
+    #[instrument(skip_all, level="trace")]
     pub(crate) fn misses_logs(&self) -> bool {
         self.state.last_log_meta().idx >= self.next_idx
     }

@@ -11,7 +11,7 @@ use tokio::net::TcpStream;
 use tokio::sync::{broadcast, mpsc, Notify};
 use tokio::task::JoinSet;
 use tokio::time::{sleep, sleep_until, timeout, timeout_at, Instant};
-use tracing::{debug, info, instrument, trace, warn, Instrument};
+use tracing::{debug, info, instrument, trace, trace_span, warn, Instrument};
 
 use super::state::append;
 use super::{Msg, Order, Reply};
@@ -98,6 +98,7 @@ enum RecieveErr {
     ConnectionError(std::io::Error),
 }
 
+#[instrument(skip_all, level = "trace")]
 async fn recieve_reply<O: Order>(
     stream: &mut MsgStream<Reply, Msg<O>>,
     req_gen: &mut RequestGen<O>,
@@ -142,21 +143,28 @@ async fn replicate_orders<O: Order>(
         next_hb += HB_PERIOD;
 
         let to_send = if req_gen.misses_logs() {
-            debug!("sending missing logs at idx: {}", req_gen.next_idx);
             req_gen.append()
         } else {
-            trace!("sending heartbeat");
             req_gen.heartbeat()
         };
-        trace!("sending msg: {to_send:?}");
 
-        if let Err(e) = stream.send(Msg::AppendEntries(to_send)).await {
+        if let Err(e) = stream
+            .send(Msg::AppendEntries(to_send))
+            .instrument(trace_span!("send raft msg to subject"))
+            .await
+        {
             warn!("did not send to host, error: {e:?}");
             return;
         }
 
         // recieve for as long as possible,
-        match timeout_at(next_hb, recieve_reply(stream, req_gen, appended)).await {
+        let until = next_hb.saturating_duration_since(Instant::now());
+        // FIXME this timeout sometimes takes way to long 
+        // - next_hb is correct (sometimes even zero)
+        match timeout_at(next_hb, recieve_reply(stream, req_gen, appended))
+            .instrument(trace_span!("timeout recieve"))
+            .await
+        {
             Err(..) => (), // not a problem reply can arrive later
             Ok(Ok(..)) => unreachable!("we always keep recieving"),
             Ok(Err(e)) => {

@@ -5,6 +5,7 @@ use opentelemetry::KeyValue;
 use tracing_error::ErrorLayer;
 use tracing_opentelemetry::OpenTelemetryLayer;
 use tracing_subscriber::filter;
+use tracing_subscriber::fmt;
 use tracing_subscriber::prelude::*;
 
 use std::net::IpAddr;
@@ -40,20 +41,23 @@ where
 pub fn setup_tracing(instance: String, endpoint: IpAddr, run: u16) {
     let filter = filter::EnvFilter::builder()
         // .parse("info,instance_chart=warn,node::raft=info,node::minister=debug,node::clerk=debug,node::raft::subjects::comitted=debug,client=debug") //,node::raft::state::append=warn")
-        .parse("info,instance_chart=warn,node::raft=debug") //,node::raft::state::append=warn")
+        .parse("info,instance_chart=warn,node::raft::subjects=trace") // debug subject send
+        // .parse("info,instance_chart=warn") 
         .unwrap();
 
+    let uptime = fmt::time::uptime();
     let telemetry = opentelemetry(instance, endpoint, run);
-    let fmt = tracing_subscriber::fmt::layer()
+    let fmt_layer = fmt::layer()
         .pretty()
-        .with_line_number(true);
+        .with_line_number(true)
+        .with_timer(uptime);
 
     // console_subscriber::init();
     let _ignore_err = tracing_subscriber::registry()
         .with(ErrorLayer::default())
         .with(filter)
         .with(telemetry)
-        .with(fmt)
+        .with(fmt_layer)
         .try_init();
 }
 
@@ -64,7 +68,7 @@ pub fn setup_integration_tracing(instance: String, endpoint: IpAddr, run: u16) {
         .unwrap();
 
     let telemetry = opentelemetry(instance, endpoint, run);
-    let fmt = tracing_subscriber::fmt::layer()
+    let fmt = fmt::layer()
         .pretty()
         .with_line_number(true)
         .with_test_writer();
@@ -86,7 +90,7 @@ pub fn setup_test_tracing(additional_filter: &str) {
         .unwrap();
 
     // console_subscriber::init();
-    let fmt = tracing_subscriber::fmt::layer()
+    let fmt = fmt::layer()
         .pretty()
         .with_line_number(true)
         .with_test_writer();

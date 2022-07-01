@@ -76,8 +76,14 @@ async fn handle_conn(stream: TcpStream, redirect: ReDirectory) {
                     subtree,
                 }
             }
-            RefreshLease | Lock { .. } | Unlock { .. } | UnlockAll { .. } | HighestCommited => {
-                warn!("idle node recieved inappropriate request");
+            UnlockAll { .. } => {
+                debug!("idle node recieved UnlockAll, this indictates its a subject of 
+                       a minister but has not yet recieved the presidents order to become clerk.
+                       Not an issue as idle nodes have nothign to unlock");
+                continue;
+            }
+            RefreshLease | Lock { .. } | Unlock { .. } | HighestCommited => {
+                warn!("idle node recieved inappropriate request: {req:?}");
                 return;
             }
         };

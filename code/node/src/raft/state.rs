@@ -198,6 +198,7 @@ impl<O: Order> State<O> {
         }
     }
 
+    #[instrument(skip_all, level="trace")]
     pub(crate) fn entry_at(&self, idx: u32) -> Option<LogEntry<O>> {
         use crate::util::TypedSled;
         self.db.get_val(db::log_key(idx))
