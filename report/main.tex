@@ -72,34 +72,41 @@
 
 \input{figs/diagrams/styles.tex}
 
-\section{Introduction} \label{sec:intro}
-\input{content/intro} 
+\begin{figure}[htbp]
+	\centering
+	\input{figs/diagrams/structure.tex}
+	\caption{Structure of the program visualized as a tree of all concurrently running tasks}
+	\label{fig:tree}
+\end{figure}
 
-\section{Background}
-\textbf{TODO write tiny intro, do after introduction has been written}
-\input{content/theory/distributed.tex}
-\input{content/theory/pitfalls.tex}
-\input{content/theory/solutions.tex}
-\input{content/theory/file_systems.tex}
-\input{content/theory/existing.tex}
-
-\acresetall{}
-\acused{api}
-\section{Design}
-\input{content/design/architecture.tex}
-\input{content/design/operations.tex}
-
-\section{Implementation}
-\input{content/implementation.tex}
-
-\section{Results}
-\input{content/results.tex}
-
-\clearpage
-\appendix
-\section{Introduction to Async} \label{app:async}
-\input{content/async.tex}
-\printbibliography
+% \section{Introduction} \label{sec:intro}
+% \input{content/intro} 
+%
+% \section{Background}
+% \textbf{TODO write tiny intro, do after introduction has been written}
+% \input{content/theory/distributed.tex}
+% \input{content/theory/pitfalls.tex}
+% \input{content/theory/solutions.tex}
+% \input{content/theory/file_systems.tex}
+% \input{content/theory/existing.tex}
+%
+% \acresetall{}
+% \acused{api}
+% \section{Design}
+% \input{content/design/architecture.tex}
+% \input{content/design/operations.tex}
+%
+% \section{Implementation}
+% \input{content/implementation.tex}
+%
+% \section{Results}
+% \input{content/results.tex}
+%
+% \clearpage
+% \appendix
+% \section{Introduction to Async} \label{app:async}
+% \input{content/async.tex}
+% \printbibliography
 
 \end{document}
 
