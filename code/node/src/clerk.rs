@@ -1,10 +1,11 @@
 use std::path::PathBuf;
 
 use color_eyre::Result;
+use tokio::time::timeout;
 use tracing::{info, instrument};
 
 use crate::directory::Directory;
-use crate::raft::{Log, ObserverLog};
+use crate::raft::{Log, ObserverLog, HB_TIMEOUT};
 use crate::redirectory::ReDirectory;
 use crate::{minister, president, Id, Role};
 
@@ -69,7 +70,12 @@ async fn keep_dir_updated(
 #[instrument(skip_all)]
 async fn update_dir(orders: &mut ObserverLog<minister::Order>, dir: &mut Directory) -> Result<()> {
     loop {
-        let order = orders.recv().await;
+        let order = match timeout(HB_TIMEOUT, orders.recv()).await {
+            Ok(order) => order,
+            // timed out, either we are up to date (no orders recieved for a while)
+            // or we lost connection to the minister
+            Err(_time_out) => return Ok(()) 
+        };
         dir.update(order.order.clone());
 
         // reached fresh orders => now up to date
@@ -84,8 +90,10 @@ async fn update_then_handle_requests(
     min_orders: &mut ObserverLog<minister::Order>,
     mut directory: Directory,
 ) {
+    info!("updating dir");
     let update_dir = update_dir(min_orders, &mut directory);
     update_dir.await.unwrap();
+    info!("dir updated");
 
     let keep_dir_updated = keep_dir_updated(min_orders, directory);
     tokio::select! {
