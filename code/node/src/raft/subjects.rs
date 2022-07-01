@@ -11,7 +11,7 @@ use tokio::net::TcpStream;
 use tokio::sync::{broadcast, mpsc, Notify};
 use tokio::task::JoinSet;
 use tokio::time::{sleep, sleep_until, timeout, timeout_at, Instant};
-use tracing::{debug, info, instrument, trace, trace_span, warn, Instrument};
+use tracing::{info, instrument, trace_span, warn, Instrument};
 
 use super::state::append;
 use super::{Msg, Order, Reply};
@@ -157,10 +157,11 @@ async fn replicate_orders<O: Order>(
             return;
         }
 
-        // recieve for as long as possible,
-        let until = next_hb.saturating_duration_since(Instant::now());
         // FIXME this timeout sometimes takes way to long 
         // - next_hb is correct (sometimes even zero)
+        // - some other task must be blocking a long time
+        
+        // recieve for as long as possible,
         match timeout_at(next_hb, recieve_reply(stream, req_gen, appended))
             .instrument(trace_span!("timeout recieve"))
             .await
