@@ -14,7 +14,7 @@ start-jeager = { path = "../start-jeager" }
 mktemp = "0.4"
 color-eyre = { version = "0.6", features = ["capture-spantrace"] }
 
-tracing = { version = "0.1", features = ["release_max_level_error"] }
+tracing = { version = "0.1" }
 tracing-error = "0.2"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tracing-opentelemetry = { version = "0.17" }
