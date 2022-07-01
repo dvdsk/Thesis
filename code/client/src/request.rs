@@ -7,7 +7,7 @@ use futures::{SinkExt, TryStreamExt};
 use protocol::connection::{self, MsgStream};
 use protocol::{Request, Response};
 use tokio::net::TcpStream;
-use tokio::time::sleep;
+use tokio::time::{sleep, timeout};
 use tracing::{info, instrument, warn};
 
 use super::Ministry;
@@ -21,7 +21,11 @@ pub struct Connection {
 
 impl Connection {
     async fn connect(addr: SocketAddr) -> Result<Self, io::Error> {
-        let stream = TcpStream::connect(addr).await?;
+        let connect = TcpStream::connect(addr);
+        let stream = timeout(Duration::from_millis(100), connect)
+            .await
+            .map_err(|_| io::Error::new(io::ErrorKind::Other, "connection timeout"))??;
+
         let peer = stream.peer_addr()?;
         Ok(Self {
             stream: connection::wrap(stream),
@@ -42,6 +46,7 @@ async fn connect(initial_addr: Option<SocketAddr>, nodes: &impl RandomNode) -> C
             Err(e) => warn!("failed to connect to {addr:?}, error: {e:?}"),
             Ok(conn) => return conn,
         }
+        sleep(Duration::from_millis(100)).await;
         addr = nodes.random_node().await;
     }
 }
@@ -62,12 +67,14 @@ impl<T: RandomNode> super::Client<T> {
                 (None, Some(_conn)) => (),
                 (Some(addr), Some(conn)) if conn.peer == addr => (),
                 (addr, _) => {
-                    // hint addr is not bound, covers None case
+                    // addr is not bound, therefore this covers None case
+                    dbg!();
                     *conn = Some(connect(addr, nodes).await);
                 }
             };
 
             let res = conn.as_mut().unwrap().stream.send(req.clone()).await;
+            dbg!();
             match res {
                 Ok(_) => return,
                 Err(e) => {
@@ -139,7 +146,9 @@ impl<T: RandomNode> super::Client<T> {
     ) -> Result<R, RequestError> {
         loop {
             self.send_request(path, &req, needs_minister).await;
+                    dbg!();
             let response = self.recieve().await;
+                    dbg!();
             match response {
                 Ok(Some(Response::NotCommitted)) => (), // will trigger a retry
                 Ok(Some(Response::Ticket { idx })) => {
