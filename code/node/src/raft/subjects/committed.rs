@@ -2,7 +2,7 @@ use futures::stream;
 use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::{mpsc, Notify};
-use tracing::{debug, info, instrument};
+use tracing::{debug, instrument};
 
 use crate::raft::{Order, State, HB_PERIOD};
 use crate::Idx;

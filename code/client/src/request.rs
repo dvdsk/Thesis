@@ -74,7 +74,6 @@ impl<T: RandomNode> super::Client<T> {
             };
 
             let res = conn.as_mut().unwrap().stream.send(req.clone()).await;
-            dbg!();
             match res {
                 Ok(_) => return,
                 Err(e) => {

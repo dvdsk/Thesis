@@ -12,7 +12,7 @@ use protocol::{Request, Response};
 use time::OffsetDateTime;
 use tokio::task::JoinSet;
 use tokio::time::{sleep_until, timeout, timeout_at, Instant};
-use tracing::{debug, instrument, warn, error, info};
+use tracing::{debug, instrument, warn, error};
 
 use crate::directory::{self, Directory};
 use crate::raft::{self, LogWriter, HB_TIMEOUT};
@@ -206,9 +206,7 @@ async fn create_file(
     let ticket = log.append(super::Order::Create(path.clone())).await;
     stream.send(Response::Ticket { idx: ticket.idx }).await?;
 
-    info!("waiting for committed");
     ticket.committed().await;
     dir.add_entry(&path);
-    info!("is committed");
     Ok(Response::Done)
 }
