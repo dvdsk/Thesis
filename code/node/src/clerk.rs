@@ -74,7 +74,7 @@ async fn update_dir(orders: &mut ObserverLog<minister::Order>, dir: &mut Directo
             Ok(order) => order,
             // timed out, either we are up to date (no orders recieved for a while)
             // or we lost connection to the minister
-            Err(_time_out) => return Ok(()) 
+            Err(_time_out) => return Ok(()),
         };
         dir.update(order.order.clone());
 

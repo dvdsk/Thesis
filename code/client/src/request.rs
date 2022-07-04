@@ -8,7 +8,7 @@ use protocol::connection::{self, MsgStream};
 use protocol::{Request, Response};
 use tokio::net::TcpStream;
 use tokio::time::{sleep, timeout};
-use tracing::{info, instrument, warn};
+use tracing::{info, instrument, trace, warn};
 
 use super::Ministry;
 use crate::random_node::RandomNode;
@@ -24,7 +24,7 @@ impl Connection {
         let connect = TcpStream::connect(addr);
         let stream = timeout(Duration::from_millis(100), connect)
             .await
-            .map_err(|_| io::Error::new(io::ErrorKind::Other, "connection timeout"))??;
+            .map_err(|_| io::Error::new(io::ErrorKind::Other, "timed out trying to connect"))??;
 
         let peer = stream.peer_addr()?;
         Ok(Self {
@@ -129,8 +129,12 @@ impl<T: RandomNode> super::Client<T> {
     #[instrument(skip(self), ret)]
     async fn recieve(&mut self) -> Result<Option<Response>, io::Error> {
         loop {
-            let msg = self.conn.as_mut().unwrap().stream.try_next().await;
+            let msg = self.conn.as_mut().unwrap().stream.try_next();
+            let msg = timeout(Duration::from_millis(500), msg)
+                .await
+                .map_err(|_| io::Error::new(io::ErrorKind::Other, "timed out trying to connect"))?;
             if let Ok(Some(Response::LeaseDropped)) = msg {
+                trace!("ignoring lease dropped; only valid while holding lease");
                 continue;
             }
             return msg;
@@ -146,9 +150,8 @@ impl<T: RandomNode> super::Client<T> {
     ) -> Result<R, RequestError> {
         loop {
             self.send_request(path, &req, needs_minister).await;
-                    dbg!();
             let response = self.recieve().await;
-                    dbg!();
+            info!("response: {response:?}");
             match response {
                 Ok(Some(Response::NotCommitted)) => (), // will trigger a retry
                 Ok(Some(Response::Ticket { idx })) => {
@@ -163,7 +166,7 @@ impl<T: RandomNode> super::Client<T> {
                     }
                 }
                 Ok(Some(Response::Redirect { staff, subtree })) => {
-                    info!("updateing staff: {staff:?}");
+                    info!("updating staff: {staff:?}");
                     self.map.insert(Ministry { staff, subtree });
                     continue;
                 }
