@@ -68,8 +68,10 @@ impl<'a, T: RandomNode> Lease<'a, T> {
         use HoldError::*;
 
         let stream = &mut self.client.conn.as_mut().unwrap().stream;
+
         let left = self.lease_terms.expires_in();
-        sleep(left - Duration::from_millis(30)).await;
+        let left = left.saturating_sub(Duration::from_millis(30));
+        sleep(left).await;
 
         debug!("refreshing lease");
         stream
