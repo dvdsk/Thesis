@@ -11,7 +11,9 @@ use tokio::net::TcpStream;
 use tokio::sync::{broadcast, mpsc, Notify};
 use tokio::task::JoinSet;
 use tokio::time::{sleep, sleep_until, timeout, timeout_at, Instant};
-use tracing::{info, instrument, trace_span, warn, Instrument};
+use tracing::{debug, info, instrument, trace_span, warn, Instrument};
+
+use self::request_gen::StateInfo;
 
 use super::state::append;
 use super::{Msg, Order, Reply};
@@ -65,12 +67,12 @@ async fn connect<O: Order>(address: &SocketAddr) -> MsgStream<Reply, Msg<O>> {
 /// when done. The id is used to inform node discovery to let us know
 /// if this node comes back online
 #[instrument(skip_all, fields(subject_id = subject_id))]
-async fn manage_subject<O: Order>(
+async fn manage_subject<O: Order, S: StateInfo<Order = O>>(
     subject_id: Id,
     address: SocketAddr,
     mut broadcast: broadcast::Receiver<O>,
     mut appended: mpsc::Sender<u32>,
-    mut req_gen: RequestGen<O>,
+    mut req_gen: RequestGen<S>,
     status_notify: impl StatusNotifier,
 ) -> Id {
     while let Ok(mut stream) = timeout(SUBJECT_CONN_TIMEOUT, connect(&address)).await {
@@ -99,13 +101,14 @@ enum RecieveErr {
 }
 
 #[instrument(skip_all, level = "trace")]
-async fn recieve_reply<O: Order>(
+async fn recieve_reply<O: Order, S: StateInfo>(
     stream: &mut MsgStream<Reply, Msg<O>>,
-    req_gen: &mut RequestGen<O>,
+    req_gen: &mut RequestGen<S>,
     appended: &mut mpsc::Sender<u32>,
 ) -> Result<(), RecieveErr> {
     loop {
-        match stream.try_next().await {
+        let reply = stream.try_next().await;
+        match reply {
             Ok(None) => return Err(RecieveErr::ConnectionClosed),
             Err(e) => return Err(RecieveErr::ConnectionError(e)),
             Ok(Some(Reply::RequestVote(..))) => {
@@ -114,6 +117,7 @@ async fn recieve_reply<O: Order>(
 
             Ok(Some(Reply::AppendEntries(append::Reply::HeartBeatOk))) => (),
             Ok(Some(Reply::AppendEntries(append::Reply::AppendOk))) => {
+                debug!("recieved idx: {}", req_gen.next_idx);
                 appended.try_send(req_gen.next_idx).unwrap();
                 req_gen.increment_idx();
             }
@@ -130,10 +134,10 @@ async fn recieve_reply<O: Order>(
 
 /// replicate orders untill connection is lost
 #[instrument(skip_all)]
-async fn replicate_orders<O: Order>(
+async fn replicate_orders<O: Order, S: StateInfo<Order = O>>(
     _broadcast: &mut broadcast::Receiver<O>,
     appended: &mut mpsc::Sender<u32>,
-    req_gen: &mut RequestGen<O>,
+    req_gen: &mut RequestGen<S>,
     stream: &mut MsgStream<Reply, Msg<O>>,
 ) {
     let mut next_hb = Instant::now() + HB_PERIOD;
@@ -157,10 +161,10 @@ async fn replicate_orders<O: Order>(
             return;
         }
 
-        // FIXME this timeout sometimes takes way to long 
+        // FIXME this timeout sometimes takes way to long
         // - next_hb is correct (sometimes even zero)
         // - some other task must be blocking a long time
-        
+
         // recieve for as long as possible,
         match timeout_at(next_hb, recieve_reply(stream, req_gen, appended))
             .instrument(trace_span!("timeout recieve"))
@@ -176,15 +180,17 @@ async fn replicate_orders<O: Order>(
     }
 }
 
-struct Subjects<O: Order, N: StatusNotifier> {
+struct Subjects<O: Order, N: StatusNotifier, S: StateInfo> {
     subject_added: Notify,
     subjects: JoinSet<Id>,
     orders: broadcast::Sender<O>,
-    base_msg: RequestGen<O>,
+    base_msg: RequestGen<S>,
     status_notify: N,
 }
 
-impl<O: Order, N: StatusNotifier + 'static> Subjects<O, N> {
+impl<S: 'static + StateInfo<Order = O> + Send, O: Order, N: StatusNotifier + 'static>
+    Subjects<O, N, S>
+{
     fn add(&mut self, id: Id, addr: SocketAddr, commit_idx: &mut Committed<'_, O>) {
         let broadcast_rx = self.orders.subscribe();
         let append_updates = commit_idx.track_subject();
@@ -234,7 +240,7 @@ pub async fn instruct<O: Order>(
         subjects: JoinSet::new(),
         subject_added: Notify::new(),
         orders,
-        base_msg: RequestGen::new(state.clone(), term, members),
+        base_msg: RequestGen::new(state.clone(), term, members.our_id()),
         status_notify,
     };
 

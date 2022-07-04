@@ -2,7 +2,7 @@ use futures::stream;
 use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::{mpsc, Notify};
-use tracing::{debug, instrument};
+use tracing::{debug, info, instrument};
 
 use crate::raft::{Order, State, HB_PERIOD};
 use crate::Idx;
@@ -10,13 +10,22 @@ use crate::Idx;
 struct Waiters {
     new: mpsc::Receiver<(Idx, Arc<Notify>)>,
     list: Vec<(Idx, Arc<Notify>)>,
+    highest_notified: Idx,
 }
 
 impl Waiters {
     #[instrument(skip_all)]
-    async fn maintain(&mut self) {
+    async fn maintain(&mut self) -> ! {
         loop {
             let (idx, notify) = self.new.recv().await.expect("channel has been closed");
+            // if the commit index is already larger then `idx` then we need to
+            // notify the waiter here. If we dont they will only be notified after the
+            // next commit increase, which may take a while or never happen at all.
+            if self.highest_notified >= idx {
+                notify.notify_one();
+                continue;
+            }
+
             let sorted_insert_pos = self
                 .list
                 .binary_search_by_key(&idx, |(idx, _)| *idx)
@@ -25,7 +34,11 @@ impl Waiters {
         }
     }
 
+    #[instrument(skip(self))]
     fn notify(&mut self, commit_idx: Idx) {
+        assert!(self.highest_notified <= commit_idx);
+
+        self.highest_notified = commit_idx;
         let stop = self.list.binary_search_by_key(&commit_idx, |(idx, _)| *idx);
         let stop = match stop {
             Ok(found_value) => found_value + 1,
@@ -58,6 +71,7 @@ impl<'a, O: Order> Committed<'a, O> {
             waiters: Waiters {
                 new: notify_rx,
                 list: Vec::new(),
+                highest_notified: 0,
             },
             state,
         }
@@ -103,10 +117,11 @@ impl<'a, O: Order> Committed<'a, O> {
                 idx_update = self.streams.next() => {
                     let update = idx_update.unwrap();
                     self.highest[update.stream_id] = update.appended;
+                    debug!("highest: {:?}", self.highest);
                     let new = self.majority_appended();
 
                     let old = self.state.commit_index();
-                    if new < old {
+                    if new <= old {
                         continue
                     }
 

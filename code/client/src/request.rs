@@ -88,9 +88,9 @@ impl<T: RandomNode> super::Client<T> {
         }
     }
 
-    #[instrument(skip(self))]
+    #[instrument(skip(self), err(Debug))]
     pub async fn follow_up_on_ticket(&mut self, path: &Path) -> Result<(), RequestError> {
-        let msg = self.conn.as_mut().unwrap().stream.try_next().await;
+        let msg = self.conn.as_mut().unwrap().stream.try_next().await; // cant timeout here
         match msg {
             Ok(Some(Response::Done)) => return Ok(()),
             Ok(None) => warn!("Connection closed while following up on ticket"),

@@ -143,6 +143,7 @@ impl<T: RandomNode> Client<T> {
     /// Can be canceld, if any request was in progress but not yet
     /// committed the ticket member will be set to allow future resuming,
     /// in case of node failure.
+    #[instrument(skip(self))]
     pub async fn create_file(&mut self, path: PathBuf) {
         self.request(&path, Request::Create(path.clone()), true)
             .await

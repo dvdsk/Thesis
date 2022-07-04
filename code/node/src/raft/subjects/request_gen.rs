@@ -1,46 +1,75 @@
+use core::fmt;
+
 use tracing::instrument;
 
 use super::super::state::append::Request;
-use super::Source;
-use crate::raft::state::LogMeta;
-use crate::raft::{State, Order};
-use crate::Term;
+use crate::{raft, Id, Idx, Term};
+use raft::state::{append::LogEntry, LogMeta};
+use raft::Order;
+
+pub trait StateInfo: Clone {
+    type Order: Clone + fmt::Debug;
+    fn entry(&self, idx: u32) -> Option<LogEntry<Self::Order>>;
+    fn commit_idx(&self) -> Idx;
+    fn last_meta(&self) -> LogMeta;
+    fn last_appl(&self) -> Idx;
+}
+
+impl<O: Clone + Order> StateInfo for super::State<O> {
+    type Order = O;
+    fn entry(&self, idx: u32) -> Option<LogEntry<O>> {
+        self.entry_at(idx)
+    }
+    fn commit_idx(&self) -> Idx {
+        self.commit_index()
+    }
+    fn last_meta(&self) -> LogMeta {
+        self.last_log_meta()
+    }
+    fn last_appl(&self) -> Idx {
+        self.last_applied()
+    }
+}
 
 #[derive(Debug, Clone)]
-pub struct RequestGen<O> {
-    state: State<O>,
-    pub base: Request<O>,
+pub struct RequestGen<S: StateInfo> {
+    state: S,
+    pub base: Request<<S as StateInfo>::Order>,
     pub next_idx: u32,
 }
 
-impl<O: Order> RequestGen<O> {
-    #[instrument(skip_all, level="trace")]
-    pub fn heartbeat(&self) -> Request<O> {
+impl<S> RequestGen<S>
+where
+    S: StateInfo,
+{
+    #[instrument(skip_all, level = "trace")]
+    pub fn heartbeat(&self) -> Request<<S as StateInfo>::Order> {
         Request {
-            leader_commit: self.state.commit_index(),
+            leader_commit: self.state.commit_idx(),
             entries: Vec::new(),
             ..self.base
         }
     }
 
+    #[instrument(skip_all, level = "trace")]
     pub fn increment_idx(&mut self) {
         self.base.prev_log_term = self.base.term;
         self.base.prev_log_idx = self.next_idx;
         self.next_idx += 1;
     }
 
-    #[instrument(skip_all, level="trace")]
+    #[instrument(skip_all, level = "trace")]
     pub fn decrement_idx(&mut self) {
         self.next_idx -= 1;
-        let prev_entry = self.state.entry_at(self.next_idx - 1).unwrap();
+        let prev_entry = self.state.entry(self.next_idx - 1).unwrap();
         self.base.prev_log_term = prev_entry.term;
     }
 
-    #[instrument(skip_all, level="trace")]
-    pub fn append(&mut self) -> Request<O> {
-        let entry = self.state.entry_at(self.next_idx).unwrap();
+    #[instrument(skip_all, level = "trace")]
+    pub fn append(&mut self) -> Request<<S as StateInfo>::Order> {
+        let entry = self.state.entry(self.next_idx).unwrap();
         let req = Request {
-            leader_commit: self.state.commit_index(),
+            leader_commit: self.state.commit_idx(),
             prev_log_idx: self.next_idx - 1,
             entries: vec![entry.order],
             ..self.base
@@ -49,31 +78,67 @@ impl<O: Order> RequestGen<O> {
         req
     }
 
-    #[instrument(skip_all, level="trace")]
+    #[instrument(skip_all, level = "trace")]
     pub(crate) fn misses_logs(&self) -> bool {
-        self.state.last_log_meta().idx >= self.next_idx
+        self.state.last_meta().idx >= self.next_idx
     }
 
-    pub fn new(state: State<O>, term: Term, chart: &impl Source) -> Self {
+    pub fn new(state: S, term: Term, leader_id: Id) -> Self {
         let LogMeta {
             idx: prev_idx,
             term: prev_term,
-        } = state.last_log_meta();
+        } = state.last_meta();
 
         let base = Request {
             term,
-            leader_id: chart.our_id(),
+            leader_id,
             prev_log_idx: prev_idx,
             prev_log_term: prev_term,
             entries: Vec::new(),
-            leader_commit: state.commit_index(),
+            leader_commit: state.commit_idx(),
         };
 
-        let next_idx = state.last_applied() + 1;
+        let next_idx = state.last_appl() + 1;
         Self {
             state,
             next_idx,
             base,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[derive(Clone)]
+    struct MockState;
+    impl StateInfo for MockState {
+        type Order = ();
+        fn entry(&self, _idx: u32) -> Option<LogEntry<()>> {
+            None
+        }
+
+        fn commit_idx(&self) -> Idx {
+            0
+        }
+
+        fn last_meta(&self) -> LogMeta {
+            LogMeta { term: 0, idx: 0 }
+        }
+
+        fn last_appl(&self) -> Idx {
+            0
+        }
+    }
+
+    #[test]
+    fn increment_idx() {
+        let state = MockState;
+        let mut gen = RequestGen::new(state, 0, 0);
+        for i in 2..1024 {
+            gen.increment_idx();
+            assert_eq!(gen.next_idx, i);
         }
     }
 }
