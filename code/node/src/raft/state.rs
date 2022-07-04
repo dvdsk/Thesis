@@ -65,7 +65,7 @@ mod db {
     pub const LOG: [u8; 1] = [Prefix::Log as u8];
     pub fn log_key(idx: u32) -> [u8; 5] {
         let mut key = [Prefix::Log as u8, 0, 0, 0, 0];
-        key[1..5].clone_from_slice(&idx.to_ne_bytes());
+        key[1..5].clone_from_slice(&idx.to_be_bytes());
         key
     }
 }
@@ -84,7 +84,10 @@ pub struct Perishable<O> {
 
 impl<O: std::fmt::Debug> Perishable<O> {
     pub fn new_fresh(order: O, process_by: Instant) -> Perishable<O> {
-        Perishable { order, age: OrderAge::Fresh { process_by } }
+        Perishable {
+            order,
+            age: OrderAge::Fresh { process_by },
+        }
     }
 
     #[instrument(skip_all, fields(_order, _time_left))]
@@ -185,20 +188,20 @@ impl<O: Order> State<O> {
         let max_key = [u8::MAX];
         let (key, value) = self
             .db
-            .get_lt(max_key) // PERF this is wrecking 2 cpu cores right now
+            .get_lt(max_key) 
             .expect("internal db issue")
             .unwrap_or_default();
 
         match key.get(0).map(Prefix::from).unwrap_or(Prefix::Invalid) {
             Prefix::Log => LogMeta {
-                idx: u32::from_ne_bytes(key[1..5].try_into().unwrap()),
+                idx: u32::from_be_bytes(dbg!(&key[1..5]).try_into().unwrap()),
                 term: u32::from_ne_bytes(value[0..4].try_into().unwrap()),
             },
             _ => Default::default(),
         }
     }
 
-    #[instrument(skip_all, level="trace")]
+    #[instrument(skip_all, level = "trace")]
     pub(crate) fn entry_at(&self, idx: u32) -> Option<LogEntry<O>> {
         use crate::util::TypedSled;
         self.db.get_val(db::log_key(idx))
@@ -222,7 +225,7 @@ impl<O: Order> State<O> {
     /// insert an order to the user facing facade (Log or ObserverLog)
     /// this order need not have come through the raft log
     pub(super) async fn insert_unlogged_order(&self, ord: O) {
-        let unlogged = Perishable::new_fresh(ord, Instant::now()+HB_PERIOD);
+        let unlogged = Perishable::new_fresh(ord, Instant::now() + HB_PERIOD);
         self.tx.send(unlogged).await.unwrap();
     }
 

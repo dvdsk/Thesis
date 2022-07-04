@@ -18,7 +18,7 @@ impl raft::Order for MockOrder {
 }
 
 #[test]
-fn log_idx() {
+fn log_idx_encoding() {
     let db = sled::Config::new().temporary(true).open().unwrap();
     let tree = db.open_tree("pres").unwrap();
 
@@ -32,3 +32,4 @@ fn log_idx() {
         assert_eq!(meta.idx, idx)
     }
 }
+
