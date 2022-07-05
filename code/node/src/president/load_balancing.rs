@@ -11,7 +11,7 @@ use self::issue::{Issue, Issues};
 
 use super::{raft, Chart, LogWriter, Order};
 use crate::redirectory::{Node, Staff};
-use crate::Id;
+use crate::{Id, Term};
 mod staffing;
 use staffing::Staffing;
 mod action;
@@ -46,6 +46,7 @@ pub enum Event {
 }
 
 pub struct LoadBalancer {
+    highest_term: Term,
     log_writer: LogWriter<Order>,
     events: mpsc::Receiver<Event>,
     chart: Chart,
@@ -58,6 +59,7 @@ impl LoadBalancer {
         let notifier = LoadNotifier { sender: tx };
         (
             Self {
+                highest_term: 0,
                 events: rx,
                 log_writer,
                 chart,
@@ -130,12 +132,14 @@ impl LoadBalancer {
         let mut idle = idle.into_values();
         let minister = idle.next().unwrap();
         let clerks = idle.collect();
+
+        self.highest_term += 1;
         let add_root = Order::AssignMinistry {
             subtree: PathBuf::from("/"),
             staff: Staff {
                 minister,
                 clerks,
-                term: 1,
+                term: self.highest_term,
             },
         };
         info!("{:?}", &add_root);

@@ -1,9 +1,11 @@
 use std::path::PathBuf;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU32, self};
 
 use color_eyre::Result;
 use serde::{Deserialize, Serialize};
 use tokio::sync::{broadcast, mpsc};
-use tracing::{info, Instrument, instrument};
+use tracing::{info, instrument, Instrument};
 
 use crate::directory::Directory;
 use crate::minister::read_locks::LockManager;
@@ -23,6 +25,7 @@ async fn handle_pres_orders(
     our_subtree: &PathBuf,
     mut register: clerks::Register,
     mut redirectory: ReDirectory,
+    term: AtomicTerm,
 ) -> Result<Role> {
     use crate::president::Order::*;
 
@@ -47,6 +50,7 @@ async fn handle_pres_orders(
                 }
 
                 register.update(staff.clerks);
+                term.update(staff.term);
             }
             #[cfg(test)]
             Test(_) => todo!(),
@@ -80,9 +84,7 @@ impl raft::Order for Order {
 }
 
 use crate::raft::Perishable;
-async fn recieve_own_order(
-    orders: &mut mpsc::Receiver<Perishable<Order>>,
-) -> color_eyre::Result<()> {
+async fn apply_own_order(orders: &mut mpsc::Receiver<Perishable<Order>>) -> color_eyre::Result<()> {
     loop {
         let order = orders
             .recv()
@@ -92,6 +94,39 @@ async fn recieve_own_order(
         if order.perished() {
             return Err(order.error());
         }
+
+        // no need to process our own orders, if we become clerk we delete the
+        // directory and build it fresh from the log
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct AtomicTerm {
+    current: Arc<AtomicU32>,
+    prev: u32,
+}
+
+use self::raft::subjects::GetTerm;
+impl GetTerm for AtomicTerm {
+    fn curr(&mut self) -> Term {
+        let curr = self.current.load(atomic::Ordering::SeqCst);
+        self.prev = curr;
+        curr
+    }
+    fn prev(&mut self) -> Term {
+        self.prev
+    }
+}
+
+impl AtomicTerm {
+    fn new(initial: Term) -> Self {
+        Self {
+            current: Arc::new(AtomicU32::new(initial)),
+            prev: initial,
+        }
+    }
+    fn update(&self, new: Term) {
+        self.current.store(new, atomic::Ordering::SeqCst);
     }
 }
 
@@ -100,7 +135,7 @@ pub(crate) async fn work(
     state: &mut super::State,
     our_subtree: PathBuf,
     clerks: Vec<Node>,
-    term: Term,
+    initial_term: Term,
 ) -> Result<Role> {
     let super::State {
         pres_orders,
@@ -123,19 +158,20 @@ pub(crate) async fn work(
     let (broadcast, _) = broadcast::channel(16);
     let (tx, notify_rx) = mpsc::channel(16);
     let log_writer = LogWriter {
-        term,
+        term: initial_term, // TODO make this adjust on re-assign order term increase
         state: state.clone(),
         broadcast: broadcast.clone(),
         notify_tx: tx,
     };
 
+    let term = AtomicTerm::new(initial_term);
     let instruct_subjects = subjects::instruct(
         &mut clerks,
         broadcast.clone(),
         notify_rx,
         subjects::EmptyNotifier,
         state.clone(),
-        term,
+        term.clone(),
     )
     .in_current_span();
 
@@ -145,6 +181,7 @@ pub(crate) async fn work(
         &our_subtree,
         register,
         redirectory.clone(),
+        term,
     );
 
     let (lock_manager, (lock_rx, unlock_rx)) = LockManager::new();
@@ -162,7 +199,7 @@ pub(crate) async fn work(
     // TODO FIXME is there a read own orders?
     tokio::select! {
         new_role = pres_orders => new_role,
-        _ = recieve_own_order(orders) => unreachable!("orders are not popped from queue fast enough"),
+        _ = apply_own_order(orders) => unreachable!("orders are not popped from queue fast enough"),
         () = instruct_subjects => unreachable!(),
         () = client_requests => unreachable!(),
         () = update_read_locks => unreachable!(),

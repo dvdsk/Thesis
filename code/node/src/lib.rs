@@ -11,10 +11,10 @@ use tracing::instrument;
 
 pub mod util;
 
-mod redirectory;
 mod directory;
 mod idle;
 mod raft;
+mod redirectory;
 
 mod clerk;
 mod minister;
@@ -44,6 +44,17 @@ pub enum Role {
     President {
         term: Term,
     },
+}
+
+impl Role {
+    fn subtree(&self) -> Option<PathBuf> {
+        match self {
+            Role::Idle => None,
+            Role::Clerk { subtree, .. } => Some(subtree.clone()),
+            Role::Minister { subtree, .. } => Some(subtree.clone()),
+            Role::President { .. } => None,
+        }
+    }
 }
 
 /// Simple program to greet a person
@@ -123,8 +134,7 @@ pub async fn run(conf: Config) {
     let redirectory = ReDirectory::from_committed(&pres_orders.state);
 
     let tree = db.open_tree("minister log").unwrap();
-    let min_orders =
-        raft::ObserverLog::open(tree, minister_listener).unwrap();
+    let min_orders = raft::ObserverLog::open(tree, minister_listener).unwrap();
 
     let mut state = State {
         pres_orders,
@@ -136,10 +146,20 @@ pub async fn run(conf: Config) {
     };
 
     let mut role = Role::Idle;
+    let mut prev_subtree = None;
     loop {
+        match (&prev_subtree, role.subtree()) {
+            (Some(prev), Some(new)) if new == *prev => (),
+            (Some(_), Some(new)) => {
+                prev_subtree = Some(new);
+                state.min_orders.reset();
+            }
+            _ => (),
+        }
+
         role = match role {
             Role::Idle => idle::work(&mut state).await.unwrap(),
-            Role::Clerk { subtree } => clerk::work(&mut state, subtree).await.unwrap(),
+            Role::Clerk { subtree, .. } => clerk::work(&mut state, subtree).await.unwrap(),
             Role::Minister {
                 subtree,
                 clerks,

@@ -3,7 +3,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use crate::raft::{CONN_RETRY_PERIOD, SUBJECT_CONN_TIMEOUT};
-use crate::{Id, Idx, Term};
+use crate::{Id, Idx};
 use async_trait::async_trait;
 use futures::{SinkExt, TryStreamExt};
 use protocol::connection::{self, MsgStream};
@@ -13,7 +13,8 @@ use tokio::task::JoinSet;
 use tokio::time::{sleep, sleep_until, timeout, timeout_at, Instant};
 use tracing::{debug, info, instrument, trace_span, warn, Instrument};
 
-use self::request_gen::StateInfo;
+use request_gen::StateInfo;
+pub use request_gen::GetTerm;
 
 use super::state::append;
 use super::{Msg, Order, Reply};
@@ -67,14 +68,19 @@ async fn connect<O: Order>(address: &SocketAddr) -> MsgStream<Reply, Msg<O>> {
 /// when done. The id is used to inform node discovery to let us know
 /// if this node comes back online
 #[instrument(skip_all, fields(subject_id = subject_id))]
-async fn manage_subject<O: Order, S: StateInfo<Order = O>>(
+async fn manage_subject<O, S, T>(
     subject_id: Id,
     address: SocketAddr,
     mut broadcast: broadcast::Receiver<O>,
     mut appended: mpsc::Sender<u32>,
-    mut req_gen: RequestGen<S>,
+    mut req_gen: RequestGen<S, T>,
     status_notify: impl StatusNotifier,
-) -> Id {
+) -> Id
+where
+    O: Order,
+    S: StateInfo<Order = O>,
+    T: GetTerm,
+{
     while let Ok(mut stream) = timeout(SUBJECT_CONN_TIMEOUT, connect(&address)).await {
         let init_msg = req_gen.heartbeat();
 
@@ -101,11 +107,16 @@ enum RecieveErr {
 }
 
 #[instrument(skip_all, level = "trace")]
-async fn recieve_reply<O: Order, S: StateInfo>(
+async fn recieve_reply<O, S, T>(
     stream: &mut MsgStream<Reply, Msg<O>>,
-    req_gen: &mut RequestGen<S>,
+    req_gen: &mut RequestGen<S, T>,
     appended: &mut mpsc::Sender<u32>,
-) -> Result<(), RecieveErr> {
+) -> Result<(), RecieveErr>
+where
+    O: Order,
+    S: StateInfo,
+    T: GetTerm,
+{
     loop {
         let reply = stream.try_next().await;
         match reply {
@@ -134,12 +145,16 @@ async fn recieve_reply<O: Order, S: StateInfo>(
 
 /// replicate orders untill connection is lost
 #[instrument(skip_all)]
-async fn replicate_orders<O: Order, S: StateInfo<Order = O>>(
+async fn replicate_orders<O, S, T>(
     _broadcast: &mut broadcast::Receiver<O>,
     appended: &mut mpsc::Sender<u32>,
-    req_gen: &mut RequestGen<S>,
+    req_gen: &mut RequestGen<S, T>,
     stream: &mut MsgStream<Reply, Msg<O>>,
-) {
+) where
+    O: Order,
+    S: StateInfo<Order = O>,
+    T: GetTerm,
+{
     let mut next_hb = Instant::now() + HB_PERIOD;
     sleep_until(next_hb).await;
 
@@ -180,16 +195,27 @@ async fn replicate_orders<O: Order, S: StateInfo<Order = O>>(
     }
 }
 
-struct Subjects<O: Order, N: StatusNotifier, S: StateInfo> {
+struct Subjects<O, N, S, T>
+where
+    O: Order,
+    N: StatusNotifier,
+    S: StateInfo,
+    T: GetTerm,
+{
     subject_added: Notify,
     subjects: JoinSet<Id>,
     orders: broadcast::Sender<O>,
-    base_msg: RequestGen<S>,
+    base_msg: RequestGen<S, T>,
     status_notify: N,
 }
 
-impl<S: 'static + StateInfo<Order = O> + Send, O: Order, N: StatusNotifier + 'static>
-    Subjects<O, N, S>
+// TODO: new (highest) term is needed when adding a subject in Minister Raft
+impl<S, O, N, T> Subjects<O, N, S, T>
+where
+    S: 'static + StateInfo<Order = O> + Send,
+    O: Order,
+    N: StatusNotifier + 'static,
+    T: GetTerm + 'static,
 {
     fn add(&mut self, id: Id, addr: SocketAddr, commit_idx: &mut Committed<'_, O>) {
         let broadcast_rx = self.orders.subscribe();
@@ -227,14 +253,17 @@ impl<S: 'static + StateInfo<Order = O> + Send, O: Order, N: StatusNotifier + 'st
 
 /// look for new subjects in the chart and register them
 #[instrument(skip_all)]
-pub async fn instruct<O: Order>(
+pub async fn instruct<O, T>(
     members: &mut impl Source,
     orders: broadcast::Sender<O>,
     commit_notify: mpsc::Receiver<(Idx, Arc<Notify>)>,
     status_notify: impl StatusNotifier + Clone + Sync + Send + 'static,
     state: State<O>,
-    term: Term,
-) {
+    term: T,
+) where
+    O: Order,
+    T: GetTerm + 'static,
+{
     let mut commit_idx = Committed::new(commit_notify, &state);
     let mut subjects = Subjects {
         subjects: JoinSet::new(),

@@ -31,30 +31,43 @@ impl<O: Clone + Order> StateInfo for super::State<O> {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct RequestGen<S: StateInfo> {
-    state: S,
-    pub base: Request<<S as StateInfo>::Order>,
-    pub next_idx: u32,
+pub trait GetTerm: Clone + Send {
+    fn curr(&mut self) -> Term;
+    /// returns the value of the previous call to curr
+    fn prev(&mut self) -> Term;
 }
 
-impl<S> RequestGen<S>
+#[derive(Debug, Clone)]
+pub struct RequestGen<S: StateInfo, T: GetTerm> {
+    state: S,
+    leader_id: Id,
+    prev_log_idx: Idx,
+    prev_log_term: Term,
+    pub next_idx: u32,
+    pub term: T,
+}
+
+impl<S, T> RequestGen<S, T>
 where
     S: StateInfo,
+    T: GetTerm,
 {
     #[instrument(skip_all, level = "trace")]
-    pub fn heartbeat(&self) -> Request<<S as StateInfo>::Order> {
+    pub fn heartbeat(&mut self) -> Request<<S as StateInfo>::Order> {
         Request {
             leader_commit: self.state.commit_idx(),
             entries: Vec::new(),
-            ..self.base
+            term: self.term.curr(),
+            leader_id: self.leader_id,
+            prev_log_idx: self.prev_log_idx,
+            prev_log_term: self.prev_log_term,
         }
     }
 
     #[instrument(skip_all, level = "trace")]
     pub fn increment_idx(&mut self) {
-        self.base.prev_log_term = self.base.term;
-        self.base.prev_log_idx = self.next_idx;
+        self.prev_log_term = self.term.prev(); // TODO won work if term can change
+        self.prev_log_idx = self.next_idx;
         self.next_idx += 1;
     }
 
@@ -62,7 +75,7 @@ where
     pub fn decrement_idx(&mut self) {
         self.next_idx -= 1;
         let prev_entry = self.state.entry(self.next_idx - 1).unwrap();
-        self.base.prev_log_term = prev_entry.term;
+        self.prev_log_term = prev_entry.term;
     }
 
     #[instrument(skip_all, level = "trace")]
@@ -72,9 +85,11 @@ where
             leader_commit: self.state.commit_idx(),
             prev_log_idx: self.next_idx - 1,
             entries: vec![entry.order],
-            ..self.base
+            term: self.term.curr(),
+            leader_id: self.leader_id,
+            prev_log_term: self.prev_log_term,
         };
-        self.base.prev_log_term = entry.term;
+        self.prev_log_term = entry.term;
         req
     }
 
@@ -83,26 +98,20 @@ where
         self.state.last_meta().idx >= self.next_idx
     }
 
-    pub fn new(state: S, term: Term, leader_id: Id) -> Self {
+    pub fn new(state: S, term: T, leader_id: Id) -> Self {
         let LogMeta {
             idx: prev_idx,
             term: prev_term,
         } = state.last_meta();
 
-        let base = Request {
-            term,
-            leader_id,
-            prev_log_idx: prev_idx,
-            prev_log_term: prev_term,
-            entries: Vec::new(),
-            leader_commit: state.commit_idx(),
-        };
-
         let next_idx = state.last_appl() + 1;
         Self {
             state,
             next_idx,
-            base,
+            leader_id,
+            prev_log_idx: prev_idx,
+            prev_log_term: prev_term,
+            term,
         }
     }
 }
@@ -135,7 +144,7 @@ mod tests {
     #[test]
     fn increment_idx() {
         let state = MockState;
-        let mut gen = RequestGen::new(state, 0, 0);
+        let mut gen = RequestGen::new(state, FixedTerm(0), 0);
         for i in 2..1024 {
             gen.increment_idx();
             assert_eq!(gen.next_idx, i);

@@ -1,6 +1,6 @@
 use color_eyre::{eyre, Help, Report};
 use instance_chart::Id;
-use std::sync::atomic::AtomicU32;
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::Mutex;
@@ -137,6 +137,14 @@ impl<O: Order> State<O> {
         // log entry that can safely be committed
         state.insert_into_log(0, &append::LogEntry::default());
         state
+    }
+
+    /// Only call when switching subtree in an observerlog
+    pub(super) fn reset(&mut self) {
+        self.vars.last_applied.store(0, Ordering::SeqCst); 
+        self.vars.commit_index.store(0, Ordering::SeqCst); 
+        self.db.clear().unwrap();
+        self.insert_into_log(0, &append::LogEntry::default());
     }
 
     /// returns if term increased

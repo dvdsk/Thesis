@@ -7,12 +7,11 @@ mod load_balancing;
 mod messages;
 
 use crate::president::load_balancing::LoadBalancer;
-use crate::raft;
 use crate::redirectory::Staff;
-use crate::Chart;
-use crate::{Role, Term};
-pub use raft::subjects;
-pub use raft::Log;
+use crate::{Chart, Role, Term};
+use crate::raft;
+pub use raft::{subjects, Log};
+use raft::subjects::GetTerm;
 use raft::LogWriter;
 
 use self::load_balancing::LoadNotifier;
@@ -33,6 +32,10 @@ pub enum Order {
     /// assigns a file tree a ministry, the load balancer
     /// will try to uphold its policy that each ministry has
     /// a minister and clecks
+    ///
+    /// # Warning: The ministers term (in staff) should be
+    /// unique and the highest in the cluster or clerk's log might get
+    /// corrupted while switching over
     AssignMinistry {
         subtree: PathBuf,
         staff: Staff,
@@ -74,6 +77,18 @@ async fn recieve_own_order(
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct FixedTerm(pub u32);
+
+impl GetTerm for FixedTerm {
+    fn curr(&mut self) -> Term {
+        self.0
+    }
+    fn prev(&mut self) -> Term {
+        self.0
+    }
+}
+
 #[instrument(skip(state, chart), ret)]
 pub(super) async fn work(state: &mut super::State, chart: &mut Chart, term: Term) -> crate::Role {
     let super::State {
@@ -102,7 +117,7 @@ pub(super) async fn work(state: &mut super::State, chart: &mut Chart, term: Term
         notify_rx,
         load_notifier.clone(),
         state.clone(),
-        term,
+        FixedTerm(term),
     )
     .in_current_span();
 

@@ -80,4 +80,9 @@ impl<O: Order> ObserverLog<O> {
             .await
             .expect("order channel should never be dropped")
     }
+
+    /// should only be called from `run()` while switching roles
+    pub(crate) fn reset(&mut self) {
+        self.state.reset();
+    }
 }
