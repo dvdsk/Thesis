@@ -12,13 +12,13 @@ use protocol::{Request, Response};
 use time::OffsetDateTime;
 use tokio::task::JoinSet;
 use tokio::time::{sleep_until, timeout, timeout_at, Instant};
-use tracing::{debug, instrument, warn, error};
+use tracing::{debug, error, instrument, warn};
 
 use crate::directory::{self, Directory};
 use crate::raft::{self, LogWriter, HB_TIMEOUT};
 use crate::redirectory::ReDirectory;
 
-use super::read_locks::LockManager;
+use super::read_locks::{FanOutError, LockManager};
 
 pub async fn handle_requests(
     listener: &mut TcpListener,
@@ -165,8 +165,10 @@ async fn write_lease(
     match timeout_at(deadline, lock_clerks).await {
         Err(..) => (),
         Ok(Ok(_)) => (),
+        Ok(Err(FanOutError::NoCapacity)) => return Ok(Response::NoCapacity),
         Ok(Err(e)) => {
             warn!("error locking clerks: {e:?}");
+            // after this any inresponsive clecks will have resigned
             sleep_until(deadline).await;
         }
     }

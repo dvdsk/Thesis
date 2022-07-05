@@ -94,8 +94,13 @@ pub enum Response {
     ReadLease(Lease),
     /// Something went wrong
     Error(String),
+    /// Could not grant lease, there are outstanding writes
+    ConflictingWriteLease,
     /// lease timed out or we canceld it by sending another request
     LeaseDropped,
     /// Highest commit index
     HighestCommited(Idx),
+    /// Indicates the server is overloaded and can not handle the request
+    /// client should try again later
+    NoCapacity,
 }

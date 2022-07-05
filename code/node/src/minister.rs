@@ -131,8 +131,8 @@ pub(crate) async fn work(
         redirectory.clone(),
     );
 
-    let (lock_manager, rx) = LockManager::new();
-    let update_read_locks = read_locks::maintain_file_locks(clerks_copy, rx);
+    let (lock_manager, (lock_rx, unlock_rx)) = LockManager::new();
+    let update_read_locks = read_locks::maintain_file_locks(clerks_copy, lock_rx, unlock_rx);
 
     let client_requests = client::handle_requests(
         client_listener,

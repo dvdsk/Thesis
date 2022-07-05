@@ -82,10 +82,8 @@ impl<'a, T: RandomNode> ReadableFile<'a, T> {
                 start: self.pos + (n_read as u64),
                 end: buf.len() as u64,
             };
-            let lease = Lease::get_read(self.client, &self.path, range);
-            let lease: Lease<_> = timeout(CLIENT_TIMEOUT, lease)
+            let lease = Lease::get_read(self.client, &self.path, range)
                 .await
-                .expect("client timed out")
                 .unwrap();
 
             tokio::select! {
@@ -114,10 +112,8 @@ impl<'a, T: RandomNode> WritableFile<'a, T> {
                 start: self.pos + (n_written as u64),
                 end: buf.len() as u64,
             };
-            let lease = Lease::get_write(self.client, &self.path, range);
-            let lease: Lease<_> = timeout(CLIENT_TIMEOUT, lease)
+            let lease = Lease::get_write(self.client, &self.path, range)
                 .await
-                .expect("client timed out")
                 .unwrap();
 
             tokio::select! {

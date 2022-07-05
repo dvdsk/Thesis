@@ -19,7 +19,7 @@ use tokio::time::sleep;
 use tracing::{debug, instrument, trace, warn};
 
 use super::locks::Locks;
-use crate::directory::Directory;
+use crate::directory::{Directory, self};
 use crate::redirectory::ReDirectory;
 use crate::{minister, raft};
 
@@ -160,7 +160,9 @@ async fn read_lease(
     dir: &mut Directory,
     readers: &Readers,
 ) -> Result<Response> {
+    use directory::Error;
     let lease = match dir.get_read_access(&path, &range) {
+        Err(Error::ConflictingWriteLease) => return Ok(Response::ConflictingWriteLease),
         Err(e) => return Ok(Response::Error(e.to_string())),
         Ok(lease) => lease,
     };

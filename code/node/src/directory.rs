@@ -40,6 +40,15 @@ impl<'a> Drop for LeaseGuard<'a> {
     }
 }
 
+#[derive(thiserror::Error, Debug)]
+pub enum Error {
+    #[error("Range overlaps with outstanding write lease")]
+    ConflictingWriteLease,
+    #[error("Db operation returned an error")]
+    Db(#[from] sled::Error),
+
+}
+
 impl Directory {
     fn lease_guard<'a>(&'a self, path: &'a Path, key: AccessKey) -> LeaseGuard<'a> {
         LeaseGuard {
@@ -105,12 +114,12 @@ impl Directory {
         dir
     }
 
-    #[instrument(skip(self), err)]
+    #[instrument(skip(self))]
     pub(crate) fn get_read_access<'a>(
         &'a self,
         path: &'a Path,
         req_range: &Range<u64>,
-    ) -> Result<LeaseGuard<'a>> {
+    ) -> Result<LeaseGuard<'a>, Error> {
         let mut key = None;
         self.tree
             .update_and_fetch(dbkey(path), |bytes| {
@@ -121,10 +130,9 @@ impl Directory {
                 } else {
                     bytes.map(Vec::from)
                 }
-            })
-            .wrap_err("internal db error")?;
+            })?;
 
-        let key = key.ok_or_else(|| eyre!("could not give access, overlapping writes"))?;
+        let key = key.ok_or(Error::ConflictingWriteLease)?;
         Ok(self.lease_guard(path, key))
     }
 
