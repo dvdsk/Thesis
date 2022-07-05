@@ -1,14 +1,16 @@
+use std::iter::repeat;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
-use std::{io, iter};
+use std::io;
 
 use futures::{SinkExt, TryStreamExt};
+use itertools::chain;
 use protocol::connection::{self, MsgStream};
 use protocol::{Request, Response};
 use tokio::net::TcpStream;
 use tokio::time::{sleep, timeout};
-use tracing::{info, instrument, trace, warn, debug};
+use tracing::{debug, info, instrument, trace, warn};
 
 use super::Ministry;
 use crate::random_node::RandomNode;
@@ -146,7 +148,8 @@ impl<T: RandomNode> super::Client<T> {
         req: Request,
         needs_minister: bool,
     ) -> Result<R, RequestError> {
-        let mut sleep_dur = [10, 20, 40, 100].into_iter().chain(iter::once(200).cycle());
+        let mut no_capacity = chain!([100, 200], repeat(400)).map(Duration::from_millis);
+        let mut redirect = chain!([10, 20, 40, 100], repeat(400)).map(Duration::from_millis);
         loop {
             self.send_request(path, &req, needs_minister).await;
             let response = self.recieve().await;
@@ -167,12 +170,16 @@ impl<T: RandomNode> super::Client<T> {
                 Ok(Some(Response::Redirect { staff, subtree })) => {
                     info!("updating staff: {staff:?}");
                     self.map.insert(Ministry { staff, subtree });
-                    sleep(Duration::from_millis(sleep_dur.next().unwrap())).await;
+                    sleep(redirect.next().unwrap()).await;
                     continue;
                 }
                 Ok(Some(Response::ConflictingWriteLease)) => {
                     sleep(Duration::from_millis(50)).await;
-                    continue
+                    continue;
+                }
+                Ok(Some(Response::NoCapacity)) => {
+                    sleep(no_capacity.next().unwrap()).await;
+                    continue;
                 }
                 Ok(Some(response)) => return Ok(R::from_response(response)),
                 Ok(None) => {
