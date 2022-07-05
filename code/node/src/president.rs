@@ -17,7 +17,7 @@ use raft::LogWriter;
 
 use self::load_balancing::LoadNotifier;
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum Order {
     /// used as placeholder for the first entry in the log
     None,

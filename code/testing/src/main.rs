@@ -38,7 +38,7 @@ fn setup_node(id: u64, run_number: u16) -> Result<Task> {
     let config = Config {
         id,
         database: temp_dir.join(format!("{id}.db")),
-        ..config.clone()
+        ..config
     };
     let fut = node::run(config);
     let task = task::Builder::new().name("node").spawn(fut);
@@ -138,9 +138,9 @@ async fn control_cluster() -> Result<()> {
         let mut buffer = String::new();
         let stdin = std::io::stdin(); // We get `Stdin` here.
         stdin.read_line(&mut buffer)?;
-        if buffer.contains("_") {
+        if buffer.contains('_') {
             action::bench(&mut client, buffer).await?;
-        } else if buffer.contains(" ") {
+        } else if buffer.contains(' ') {
             action::client(&mut client, buffer).await?;
         } else {
             cluster_action(&mut conn, buffer).await;

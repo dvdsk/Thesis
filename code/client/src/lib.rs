@@ -14,10 +14,8 @@ use map::{Map, Ministry};
 pub use random_node::{ChartNodes, RandomNode};
 
 use request::Connection;
-use tokio::time::{sleep, timeout};
+use tokio::time::sleep;
 use tracing::instrument;
-
-const CLIENT_TIMEOUT: Duration = Duration::from_millis(500);
 
 pub struct Ticket {
     idx: protocol::Idx,
@@ -156,14 +154,14 @@ impl<T: RandomNode> Client<T> {
             .unwrap()
     }
 
-    pub async fn open_writeable<'a>(&'a mut self, path: PathBuf) -> WritableFile<'a, T> {
+    pub async fn open_writeable(&mut self, path: PathBuf) -> WritableFile<'_, T> {
         WritableFile {
             client: self,
             path,
             pos: 0,
         }
     }
-    pub async fn open_readable<'a>(&'a mut self, path: PathBuf) -> ReadableFile<'a, T> {
+    pub async fn open_readable(&mut self, path: PathBuf) -> ReadableFile<'_, T> {
         ReadableFile {
             client: self,
             path,

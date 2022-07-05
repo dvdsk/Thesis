@@ -39,14 +39,13 @@ impl Map {
     pub fn clerk_for(&self, path: &Path) -> Option<SocketAddr> {
         let mut rng = thread_rng();
         self.staff_for(path)
-            .map(|s| s.clerks.choose(&mut rng))
-            .flatten()
+            .and_then(|s| s.clerks.choose(&mut rng))
             .cloned()
     }
 
     #[instrument(skip(self), ret)]
     pub fn minister_for(&self, path: &Path) -> Option<SocketAddr> {
-        self.staff_for(path).map(|s| s.minister).flatten()
+        self.staff_for(path).and_then(|s| s.minister)
     }
 
     #[instrument(skip(self))]

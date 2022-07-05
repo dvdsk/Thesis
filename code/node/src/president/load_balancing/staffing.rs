@@ -35,7 +35,7 @@ impl Staffing {
     pub fn from_committed(state: &State<president::Order>) -> Self {
         let mut ministries = Staffing::default();
         for order in state.committed() {
-            let _ig_other = ministries.process_order(order);
+            ministries.process_order(order);
         }
 
         ministries
@@ -90,7 +90,7 @@ impl Staffing {
             .clerks_down
             .get(&ministry)
             .cloned()
-            .unwrap_or_else(|| Vec::new());
+            .unwrap_or_default();
         let clerks_left = self.n_clerks(&ministry) - down.len();
         if clerks_left < 2 {
             issues.push(Issue::UnderStaffed {

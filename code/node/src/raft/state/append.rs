@@ -1,5 +1,5 @@
 use color_eyre::eyre::eyre;
-use color_eyre::Result;
+use color_eyre::{Help, Result};
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::Ordering;
 use std::time::Instant;
@@ -157,7 +157,9 @@ impl<O: Order> State<O> {
         let order = super::Perishable { order, age };
         match self.tx.try_send(order) {
             Ok(..) => Ok(()),
-            Err(TrySendError::Full(..)) => Err(eyre!("Orders are not consumed (fast) enough")),
+            Err(TrySendError::Full(..)) => Err(eyre!("Order queue full")
+                .suggestion("orders are not processed fast enough")
+                .with_note(|| format!("orders in queue: {}", self.tx.capacity()))),
             Err(TrySendError::Closed(..)) => unreachable!("Log closed the recieving mpsc"),
         }
     }
@@ -192,7 +194,7 @@ pub struct Request<O> {
     pub leader_commit: LogIdx,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum Reply {
     HeartBeatOk,
     AppendOk,

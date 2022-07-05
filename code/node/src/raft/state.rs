@@ -192,7 +192,7 @@ impl<O: Order> State<O> {
             .expect("internal db issue")
             .unwrap_or_default();
 
-        match key.get(0).map(Prefix::from).unwrap_or(Prefix::Invalid) {
+        match key.first().map(Prefix::from).unwrap_or(Prefix::Invalid) {
             Prefix::Log => LogMeta {
                 idx: u32::from_be_bytes(key[1..5].try_into().unwrap()),
                 term: u32::from_ne_bytes(value[0..4].try_into().unwrap()),

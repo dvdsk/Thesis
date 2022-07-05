@@ -217,7 +217,6 @@ macro_rules! from_response {
 impl FromResponse for () {
     fn from_response(resp: Response) -> Self {
         if let Response::Done = resp {
-            ()
         } else {
             panic!("invalid response, expected Done got: {resp:?}");
         }

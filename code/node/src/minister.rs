@@ -58,7 +58,7 @@ async fn handle_pres_orders(
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum Order {
     Create(PathBuf),
     Remove(PathBuf),
@@ -76,6 +76,22 @@ impl raft::Order for Order {
 
     fn resign() -> Self {
         unreachable!("Ministers can not be risigned by ministers")
+    }
+}
+
+use crate::raft::Perishable;
+async fn recieve_own_order(
+    orders: &mut mpsc::Receiver<Perishable<Order>>,
+) -> color_eyre::Result<()> {
+    loop {
+        let order = orders
+            .recv()
+            .await
+            .expect("channel was dropped, this means another thread panicked. Joining the panic");
+
+        if order.perished() {
+            return Err(order.error());
+        }
     }
 }
 
@@ -99,7 +115,7 @@ pub(crate) async fn work(
 
     let (register, mut clerks, clerks_copy) = clerks::RaftMap::new(clerks, *our_id);
 
-    let ObserverLog { state, .. } = min_orders;
+    let ObserverLog { state, orders, .. } = min_orders;
 
     redirectory.set_tree(Some(our_subtree.clone()));
     let directory = Directory::from_committed(state, db);
@@ -143,8 +159,10 @@ pub(crate) async fn work(
         lock_manager,
     );
 
+    // TODO FIXME is there a read own orders?
     tokio::select! {
         new_role = pres_orders => new_role,
+        _ = recieve_own_order(orders) => unreachable!("orders are not popped from queue fast enough"),
         () = instruct_subjects => unreachable!(),
         () = client_requests => unreachable!(),
         () = update_read_locks => unreachable!(),

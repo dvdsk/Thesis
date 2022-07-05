@@ -28,13 +28,13 @@ async fn do_reads((id, spread, mut client): (usize, usize, Client)) {
 }
 
 async fn do_writes((id, spread, mut client): (usize, usize, Client)) {
-    let mut buf = vec![0u8; 10_000];
+    let buf = vec![0u8; 10_000];
     let dir = id % spread;
     let path = PathBuf::from_str(&format!("/{dir}/{id}")).unwrap();
 
     for _ in 0..2 {
         let mut file = client.open_writeable(path.clone()).await;
-        file.write(&mut buf).await;
+        file.write(&buf).await;
     }
 }
 
@@ -49,7 +49,9 @@ pub async fn leases(client: &mut Client, readers: usize, writers: usize, spread:
     };
 
     let prep = prep_dir(client, readers, writers, spread);
+    #[allow(clippy::needless_collect)]
     let readers: Vec<_> = (0..readers).map(make_client).collect();
+    #[allow(clippy::needless_collect)]
     let writers: Vec<_> = (0..writers).map(make_client).collect();
     let sleep = sleep(Duration::from_millis(500)); // give the clients time to map the cluster
     tokio::join!(prep, sleep);
@@ -98,7 +100,9 @@ pub async fn meta(creators: usize, listers: usize, spread: usize) {
         (id, Client::new(nodes))
     };
 
+    #[allow(clippy::needless_collect)]
     let creators: Vec<_> = (0..creators).map(make_client).collect();
+    #[allow(clippy::needless_collect)]
     let listers: Vec<_> = (0..listers).map(make_client).collect();
     sleep(Duration::from_millis(500)).await; // give the clients time to map the cluster
 

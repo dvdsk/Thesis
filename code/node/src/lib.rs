@@ -30,7 +30,7 @@ use self::redirectory::{Node, ReDirectory};
 use self::util::open_socket;
 type Chart = mChart<3, u16>;
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum Role {
     Idle,
     Clerk {

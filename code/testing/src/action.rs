@@ -6,7 +6,7 @@ mod bench;
 type Client = client::Client<client::ChartNodes<3, 2>>;
 
 pub async fn client(client: &mut Client, buffer: String) -> Result<()> {
-    let mut args = buffer.split(" ");
+    let mut args = buffer.split(' ');
     let cmd = args.next();
     let path = args
         .next()
@@ -17,7 +17,7 @@ pub async fn client(client: &mut Client, buffer: String) -> Result<()> {
         .next()
         .map(str::trim)
         .map(|s| {
-            let s = s.replace("_", "");
+            let s = s.replace('_', "");
             usize::from_str(&s)
         })
         .map(|r| r.wrap_err("bytes needs to be an unsigned int"));
@@ -42,13 +42,13 @@ pub async fn client(client: &mut Client, buffer: String) -> Result<()> {
 }
 
 pub async fn bench(client: &mut Client, buffer: String) -> Result<()> {
-    let mut args = buffer.split(" ");
+    let mut args = buffer.split(' ');
     let cmd = args.next();
     let mut next_arg = || {
         args.next()
             .map(str::trim)
             .map(|s| {
-                let s = s.replace("_", "");
+                let s = s.replace('_', "");
                 usize::from_str(&s)
             })
             .map(|r| r.wrap_err("argument should be a signed interger"))

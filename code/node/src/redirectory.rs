@@ -145,7 +145,7 @@ impl ReDirectory {
         }
     }
 
-    #[instrument(skip(self), ret)]
+    #[instrument(level="debug", skip(self), ret)]
     pub async fn to_staff(&self, path: &Path) -> (Staff, PathBuf) {
         let tree = self.trees.read().await;
         for (subtree, staff) in tree.iter().rev() {
