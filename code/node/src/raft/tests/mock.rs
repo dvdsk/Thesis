@@ -17,6 +17,7 @@ use tracing::instrument;
 use tracing::warn;
 use tracing::Instrument;
 
+use crate::president::FixedTerm;
 use crate::president::subjects;
 use crate::president::Order;
 use crate::raft;
@@ -65,7 +66,7 @@ async fn heartbeat_while_pres(
             commit_notify,
             status_notifier,
             state.clone(),
-            term,
+            FixedTerm(term),
         );
 
         tokio::select! {
@@ -240,7 +241,7 @@ pub async fn president(
             commit_notify,
             load_notify,
             state.clone(),
-            term,
+            FixedTerm(term),
         );
 
         tokio::select! {
