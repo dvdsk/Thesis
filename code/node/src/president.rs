@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use tokio::sync::{broadcast, mpsc};
 use tracing::{info, instrument, Instrument};
 
-mod load_balancing;
+pub mod load_balancing;
 mod messages;
 
 use crate::president::load_balancing::LoadBalancer;
@@ -14,7 +14,7 @@ pub use raft::{subjects, Log};
 use raft::subjects::GetTerm;
 use raft::LogWriter;
 
-use self::load_balancing::LoadNotifier;
+use load_balancing::LoadNotifier;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum Order {
@@ -95,6 +95,7 @@ pub(super) async fn work(state: &mut super::State, chart: &mut Chart, term: Term
         id,
         pres_orders,
         client_listener,
+        partitions,
         ..
     } = state;
 
@@ -121,7 +122,7 @@ pub(super) async fn work(state: &mut super::State, chart: &mut Chart, term: Term
     )
     .in_current_span();
 
-    let load_balancing = load_balancer.run(state).in_current_span();
+    let load_balancing = load_balancer.run(state, partitions.clone()).in_current_span();
 
     tokio::select! {
         () = load_balancing => unreachable!(),

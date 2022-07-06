@@ -26,6 +26,7 @@ pub type Idx = u32; // raft idx
 
 use instance_chart::Chart as mChart;
 
+use self::president::load_balancing::Partition;
 use self::redirectory::{Node, ReDirectory};
 use self::util::open_socket;
 type Chart = mChart<3, u16>;
@@ -67,7 +68,7 @@ pub struct Config {
     /// Instrumentation endpoint
     #[clap(short, long, default_value = "127.0.0.1")]
     pub endpoint: IpAddr,
-    /// Run
+    /// Run number (passed to opentelemetry backend)
     #[clap(short('u'), long)]
     pub run: u16,
     /// Enable running multiple instances a the same host
@@ -76,15 +77,15 @@ pub struct Config {
 
     /// Optional, port on which to listen for presidential orders
     /// by default pick a free port
-    #[clap(short, long)]
+    #[clap(long)]
     pub pres_port: Option<NonZeroU16>,
     /// Optional, port on which to listen for internal communication
     /// by default pick a free port
-    #[clap(short, long)]
+    #[clap(long)]
     pub minister_port: Option<NonZeroU16>,
     /// Optional, port on which to listen for client request
     /// by default pick a free port
-    #[clap(short, long)]
+    #[clap(long)]
     pub client_port: Option<NonZeroU16>,
 
     /// number of nodes in the cluster, must be fixed
@@ -92,6 +93,10 @@ pub struct Config {
     /// Minimum is 4 (1 president, 1 minister, 2 clerks)
     #[clap(short, long)]
     pub cluster_size: u16,
+
+    /// use static subtree partitions.
+    #[clap(short, long)]
+    pub partitions: Vec<Partition>,
 
     /// database path, change when running multiple instances on
     /// the same machine
@@ -104,6 +109,7 @@ struct State {
     min_orders: raft::ObserverLog<minister::Order>,
     client_listener: TcpListener,
     redirectory: ReDirectory,
+    partitions: Vec<Partition>,
     id: Id,
     db: sled::Db,
 }
@@ -141,6 +147,7 @@ pub async fn run(conf: Config) {
         min_orders,
         client_listener,
         redirectory,
+        partitions: conf.partitions,
         id: conf.id,
         db,
     };

@@ -1,6 +1,7 @@
 use async_trait::async_trait;
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::str::FromStr;
 use std::time::Duration;
 use tokio::time::timeout;
 
@@ -9,7 +10,7 @@ use tracing::{info, instrument, warn};
 
 use self::issue::{Issue, Issues};
 
-use super::{raft, Chart, LogWriter, Order, FixedTerm};
+use super::{raft, Chart, FixedTerm, LogWriter, Order};
 use crate::redirectory::{Node, Staff};
 use crate::{Id, Term};
 mod staffing;
@@ -68,8 +69,8 @@ impl LoadBalancer {
             notifier,
         )
     }
-    pub async fn run(self, state: &raft::State<Order>) {
-        let mut init = self.initialize(state).await;
+    pub async fn run(self, state: &raft::State<Order>, partitions: Vec<Partition>) {
+        let mut init = self.initialize(state, partitions).await;
         init.run().await;
     }
     #[allow(dead_code)]
@@ -81,9 +82,61 @@ impl LoadBalancer {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct Partition {
+    subtree: PathBuf,
+    clerks: usize,
+}
+
+#[derive(Debug, Clone, thiserror::Error)]
+pub enum PartitionFromStrError {
+    #[error("missing delimiter `:` seperating path from number of clerks")]
+    NoDelimiter,
+    #[error("path could not be parsed")]
+    InvalidPath(<PathBuf as FromStr>::Err),
+    #[error("number of clerks is not a valid number")]
+    InvalidClerks(<usize as FromStr>::Err),
+    #[error("need a minimum of 2 clerks per partition")]
+    NotEnoughClerks,
+}
+
+impl FromStr for Partition {
+    type Err = PartitionFromStrError;
+
+    /// format: subtree:clerks
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        use PartitionFromStrError::*;
+        let (subtree, clerks) = s.split_once(':').ok_or(NoDelimiter)?;
+        let clerks = clerks.parse().map_err(InvalidClerks)?;
+        if clerks < 2 {
+            return Err(NotEnoughClerks);
+        }
+
+        Ok(Self {
+            subtree: subtree.parse().map_err(InvalidPath)?,
+            clerks,
+        })
+    }
+}
+
+impl Partition {
+    pub fn new(subtree: PathBuf, clerks: usize) -> Self {
+        assert!(
+            clerks >= 2,
+            "partition needs at least two clerks to be functional"
+        );
+        Self { subtree, clerks }
+    }
+}
+
 impl LoadBalancer {
-    async fn initialize(mut self, state: &raft::State<Order>) -> Init {
-        let staffing = self.organise_staffing(state).await;
+    async fn initialize(mut self, state: &raft::State<Order>, partitions: Vec<Partition>) -> Init {
+        let mut staffing = Staffing::from_committed(state);
+        match (staffing.has_root(), partitions.is_empty()) {
+            (true, _) => (),
+            (false, true) => self.add_partitions(&mut staffing, partitions).await,
+            (false, false) => self.add_root(&mut staffing).await,
+        }
 
         Init {
             chart: self.chart,
@@ -96,22 +149,10 @@ impl LoadBalancer {
         }
     }
 
-    async fn organise_staffing(&mut self, state: &raft::State<Order>) -> Staffing {
+    async fn collect_idle(&mut self, needed: usize) -> HashMap<Id, Node> {
         use Event::*;
-
-        let mut staffing = Staffing::from_committed(state);
-        if staffing.has_root() {
-            return staffing;
-        }
-
-        assert!(
-            staffing.is_empty(),
-            "there must be a root ministry before there can be any other"
-        );
-
-        // collect up to three not yet assigned nodes nodes, filter out those assigned to ministry
         let mut idle = HashMap::new();
-        while idle.len() < 3 {
+        while idle.len() < needed {
             match self.events.recv().await.unwrap() {
                 NodeUp(id) => {
                     let node = Node::from_chart(id, &self.chart);
@@ -121,15 +162,45 @@ impl LoadBalancer {
                     idle.remove(&id);
                 }
                 Committed(order) => {
-                    staffing.process_order(order);
-                    if staffing.has_root() {
-                        return staffing;
-                    }
+                    panic!("no orders should arrive while adding root, got: {order:?}");
                 }
             }
         }
+        idle
+    }
 
-        let mut idle = idle.into_values();
+    async fn add_partitions(&mut self, staffing: &mut Staffing, partitions: Vec<Partition>) {
+        assert!(
+            staffing.is_empty(),
+            "there must be a root ministry before there can be any other"
+        );
+
+        let needed: usize = partitions.iter().map(|p| p.clerks + 1).sum();
+        let mut idle = self.collect_idle(needed).await.into_values();
+
+        for part in partitions {
+            let add = Order::AssignMinistry {
+                subtree: part.subtree,
+                staff: Staff {
+                    minister: idle.next().unwrap().clone(),
+                    clerks: (&mut idle).take(part.clerks).collect(),
+                    term: self.highest_term,
+                },
+            };
+            info!("adding partition: {:?}", &add);
+            self.log_writer.append(add).await.committed().await;
+        }
+    }
+
+    async fn add_root(&mut self, staffing: &mut Staffing) {
+        assert!(
+            staffing.is_empty(),
+            "there must be a root ministry before there can be any other"
+        );
+
+        // collect up to three not yet assigned nodes nodes,
+        // filter out those assigned to ministry
+        let mut idle = self.collect_idle(3).await.into_values();
         let minister = idle.next().unwrap();
         let clerks = idle.collect();
 
@@ -142,9 +213,8 @@ impl LoadBalancer {
                 term: self.highest_term,
             },
         };
-        info!("{:?}", &add_root);
+        info!("adding root: {:?}", &add_root);
         self.log_writer.append(add_root).await.committed().await;
-        staffing
     }
 }
 

@@ -32,6 +32,7 @@ fn setup_node(id: u64, run_number: u16) -> Result<Task> {
         client_port: None,
         cluster_size: 4,
         database: PathBuf::from("changed in loop"),
+        partitions: Vec::new(),
     };
 
     let temp_dir = Temp::new_dir().unwrap();
