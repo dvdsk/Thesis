@@ -91,7 +91,7 @@ async fn most_experienced(clerks: &[Node]) -> Result<Node, ContactClerksErr> {
 }
 
 impl Init {
-    async fn update_ministry_staff(&self, subtree: PathBuf, new_staff: Staff) {
+    async fn update_ministry_staff(&mut self, subtree: PathBuf, new_staff: Staff) {
         self.log_writer
             .append(crate::president::Order::AssignMinistry {
                 subtree,
@@ -104,7 +104,7 @@ impl Init {
 
     /// solve a ministry without minister by promoting the most experianced clerk
     #[instrument(skip(self), err)]
-    pub(crate) async fn promote_clerk(&self, subtree: &Path) -> Result<(), Report> {
+    pub(crate) async fn promote_clerk(&mut self, subtree: &Path) -> Result<(), Report> {
         let staff = self.staffing.staff(subtree);
         let candidate = most_experienced(&staff.clerks).await?;
 

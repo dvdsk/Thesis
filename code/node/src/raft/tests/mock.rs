@@ -147,7 +147,7 @@ impl TestVoteNode {
 async fn test_req(
     n: u8,
     partial: Option<Idx>,
-    log: &mut LogWriter<Order>,
+    log: &mut LogWriter<Order, FixedTerm>,
     stream: &mut MsgStream<Msg, Reply>,
 ) -> Option<Reply> {
     debug!("appending Test({n}) to log");
@@ -160,7 +160,7 @@ async fn test_req(
     Some(Reply::Done)
 }
 
-async fn handle_conn(stream: TcpStream, mut _log: LogWriter<Order>) {
+async fn handle_conn(stream: TcpStream, mut _log: LogWriter<Order, FixedTerm>) {
     use Msg::*;
     use Reply::*;
     let mut stream: MsgStream<Msg, Reply> = connection::wrap(stream);
@@ -185,7 +185,7 @@ async fn handle_conn(stream: TcpStream, mut _log: LogWriter<Order>) {
     }
 }
 
-pub async fn handle_incoming(listener: &mut TcpListener, log: LogWriter<Order>) {
+pub async fn handle_incoming(listener: &mut TcpListener, log: LogWriter<Order, FixedTerm>) {
     let mut request_handlers = JoinSet::new();
     loop {
         let (conn, _addr) = listener.accept().await.unwrap();
@@ -214,7 +214,7 @@ pub async fn president(
         let (broadcast, _) = broadcast::channel(16);
         let (tx, commit_notify) = mpsc::channel(16);
         let log_writer = LogWriter {
-            term,
+            term: FixedTerm(term),
             state: state.clone(),
             broadcast: broadcast.clone(),
             notify_tx: tx,

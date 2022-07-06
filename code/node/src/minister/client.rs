@@ -18,11 +18,12 @@ use crate::directory::{self, Directory};
 use crate::raft::{self, LogWriter, HB_TIMEOUT};
 use crate::redirectory::ReDirectory;
 
+use super::AtomicTerm;
 use super::read_locks::{FanOutError, LockManager};
 
 pub async fn handle_requests(
     listener: &mut TcpListener,
-    log: LogWriter<super::Order>,
+    log: LogWriter<super::Order, AtomicTerm>,
     our_subtree: &Path,
     redirect: &mut ReDirectory,
     dir: Directory,
@@ -79,7 +80,7 @@ type ClientStream<'a> = Pin<&'a mut Peekable<MsgStream<Request, Response>>>;
 // Track locks here too to update new nodes
 async fn handle_conn(
     stream: TcpStream,
-    mut log: LogWriter<super::Order>,
+    mut log: LogWriter<super::Order, AtomicTerm>,
     our_subtree: PathBuf,
     redirect: ReDirectory,
     mut dir: Directory,
@@ -202,7 +203,7 @@ async fn write_lease(
 async fn create_file(
     path: PathBuf,
     stream: &mut ClientStream<'_>,
-    log: &mut LogWriter<super::Order>,
+    log: &mut LogWriter<super::Order, AtomicTerm>,
     dir: &mut Directory,
 ) -> Result<Response> {
     let ticket = log.append(super::Order::Create(path.clone())).await;

@@ -157,14 +157,15 @@ pub(crate) async fn work(
 
     let (broadcast, _) = broadcast::channel(16);
     let (tx, notify_rx) = mpsc::channel(16);
+
+    let term = AtomicTerm::new(initial_term);
     let log_writer = LogWriter {
-        term: initial_term, // TODO make this adjust on re-assign order term increase
+        term: term.clone(),
         state: state.clone(),
         broadcast: broadcast.clone(),
         notify_tx: tx,
     };
 
-    let term = AtomicTerm::new(initial_term);
     let instruct_subjects = subjects::instruct(
         &mut clerks,
         broadcast.clone(),

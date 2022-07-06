@@ -2,14 +2,14 @@ use std::sync::Arc;
 
 use tokio::sync::{broadcast, mpsc, Notify};
 
-use super::Order;
-use crate::{Idx, Term};
+use super::{Order, subjects::GetTerm};
+use crate::Idx;
 
 /// interface to append an item to the clusters raft log and
 /// return once it is comitted
 #[derive(Debug, Clone)]
-pub struct LogWriter<O> {
-    pub term: Term,
+pub struct LogWriter<O, T: GetTerm> {
+    pub term: T,
     pub state: super::State<O>,
     pub broadcast: broadcast::Sender<O>,
     pub notify_tx: mpsc::Sender<(Idx, Arc<Notify>)>,
@@ -26,10 +26,10 @@ impl AppendTicket {
     }
 }
 
-impl<O: Order> LogWriter<O> {
+impl<O: Order, T: GetTerm> LogWriter<O, T> {
     // returns notify
-    pub async fn append(&self, order: O) -> AppendTicket {
-        let idx = self.state.append(order.clone(), self.term);
+    pub async fn append(&mut self, order: O) -> AppendTicket {
+        let idx = self.state.append(order.clone(), self.term.curr());
         let notify = Arc::new(Notify::new());
         self.notify_tx.send((idx, notify.clone())).await.unwrap();
         self.broadcast.send(order).unwrap();
@@ -37,7 +37,7 @@ impl<O: Order> LogWriter<O> {
     }
     /// Verify an order was appended correctly, if it was not then append it again
     #[allow(dead_code)] // not dead used in tests will be used later
-    pub async fn re_append(&self, order: O, prev_idx: Idx) -> AppendTicket {
+    pub async fn re_append(&mut self, order: O, prev_idx: Idx) -> AppendTicket {
         use super::LogEntry;
 
         match self.state.entry_at(prev_idx) {

@@ -104,7 +104,7 @@ pub(super) async fn work(state: &mut super::State, chart: &mut Chart, term: Term
     let (tx, notify_rx) = mpsc::channel(16);
 
     let log_writer = LogWriter {
-        term,
+        term: FixedTerm(term),
         state: state.clone(),
         broadcast: broadcast.clone(),
         notify_tx: tx,

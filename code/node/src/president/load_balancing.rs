@@ -9,7 +9,7 @@ use tracing::{info, instrument, warn};
 
 use self::issue::{Issue, Issues};
 
-use super::{raft, Chart, LogWriter, Order};
+use super::{raft, Chart, LogWriter, Order, FixedTerm};
 use crate::redirectory::{Node, Staff};
 use crate::{Id, Term};
 mod staffing;
@@ -47,14 +47,14 @@ pub enum Event {
 
 pub struct LoadBalancer {
     highest_term: Term,
-    log_writer: LogWriter<Order>,
+    log_writer: LogWriter<Order, FixedTerm>,
     events: mpsc::Receiver<Event>,
     chart: Chart,
     policy: (),
 }
 
 impl LoadBalancer {
-    pub fn new(log_writer: LogWriter<Order>, chart: Chart) -> (Self, LoadNotifier) {
+    pub fn new(log_writer: LogWriter<Order, FixedTerm>, chart: Chart) -> (Self, LoadNotifier) {
         let (tx, rx) = mpsc::channel(16);
         let notifier = LoadNotifier { sender: tx };
         (
@@ -150,7 +150,7 @@ impl LoadBalancer {
 
 struct Init {
     chart: Chart,
-    log_writer: LogWriter<Order>,
+    log_writer: LogWriter<Order, FixedTerm>,
     events: mpsc::Receiver<Event>,
     /// used for staffing changes due the drop of a ministry because
     /// its directory is deleted
