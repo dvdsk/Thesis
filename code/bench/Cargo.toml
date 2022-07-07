@@ -1,0 +1,24 @@
+[package]
+name = "bench"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[[bin]]
+name = "client"
+
+[dependencies]
+instance-chart = { version = "0.2.1" }
+
+tracing = { version = "0.1" } #, features = ["release_max_level_error"] }
+tracing-error = "0.2"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+clap = { version = "3.1", features = ["derive"] }
+color-eyre = { version = "0.6", features = ["capture-spantrace"] }
+thiserror = "1"
+result-tools = { git = "https://github.com/dvdsk/result-tools.git" }
+
+client = { path = "../client" }
+node = { path = "../node" }
+mktemp = "0.4"
