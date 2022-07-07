@@ -90,13 +90,17 @@ pub(super) async fn work( ) -> crate::Role {
 \end{lstlisting}
 
 The other work functions similarly select on multiple async tasks. The tasks themselves often create yet other tasks. This way the program builds up a tree of concurrently working functions. The tree is illustrated in \cref{fig:tree}.
-
+%
+\clearpage
+\thispagestyle{empty}
 \begin{figure}[htbp]
 	\centering
 	\input{figs/diagrams/structure.tex}
-	\caption{Structure of the program visualized as a tree of all concurrently running tasks}
+	\caption{Diagram of all concurrently running functions in a node. A dashed line between items means only of those items will be running at the time. For example a node in the Idle role can not concurrently be a Minister. Functions in red~\taskLeg{} are single tasks while purple~\tasksLeg{} indicates there are between zero and $n$ instances of the function running. Functions in gray~\futureLeg{} are futures, they share a thread with any parent and or child futures}
 	\label{fig:tree}
 \end{figure}
+\clearpage
+
 % (mathy) conditions from 
 % note all are ranged just range > file for unranged
 % mocking

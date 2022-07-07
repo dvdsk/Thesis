@@ -1,35 +1,39 @@
-\tikzstyle{tasks}=[base, rectangle, fill=skPurple!30]
-\tikzstyle{task}=[base, rectangle, fill=skRed!30, font=\normalsize]
-\tikzstyle{future}=[base, rectangle, fill=skRed!30, font=\normalsize]
+\tikzstyle{tasks}=[base, rectangle, fill=skPurple!30, font=\small]
+\tikzstyle{task}=[base, rectangle, fill=skRed!30, font=\small]
+\tikzstyle{future}=[base, rectangle, fill=gray!20, font=\small]
 \tikzstyle{bracket2}=[decorate, decoration={brace, amplitude=5pt, raise=5pt, mirror}, line width=0.5mm, xshift=20pt]
-\tikzstyle{or_line}=[thick, font=\normalsize, align=center]
+\tikzstyle{bracket3}=[decorate, decoration={brace, amplitude=5pt, raise=5pt}, line width=0.5mm, xshift=20pt]
+\tikzstyle{or_line}=[dashed, line width=0.5mm, color=black!60, font=\normalsize, align=center]
 
 \begin{tikzpicture}[node distance=0.5cm and 1.0cm, auto]
-	\node (root) [task] {main function};
 
-	\node (disc) [task, below=of root.west, anchor=north west] {Discover new nodes};
-	\node (succession) [task, below=of disc.west, anchor=north west] {President succession};
-		\node (sleep) [future, right=6 of succession.west] {sleep until timeout};
-		\node (elect) [future, below=of sleep.west, anchor=north west] {hold election};
+	\node (disc) [task] {Discover new nodes};
+	\node (praft) [task, below= of disc.west, anchor=north west] {President Raft};
+		\node (handle_praft) [tasks, right=4 of praft.west] {handle append or vote request};
+	\node (succession) [task, below=of praft.west, anchor=north west] {President succession};
+		\node (sleep) [future, below right=0.2 and 9.5 of succession.west] {sleep until timeout};
+		\node (elect) [future, below=of sleep.west, anchor=north west] {hold Raft election};
 		\node (found) [future, above=of sleep.west, anchor=south west] {valid leader found};
-		\node (died) [future, above=0.7 of found.west, anchor=south west] {president died};
+		\node (died) [future, above=0.7 of found.west, anchor=south west] {await presidents death};
+	\node (mraft) [task, below=of succession.west, anchor=north west] {Minister Raft};
+		\node (handle_mraft) [tasks, right=4 of mraft.west] {handle append};
 
 	\draw[bracket2] (died.north west) to [out=270, in=90] node [] {} (elect.south west);
 	\draw[text_small] (succession) to [out=0, in=180] node [] {} ($(died.north west)!.5!(elect.south west)-(0.5,0)$);
 
-	\node (mid) [invisible] at ($(died.west)!.5!(found.west)-(0.2, 0)$) {};
-	\draw[or_line] (mid) to [out=0, in=180] node [] {} ($(mid)+(3.8,0)$);
+	\node (mid) [invisible] at ($(died.west)!.5!(found.west)-(0, 0)$) {};
+	\draw[or_line] (mid) to [out=0, in=180] node [] {} ($(mid.west)+(3.8,0)$);
 
+	\draw[text_small] (praft) to [out=0, in=180] node [] {} (handle_praft);
+	\draw[text_small] (mraft) to [out=0, in=180] node [] {} (handle_mraft);
 
-	\node (praft) [task, below=of succession.west, anchor=north west] {President Raft};
-	\node (mraft) [task, below=of praft.west, anchor=north west] {Minister Raft};
-	\node (handle) [tasks, right=6 of $(praft.west)!.8!(mraft.west)$] {handle connection};
-	\draw[text_small] (praft) to [out=0, in=180] node [] {} (handle);
-	\draw[text_small] (mraft) to [out=0, in=180] node [] {} (handle);
+	\node (main) [task, below = of mraft.west, anchor=north west] {Role};
+	\node (roles) [invisible, right= 0.25 of main] {};
+	\draw[thick] (main.east) to [out=0, in=180, anchor=west] (roles) [] {};
+	\draw[text_small] (roles.west) to [out=270, in=90, anchor=west] ($(roles.west) + (0,-0.25)$) [] {};
 
-
-	\node (idle) [future, below=of mraft.west, anchor=north west] {perform Idle role};
-		\node (redirect) [future, right=6 of idle.west] {redirect clients};
+	\node (idle) [future, below=1. of main.west, anchor=north west] {perform Idle role};
+		\node (redirect) [future, right=5 of idle.west] {redirect clients};
 			\node (handle_conn) [tasks, right=of redirect] {handle client connection};
 		\node (pres_orders) [future, below= of redirect.west, anchor=north west] {handle presidents orders};
 
@@ -37,8 +41,7 @@
 	\draw[bracket2] (redirect.north west) to [out=270, in=90] node [] {} (pres_orders.south west);
 	\draw[text_small] (idle) to [out=0, in=180] node [] {} ($(redirect.north west)!.5!(pres_orders.south west)-(0.5,0)$);
 
-
-	\node (clerk) [future, below=1.5 of idle.west, anchor=north west] {perform clerk role};
+	\node (clerk) [future, below left=1 and 5 of pres_orders.west, anchor=north west] {perform clerk role};
 		\node (client) [future, below right= 0.5 and 2 of clerk.west] {handle client request};
 			\node (handle_conn) [tasks, right=of client] {handle client connection};
 		\node (min_orders) [future, below=of client.west, anchor=north west] {handle minister orders};
@@ -48,16 +51,16 @@
 	\draw[bracket2] (client.north west) to [out=270, in=90] node [] {} (pres_orders.south west);
 	\draw[text_small] ($(clerk.south) - (1,0)$) to [out=270, in=180] node [] {} ($(client.north west)!.5!(pres_orders.south west)-(0.5,0)$);
 
-	\node (minister) [future, below=3 of clerk.west, anchor=north west] {perform minister role};
+	\node (minister) [future, below left= 1 and 2 of pres_orders.west, anchor=north west] {perform minister role};
 		\node (client) [future, below right= 0.5 and 2 of minister.west] {handle client request};
 			\node (handle_conn) [tasks, right=5 of client.west] {handle client connection};
 		\node (instruct) [future, below=of client.west, anchor=north west] {instruct clerks};
-			\node (in_manage_clerk) [tasks, above right= 0.5 and 10 of instruct.west] {manage clerks};
+			\node (in_manage_clerk) [tasks, above right= 0.4625 and 10 of instruct.west] {manage clerks};
 			\node (in_new_clerk) [future, below=of in_manage_clerk.west, anchor=north west] {add new clerks};
 			\node (in_dead_clerk) [future, below=of in_new_clerk.west, anchor=north west] {remove dead clerk};
 		\node (locks) [future, below=of instruct.west, anchor=north west] {manage read locks};
 		\node (pres_orders) [future, below=of locks.west, anchor=north west] {handle presidents orders};
-			\node (new_clerk) [future, above right= 1.5 and 6 of pres_orders.west, anchor=north west] {add new clerks};
+			\node (new_clerk) [future, above right= 1.4625 and 6 of pres_orders.west, anchor=north west] {add new clerks};
 			\node (dead_clerk) [future, below=of new_clerk.west, anchor=north west] {remove dead clerk};
 			\node (lock_req) [future, below=of dead_clerk.west, anchor=north west] {handle lock request};
 			\node (manage_clerk) [tasks, below=of lock_req.west, anchor=north west] {manage clerks};
@@ -73,7 +76,8 @@
 	\draw[bracket2] (new_clerk.north west) to [out=270, in=90] node [] {} (manage_clerk.south west);
 	\draw[text_small] (pres_orders) to [out=0, in=180] node [] {} ($(new_clerk.north west)!.5!(manage_clerk.south west)-(0.5,0)$);
 
-	\node (president) [future, below=5 of minister.west, anchor=north west] {perform president role};
+
+	\node (president) [future, below left=1 and 8 of manage_clerk.west, anchor=north west] {perform president role};
 		\node (redirect) [future, below right=0.5 and 2 of president.west] {redirect clients};
 			\node (handle_conn) [tasks, right=of redirect] {handle client connection};
 		\node (instruct) [future, below=of redirect.west, anchor=north west] {instruct nodes};
@@ -90,5 +94,9 @@
 
 	\draw[bracket2] (in_manage_clerk.north west) to [out=270, in=90] node [] {} (in_dead_clerk.south west);
 	\draw[text_small] (instruct) to [out=0, in=180] node [] {} ($(in_manage_clerk.north west)!.5!(in_dead_clerk.south west)-(0.5,0)$);
+
+	\draw[or_line] ($(clerk.west) + (0,0.625)$) to [out=0, in=180] node [] {} ($(clerk) + (13,0.625)$);
+	\draw[or_line] ($(minister.west) + (0,0.625)$) to [out=0, in=180] node [] {} ($(minister) + (13,0.625)$);
+	\draw[or_line] ($(president.west) + (0,0.625)$) to [out=0, in=180] node [] {} ($(president) + (13,0.625)$);
 
 \end{tikzpicture}
