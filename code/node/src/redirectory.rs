@@ -145,7 +145,7 @@ impl ReDirectory {
         }
     }
 
-    #[instrument(level="debug", skip(self), ret)]
+    #[instrument(level = "debug", skip(self), ret)]
     pub async fn to_staff(&self, path: &Path) -> (Staff, PathBuf) {
         let tree = self.trees.read().await;
         for (subtree, staff) in tree.iter().rev() {
@@ -158,5 +158,15 @@ impl ReDirectory {
 
     pub(crate) fn set_tree(&mut self, tree: Option<PathBuf>) {
         self.our_tree = tree;
+    }
+
+    pub(crate) async fn subtrees(&self, path: &PathBuf) -> Vec<PathBuf> {
+        let tree = self.trees.read().await;
+        tree.iter()
+            .map(|(path, _)| path)
+            .filter(|tree| tree.starts_with(path))
+            .filter(|tree| *tree != path)
+            .cloned()
+            .collect()
     }
 }

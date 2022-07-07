@@ -1,13 +1,13 @@
 use std::iter::repeat;
 use std::net::SocketAddr;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::time::Duration;
 use std::io;
 
 use futures::{SinkExt, TryStreamExt};
 use itertools::chain;
 use protocol::connection::{self, MsgStream};
-use protocol::{Request, Response};
+use protocol::{Request, Response, DirList};
 use tokio::net::TcpStream;
 use tokio::time::{sleep, timeout};
 use tracing::{debug, info, instrument, trace, warn};
@@ -233,5 +233,5 @@ impl FromResponse for () {
 //     }
 // }
 
-from_response!([List], Vec<PathBuf>);
+from_response!([List], DirList);
 from_response!([WriteLease, ReadLease], protocol::Lease);

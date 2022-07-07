@@ -23,8 +23,8 @@ pub async fn client(client: &mut Client, buffer: String) -> Result<()> {
         .map(|r| r.wrap_err("bytes needs to be an unsigned int"));
 
     match cmd {
-        Some("list") => println!("list: {:?}", client.list(path).await),
-        Some("create") => client.create_file(path).await,
+        Some("ls") => println!("list: {:?}", client.list(path).await),
+        Some("touch") => client.create_file(path).await,
         Some("read") => {
             let mut file = client.open_readable(path).await;
             let bytes = bytes.ok_or_else(|| eyre!("read needs bytes as third arg"))??;

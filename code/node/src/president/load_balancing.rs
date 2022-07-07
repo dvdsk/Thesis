@@ -149,6 +149,7 @@ impl LoadBalancer {
         }
     }
 
+    #[instrument(skip(self))]
     async fn collect_idle(&mut self, needed: usize) -> HashMap<Id, Node> {
         use Event::*;
         let mut idle = HashMap::new();
@@ -169,10 +170,11 @@ impl LoadBalancer {
         idle
     }
 
+    #[instrument(skip_all)]
     async fn add_partitions(&mut self, staffing: &mut Staffing, partitions: Vec<Partition>) {
         assert!(
             staffing.is_empty(),
-            "there must be a root ministry before there can be any other"
+            "can not setup inital staff if there already is a staff"
         );
 
         let needed: usize = partitions.iter().map(|p| p.clerks + 1).sum();

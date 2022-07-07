@@ -1,8 +1,8 @@
-use std::ops::Range;
+use std::{ops::Range, collections::HashSet};
 use std::path::PathBuf;
 use std::time::Duration;
 
-use protocol::Request;
+use protocol::{DirList, Request};
 
 mod lease;
 mod map;
@@ -145,13 +145,33 @@ impl<T: RandomNode> Client<T> {
     }
 
     /// # Note
-    /// Can be canceld, if any request was in progress but not yet
-    /// committed the ticket member will be set to allow future resuming,
-    /// in case of node failure.
+    /// Can be canceld
     pub async fn list(&mut self, path: PathBuf) -> Vec<PathBuf> {
-        self.request(&path, Request::List(path.clone()), false)
+        let mut res = Vec::new();
+        let mut checked = HashSet::new();
+        let mut to_check = Vec::new();
+
+        let DirList { local, subtrees } = self
+            .request(&path, Request::List(path.clone()), false)
             .await
-            .unwrap()
+            .unwrap();
+        checked.insert(path);
+        res.extend_from_slice(&local);
+        to_check.extend(subtrees.into_iter());
+
+        while let Some(tree_path) = to_check.pop() {
+            let DirList { local, subtrees } = self
+                .request(&tree_path, Request::List(tree_path.clone()), false)
+                .await
+                .unwrap();
+            checked.insert(tree_path);
+            res.extend_from_slice(&local);
+
+            let subtrees: HashSet<_> = subtrees.into_iter().collect();
+            let add = subtrees.difference(&checked).cloned();
+            to_check.extend(add);
+        }
+        res
     }
 
     pub async fn open_writeable(&mut self, path: PathBuf) -> WritableFile<'_, T> {

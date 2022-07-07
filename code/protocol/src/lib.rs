@@ -3,8 +3,8 @@ use std::ops::Range;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use time::OffsetDateTime;
 use serde::{Deserialize, Serialize};
+use time::OffsetDateTime;
 
 pub mod connection;
 pub type Idx = u32;
@@ -22,7 +22,6 @@ pub trait Message<'de>: Serialize + Deserialize<'de> {
     }
 }
 
-
 slotmap::new_key_type! { pub struct AccessKey; }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -33,17 +32,33 @@ pub enum Request {
     /// refresh the lease hold by the current connection
     RefreshLease,
     /// get a write lease to the file at this path
-    Write{path: PathBuf, range: Range<u64>},
+    Write {
+        path: PathBuf,
+        range: Range<u64>,
+    },
     /// get a write lease to the file at this path
-    Read{path: PathBuf, range: Range<u64>},
+    Read {
+        path: PathBuf,
+        range: Range<u64>,
+    },
     /// check if change is committed to disk, should be awnserd by Done
     /// if it is or by No if not
-    IsCommitted {path: PathBuf, idx: Idx },
+    IsCommitted {
+        path: PathBuf,
+        idx: Idx,
+    },
     /// send to a clerk by a minister needing write permissions over a file (range)
     /// the clerk will stop any ongoing reading
-    Lock {path: PathBuf, range: Range<u64>, key: AccessKey },
+    Lock {
+        path: PathBuf,
+        range: Range<u64>,
+        key: AccessKey,
+    },
     /// tells the clerk it can start reading again
-    Unlock { path: PathBuf, key: AccessKey },
+    Unlock {
+        path: PathBuf,
+        key: AccessKey,
+    },
     /// unlock all file leases, send by new minister to ensure locks held under
     /// the old administration are released (since they are no longer used)
     UnlockAll,
@@ -76,21 +91,32 @@ pub struct Staff {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+pub struct DirList {
+    pub local: Vec<PathBuf>,
+    pub subtrees: Vec<PathBuf>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub enum Response {
-    List(Vec<PathBuf>),
+    List(DirList),
     /// wrong subtree redirect client to correct clerk/minister
-    Redirect { subtree: PathBuf, staff: Staff },
+    Redirect {
+        subtree: PathBuf,
+        staff: Staff,
+    },
     /// change not yet done, starting comit with index
-    Ticket { idx: Idx },
+    Ticket {
+        idx: Idx,
+    },
     /// affirming awnser to `Request::IsCommitted`
     Committed,
     /// negative awnser to `Request::IsCommitted`
     NotCommitted,
     /// change committed to disk
     Done,
-    /// a write lease till 
+    /// a write lease till
     WriteLease(Lease),
-    /// a read lease till 
+    /// a read lease till
     ReadLease(Lease),
     /// Something went wrong
     Error(String),
