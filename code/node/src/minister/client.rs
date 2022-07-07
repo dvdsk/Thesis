@@ -12,14 +12,14 @@ use protocol::{Request, Response};
 use time::OffsetDateTime;
 use tokio::task::JoinSet;
 use tokio::time::{sleep_until, timeout, timeout_at, Instant};
-use tracing::{debug, error, instrument, warn};
+use tracing::{debug, error, instrument, warn, Instrument};
 
 use crate::directory::{self, Directory};
 use crate::raft::{self, LogWriter, HB_TIMEOUT};
 use crate::redirectory::ReDirectory;
 
-use super::AtomicTerm;
 use super::read_locks::{FanOutError, LockManager};
+use super::AtomicTerm;
 
 pub async fn handle_requests(
     listener: &mut TcpListener,
@@ -39,7 +39,8 @@ pub async fn handle_requests(
             redirect.clone(),
             dir.clone(),
             manager.clone(),
-        );
+        )
+        .in_current_span();
         request_handlers
             .build_task()
             .name("minister client conn")
@@ -48,36 +49,39 @@ pub async fn handle_requests(
 }
 
 /// checks if a request can be handled by this minister
+#[instrument(skip_all, ret)]
 async fn check_subtree(
     our_subtree: &PathBuf,
     req: &Request,
     redirect: &ReDirectory,
-) -> Result<(), Response> {
+) -> Option<Response> {
     use Request::*;
+
     match req {
         List(path) | Read { path, .. } => {
             let (staff, subtree) = redirect.to_staff(path).await;
-            Err(Response::Redirect {
+            Some(Response::Redirect {
                 staff: staff.for_client(),
                 subtree,
             })
         }
-        Create(path) | Write { path, .. } | IsCommitted { path, .. }
-            if !path.starts_with(&our_subtree) =>
-        {
+        Create(path) | Write { path, .. } | IsCommitted { path, .. } => {
             let (staff, subtree) = redirect.to_staff(path).await;
-            Err(Response::Redirect {
-                staff: staff.for_client(),
-                subtree,
-            })
+            if subtree == *our_subtree {
+                None
+            } else {
+                Some(Response::Redirect {
+                    staff: staff.for_client(),
+                    subtree,
+                })
+            }
         }
-        _ => Ok(()),
+        _ => None,
     }
 }
 
 type ClientStream<'a> = Pin<&'a mut Peekable<MsgStream<Request, Response>>>;
 
-// Track locks here too to update new nodes
 async fn handle_conn(
     stream: TcpStream,
     mut log: LogWriter<super::Order, AtomicTerm>,
@@ -92,10 +96,10 @@ async fn handle_conn(
     pin_mut!(stream);
     while let Ok(Some(req)) = stream.try_next().await {
         debug!("got request: {req:?}");
-        let res = check_subtree(&our_subtree, &req, &redirect).await;
-        let final_response = match res {
-            Err(redirect) => Ok(redirect),
-            Ok(_) => match req {
+        let redir = check_subtree(&our_subtree, &req, &redirect).await;
+        let final_response = match redir {
+            Some(redirect) => Ok(redirect),
+            None => match req {
                 Create(path) => create_file(path, &mut stream, &mut log, &mut dir).await,
                 Write { path, range } => {
                     write_lease(path, stream.as_mut(), range, &mut dir, &mut manager).await

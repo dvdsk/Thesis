@@ -7,7 +7,7 @@ use std::sync::Arc;
 use futures::stream::Peekable;
 use futures::{pin_mut, SinkExt, StreamExt, TryStreamExt};
 use protocol::connection::{self, MsgStream};
-use protocol::AccessKey;
+use protocol::{AccessKey, DirList};
 use time::OffsetDateTime;
 use tokio::net::{TcpListener, TcpStream};
 
@@ -16,10 +16,10 @@ use protocol::{Request, Response};
 use tokio::sync::{Mutex, Notify};
 use tokio::task::JoinSet;
 use tokio::time::sleep;
-use tracing::{debug, instrument, trace, warn};
+use tracing::{debug, error, instrument, trace, warn};
 
 use super::locks::Locks;
-use crate::directory::{Directory, self};
+use crate::directory::{self, Directory};
 use crate::redirectory::ReDirectory;
 use crate::{minister, raft};
 
@@ -80,13 +80,50 @@ pub async fn handle_requests(
     }
 }
 
-type ClientStream<'a> = Pin<&'a mut Peekable<MsgStream<Request, Response>>>;
+async fn check_subtree(
+    our_subtree: &PathBuf,
+    req: &Request,
+    redirect: &ReDirectory,
+) -> Option<Response> {
+    use Request::*;
 
+    match req {
+        List(path) | Read { path, .. } | IsCommitted { path, .. } => {
+            let (staff, subtree) = redirect.to_staff(path).await;
+            if subtree != *our_subtree {
+                return Some(Response::Redirect {
+                    staff: staff.for_client(),
+                    subtree,
+                });
+            }
+        }
+        Lock { path, .. } | Unlock { path, .. } => {
+            let (_, subtree) = redirect.to_staff(path).await;
+            if subtree != *our_subtree {
+                error!("got lock request for invalid path");
+                return Some(Response::Error(format!(
+                    "invalid path!, clerk subtree: {our_subtree:?}"
+                )));
+            }
+        }
+        Create(path) | Write { path, .. } => {
+            let (staff, subtree) = redirect.to_staff(path).await;
+            return Some(Response::Redirect {
+                staff: staff.for_client(),
+                subtree,
+            });
+        }
+        UnlockAll | HighestCommited | RefreshLease => (),
+    }
+    None
+}
+
+type ClientStream<'a> = Pin<&'a mut Peekable<MsgStream<Request, Response>>>;
 async fn handle_conn(
     stream: TcpStream,
     state: raft::State<minister::Order>,
     our_subtree: PathBuf,
-    redirect: ReDirectory,
+    redirectory: ReDirectory,
     mut dir: Directory,
     mut readers: Readers,
     mut locks: Locks,
@@ -97,45 +134,48 @@ async fn handle_conn(
     pin_mut!(stream);
     while let Ok(Some(req)) = stream.try_next().await {
         debug!("got request: {req:?}");
+        let redir = check_subtree(&our_subtree, &req, &redirectory).await;
 
-        let final_response = match req {
-            List(path) => Ok(Response::List(dir.list(&path))),
-            Read { path, range } if path.starts_with(&our_subtree) => {
-                read_lease(path, stream.as_mut(), range, &mut dir, &readers).await
-            }
-            IsCommitted { path, idx } if path.starts_with(&our_subtree) => {
-                match state.is_committed(idx) {
+        let final_response = match redir {
+            Some(redirect) => Ok(redirect),
+            None => match req {
+                List(path) => Ok(Response::List(DirList {
+                    local: dir.list(&path),
+                    subtrees: redirectory.subtrees(&path).await,
+                })),
+                Read { path, range } => {
+                    read_lease(path, stream.as_mut(), range, &mut dir, &readers).await
+                }
+                IsCommitted { idx, .. } => match state.is_committed(idx) {
                     true => Ok(Response::Committed),
                     false => Ok(Response::NotCommitted),
+                },
+                HighestCommited => Ok(Response::HighestCommited(state.commit_index())),
+                /* FIX: Should verify if this is send by the current minister and not some
+                 * malfunctioning impostor (minister could fall asleep and take a while to get back
+                 * up <07-07-22, dvdsk> */
+                UnlockAll => {
+                    locks.reset_all(&mut dir).await;
+                    Ok(Response::Done)
                 }
-            }
-            IsCommitted { path, .. } | Write { path, .. } | Create(path) | Read { path, .. } => {
-                let (staff, subtree) = redirect.to_staff(&path).await;
-                Ok(Response::Redirect {
-                    staff: staff.for_client(),
-                    subtree,
-                })
-            }
-            HighestCommited => Ok(Response::HighestCommited(state.commit_index())),
-            UnlockAll => {
-                locks.reset_all(&mut dir).await;
-                Ok(Response::Done)
-            }
-            Unlock { path, key } => {
-                locks.reset(path, key, &mut dir).await;
-                Ok(Response::Done)
-            }
-            Lock { path, range, key } => {
-                // for consistency this has to happen first, if we did it later new
-                // reads could be added while we are revoking the existing
-                locks.add(&mut dir, path.clone(), range.clone(), key).await;
-                let overlapping = dir.remove_overlapping_reads(&path, &range).unwrap();
-                for key in overlapping {
-                    readers.revoke(&key).await;
+                Unlock { path, key } => {
+                    locks.reset(path, key, &mut dir).await;
+                    Ok(Response::Done)
                 }
-                Ok(Response::Done)
-            }
-            RefreshLease => Ok(Response::LeaseDropped),
+                Lock { path, range, key } => {
+                    // for consistency this has to happen first, if we did it later new
+                    // reads could be added while we are revoking the existing
+                    locks.add(&mut dir, path.clone(), range.clone(), key).await;
+                    let overlapping = dir.remove_overlapping_reads(&path, &range).unwrap();
+                    for key in overlapping {
+                        readers.revoke(&key).await;
+                    }
+                    Ok(Response::Done)
+                }
+                RefreshLease => Ok(Response::LeaseDropped),
+                Create(_) => unreachable!(),
+                Write { .. } => unreachable!(),
+            },
         };
 
         let final_response = match final_response {
