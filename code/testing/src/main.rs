@@ -48,7 +48,7 @@ fn setup_node(id: u64, run_number: u16, parts: Vec<Partition>) -> Result<Task> {
 
 async fn local_cluster(parts: &[Partition]) -> Result<HashMap<u64, Task>> {
     let run_number = util::run_number(&runtime_dir());
-    let n_nodes = parts.iter().map(|p| 1 + p.clerks).sum::<usize>().min(4) as u64;
+    let n_nodes = parts.iter().map(|p| 1 + p.clerks).sum::<usize>().max(4) as u64;
     let nodes = (0..n_nodes)
         .map(|id| setup_node(id, run_number, parts.to_vec()))
         .map(Result::unwrap)
@@ -154,7 +154,11 @@ use node::Partition;
 #[derive(clap::Subcommand, Clone, Debug)]
 enum Commands {
     Remote,
-    Cluster { partitions: Vec<Partition> },
+    Cluster { 
+        /// one or more partitions, space separated.
+        /// format: <path>:<number of clerks>
+        partitions: Vec<Partition> 
+    },
 }
 
 use clap::Parser;

@@ -134,8 +134,8 @@ impl LoadBalancer {
         let mut staffing = Staffing::from_committed(state);
         match (staffing.has_root(), partitions.is_empty()) {
             (true, _) => (),
-            (false, true) => self.add_partitions(&mut staffing, partitions).await,
-            (false, false) => self.add_root(&mut staffing).await,
+            (false, false) => self.add_partitions(&mut staffing, partitions).await,
+            (false, true) => self.add_root(&mut staffing).await,
         }
 
         Init {
