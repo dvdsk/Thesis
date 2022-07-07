@@ -26,7 +26,7 @@ pub type Idx = u32; // raft idx
 
 use instance_chart::Chart as mChart;
 
-use self::president::load_balancing::Partition;
+pub use self::president::load_balancing::Partition;
 use self::redirectory::{Node, ReDirectory};
 use self::util::open_socket;
 type Chart = mChart<3, u16>;

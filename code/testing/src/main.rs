@@ -21,7 +21,7 @@ mod action;
 type Task = task::JoinHandle<()>;
 
 /// run number 4242 indicates resurrected/added node
-fn setup_node(id: u64, run_number: u16) -> Result<Task> {
+fn setup_node(id: u64, run_number: u16, parts: Vec<Partition>) -> Result<Task> {
     let config = Config {
         id: 0,
         endpoint: IpAddr::V4(Ipv4Addr::LOCALHOST),
@@ -32,7 +32,7 @@ fn setup_node(id: u64, run_number: u16) -> Result<Task> {
         client_port: None,
         cluster_size: 4,
         database: PathBuf::from("changed in loop"),
-        partitions: Vec::new(),
+        partitions: parts,
     };
 
     let temp_dir = Temp::new_dir().unwrap();
@@ -46,10 +46,11 @@ fn setup_node(id: u64, run_number: u16) -> Result<Task> {
     Ok(task)
 }
 
-async fn local_cluster() -> Result<HashMap<u64, Task>> {
+async fn local_cluster(parts: &[Partition]) -> Result<HashMap<u64, Task>> {
     let run_number = util::run_number(&runtime_dir());
-    let nodes = (0..4)
-        .map(|id| setup_node(id, run_number))
+    let n_nodes = parts.iter().map(|p| 1 + p.clerks).sum::<usize>().min(4) as u64;
+    let nodes = (0..n_nodes)
+        .map(|id| setup_node(id, run_number, parts.to_vec()))
         .map(Result::unwrap)
         .fold(HashMap::new(), |mut set, task| {
             let id = set.len() as u64;
@@ -59,8 +60,8 @@ async fn local_cluster() -> Result<HashMap<u64, Task>> {
     Ok(nodes)
 }
 
-async fn manage_cluster() {
-    let mut cluster = local_cluster().await.unwrap();
+async fn manage_cluster(parts: Vec<Partition>) {
+    let mut cluster = local_cluster(&parts).await.unwrap();
     let listener = TcpListener::bind("127.0.0.1:4242").await.unwrap();
     loop {
         let (mut socket, _) = listener.accept().await.unwrap();
@@ -82,14 +83,14 @@ async fn manage_cluster() {
                 }
                 'r' => {
                     // `ressurrect` a node
-                    let node = setup_node(id as u64, 4242).unwrap();
+                    let node = setup_node(id as u64, 4242, parts.clone()).unwrap();
                     cluster.insert(id as u64, node);
                     warn!("resurrected node {id} [by remote request]");
                 }
                 'a' => {
                     // add new node
                     let id = cluster.len() as u64;
-                    cluster.insert(id, setup_node(id, 4242).unwrap());
+                    cluster.insert(id, setup_node(id, 4242, parts.clone()).unwrap());
                     warn!("added node {id} [by remote request]");
                 }
                 _ => panic!("recieved incorrect command"),
@@ -149,27 +150,34 @@ async fn control_cluster() -> Result<()> {
     }
 }
 
+use node::Partition;
+#[derive(clap::Subcommand, Clone, Debug)]
+enum Commands {
+    Remote,
+    Cluster { partitions: Vec<Partition> },
+}
+
+use clap::Parser;
+#[derive(Parser, Debug, Clone)]
+#[clap(author, version, about, long_about = None)]
+pub struct Args {
+    #[clap(subcommand)]
+    command: Commands,
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     color_eyre::install().unwrap();
-
-    let arg = match std::env::args().nth(1) {
-        Some(arg) => arg,
-        None => {
-            println!("pass one argument, c (cluster) or r (remote)");
-            return Ok(());
-        }
-    };
+    let args = Args::parse();
 
     println!("setting up log analyzer/collector (jeager)");
     start_jeager::start_if_not_running(runtime_dir()).await;
-    util::setup_tracing(arg.clone(), IpAddr::V4(Ipv4Addr::LOCALHOST), 10);
+    util::setup_tracing("testing".to_owned(), IpAddr::V4(Ipv4Addr::LOCALHOST), 10);
     println!("logging setup completed");
 
-    match arg.as_str() {
-        "c" => manage_cluster().await,
-        "r" => control_cluster().await.unwrap(),
-        _ => println!("pass one argument, c (cluster) or r (remote)"),
+    match args.command {
+        Commands::Cluster { partitions } => manage_cluster(partitions).await,
+        Commands::Remote => control_cluster().await.unwrap(),
     }
     Ok(())
 }

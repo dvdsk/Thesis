@@ -85,7 +85,7 @@ impl LoadBalancer {
 #[derive(Clone, Debug)]
 pub struct Partition {
     subtree: PathBuf,
-    clerks: usize,
+    pub clerks: usize,
 }
 
 #[derive(Debug, Clone, thiserror::Error)]

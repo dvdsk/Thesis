@@ -13,6 +13,7 @@ node = { path = "../node" }
 start-jeager = { path = "../start-jeager" }
 mktemp = "0.4"
 color-eyre = { version = "0.6", features = ["capture-spantrace"] }
+clap = { version = "3.1", features = ["derive"] }
 
 tracing = { version = "0.1" }
 tracing-error = "0.2"
