@@ -9,6 +9,8 @@ name = "client"
 
 [dependencies]
 instance-chart = { version = "0.2.1" }
+serde = { version = "1", features = ["derive"] }
+bincode = "1"
 
 tracing = { version = "0.1" } #, features = ["release_max_level_error"] }
 tracing-error = "0.2"

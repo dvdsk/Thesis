@@ -120,12 +120,15 @@ impl FromStr for Partition {
 }
 
 impl Partition {
-    pub fn new(subtree: PathBuf, clerks: usize) -> Self {
+    pub fn new(subtree: impl Into<PathBuf>, clerks: usize) -> Self {
         assert!(
             clerks >= 2,
             "partition needs at least two clerks to be functional"
         );
-        Self { subtree, clerks }
+        Self {
+            subtree: subtree.into(),
+            clerks,
+        }
     }
 }
 
