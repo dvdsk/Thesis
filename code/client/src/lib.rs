@@ -146,11 +146,12 @@ impl<T: RandomNode> Client<T> {
 
     /// # Note
     /// Can be canceld
-    pub async fn list(&mut self, path: PathBuf) -> Vec<PathBuf> {
+    pub async fn list(&mut self, path: impl Into<PathBuf>) -> Vec<PathBuf> {
         let mut res = Vec::new();
         let mut checked = HashSet::new();
         let mut to_check = Vec::new();
 
+        let path = path.into();
         let DirList { local, subtrees } = self
             .request(&path, Request::List(path.clone()), false)
             .await

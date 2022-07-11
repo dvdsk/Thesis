@@ -1,11 +1,11 @@
 use std::{
-    io::Write,
+    io::{Write, Read},
     net::TcpListener,
     sync::{Arc, Barrier},
     thread::{self, JoinHandle},
 };
 
-const PORT: u16 = 19744;
+pub const PORT: u16 = 19744;
 
 fn server(n_clients: usize) {
     let barrier = Arc::new(Barrier::new(n_clients));
@@ -14,7 +14,9 @@ fn server(n_clients: usize) {
         let c = barrier.clone();
         let (mut stream, _) = listener.accept().unwrap();
         thread::spawn(move || {
-            c.wait();
+            // client rdy
+            stream.read_exact(&mut[0u8]).unwrap();
+            c.wait(); // all clients rdy
             stream.write(&[42u8]).unwrap();
         });
     }

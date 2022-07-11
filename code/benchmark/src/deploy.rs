@@ -1,4 +1,4 @@
-use color_eyre::{Result, eyre::eyre};
+use color_eyre::{eyre::eyre, Result};
 use node::WrapErr;
 use std::{process::Command, thread::sleep, time::Duration};
 
@@ -19,7 +19,8 @@ fn reserve_nodes(n: usize) -> Result<(usize, Vec<Node>)> {
         .arg(n.to_string())
         .arg("-t")
         .arg(time)
-        .output()?;
+        .output()
+        .wrap_err("Could not find command")?;
 
     dbg!(output);
     todo!("get reservation number");
@@ -47,6 +48,6 @@ pub fn start_cluster(command: bench::Command, nodes: &[Node]) -> Result<()> {
     Ok(())
 }
 
-pub(crate) fn start_clients(client_nodes: &[Node]) -> Result<()> {
+pub fn start_clients(client_nodes: &[Node]) -> Result<()> {
     Ok(())
 }

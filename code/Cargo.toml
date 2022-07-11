@@ -5,7 +5,7 @@ members = [
 	"start-jeager",
 	"client",
 	"testing",
-	"bench",
+	"benchmark",
 ]
 
 [patch.crates-io]
