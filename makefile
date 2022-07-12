@@ -44,8 +44,10 @@ tmp/cargo: | tmp
 benchmark: | bin
 benchmark: | tmp/cargo tmp/target
 	export RUSTFLAGS="--cfg tokio_unstable"; \
-	tmp/cargo/bin/cargo build --manifest-path code/Cargo.toml --release
+	tmp/cargo/bin/cargo build --manifest-path code/Cargo.toml --release --bins
 	cp code/target/release/benchmark bin/benchmark
+	cp code/target/release/node bin/node
+	cp code/target/release/bench_client bin/bench_client
 
 clean:
 	rm -rf tmp/target

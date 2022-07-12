@@ -29,7 +29,7 @@ fn cancel_existing() -> Result<()> {
         .arg("-llist")
         .output()
         .wrap_err("Could not find command")?
-        .wrap()?;
+        .wrap("preserve failed to list reservations")?;
 
     let tickets = output
         .lines()
@@ -43,7 +43,7 @@ fn cancel_existing() -> Result<()> {
             .arg(ticket.to_string())
             .output()
             .wrap_err("Could not find command")?
-            .wrap()?;
+            .wrap("preserve failed to cancel reservation")?;
     }
     Ok(())
 }
@@ -72,7 +72,7 @@ fn reserve_nodes(n: usize) -> Result<usize> {
         .arg(time)
         .output()
         .wrap_err("Could not find command")?
-        .wrap()?;
+        .wrap("preserve failed to reserve nodes")?;
 
     let ticket: usize = output
         .split_whitespace()
@@ -94,7 +94,7 @@ fn node_list() -> Result<String> {
         .arg("-long-list")
         .output()
         .wrap_err("Could not find command")?
-        .wrap()
+        .wrap("preserve failed to list reservations")
 }
 
 #[instrument(ret)]
@@ -139,7 +139,7 @@ async fn ssh_node(path: String, node: String, args: String) -> Result<String> {
         .output()
         .await
         .wrap_err("test")?
-        .wrap()
+        .wrap("error on remote node")
 }
 
 /// expects node binary in $PWD/bin/
@@ -153,7 +153,7 @@ pub fn start_cluster(
     if !path.is_file() {
         return Err(eyre!("node binary missing")
             .suggestion("compile node and place in bin")
-            .suggestion("use `make node` from the project root"));
+            .suggestion("use `make benchmark` from the project root"));
     }
     let path = path.to_str().unwrap();
 
@@ -176,7 +176,7 @@ async fn ssh_client(path: String, node: String, args: String) -> Result<String> 
         .output()
         .await
         .wrap_err("test")?
-        .wrap()
+        .wrap("error on remote node")
 }
 
 /// expects bench_client binary in $PWD/bin/
@@ -190,7 +190,7 @@ pub fn start_clients(
     if !path.is_file() {
         return Err(eyre!("bench_client binary missing")
             .suggestion("compile node and place in bin")
-            .suggestion("use `make node` from the project root"));
+            .suggestion("use `make benchmark` from the project root"));
     }
     let path = path.to_str().unwrap();
     let args = command.args();
@@ -202,15 +202,15 @@ pub fn start_clients(
 }
 
 pub trait WrapOutput {
-    fn wrap(self) -> Result<String, Report>;
+    fn wrap(self, msg: &'static str) -> Result<String, Report>;
 }
 
 impl WrapOutput for Output {
-    fn wrap(self) -> Result<String, Report> {
+    fn wrap(self, msg: &'static str) -> Result<String, Report> {
         if !self.status.success() {
             let stderr = String::from_utf8(self.stderr).unwrap();
             let stdout = String::from_utf8(self.stdout).unwrap();
-            Err(eyre!("Failed to reserve nodes")
+            Err(eyre!(msg)
                 .with_section(|| stderr.trim().to_string().header("Stdout:"))
                 .with_section(|| stdout.trim().to_string().header("Stdout:")))
         } else {
