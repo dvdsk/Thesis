@@ -150,6 +150,11 @@ pub fn start_cluster(
 ) -> Result<FuturesUnordered<impl Future<Output = Result<String>>>> {
     let mut path = env::current_dir()?;
     path.push("bin/node");
+    if !path.is_file() {
+        return Err(eyre!("node binary missing")
+            .suggestion("compile node and place in bin")
+            .suggestion("use `make node` from the project root"));
+    }
     let path = path.to_str().unwrap();
 
     let nodes: FuturesUnordered<_> = nodes
@@ -182,6 +187,11 @@ pub fn start_clients(
 ) -> Result<FuturesUnordered<impl Future<Output = Result<String>>>> {
     let mut path = env::current_dir()?;
     path.push("bin/bench_client");
+    if !path.is_file() {
+        return Err(eyre!("bench_client binary missing")
+            .suggestion("compile node and place in bin")
+            .suggestion("use `make node` from the project root"));
+    }
     let path = path.to_str().unwrap();
     let args = command.args();
     let nodes: FuturesUnordered<_> = nodes
