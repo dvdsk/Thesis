@@ -1,4 +1,4 @@
-use color_eyre::{eyre::eyre, Help, Report, Result};
+use color_eyre::{eyre::eyre, Help, Report, Result, SectionExt};
 use futures::stream::FuturesUnordered;
 use node::WrapErr;
 use std::{
@@ -90,11 +90,11 @@ fn reserve_nodes(n: usize) -> Result<usize> {
 
 #[instrument]
 fn node_list() -> Result<String> {
-    Ok(Command::new("preserve")
+    Command::new("preserve")
         .arg("-long-list")
         .output()
         .wrap_err("Could not find command")?
-        .wrap()?)
+        .wrap()
 }
 
 #[instrument(ret)]
@@ -126,11 +126,28 @@ fn args(id: usize, bench: &Bench) -> String {
     args
 }
 
+async fn ssh_node(path: String, node: String, args: String) -> Result<String> {
+    tokio::process::Command::new("ssh")
+        .arg("-t")
+        .arg(node)
+        .arg(format!(
+            "rm -rf /tmp/govfs
+                mkdir -p /tmp/govfs
+                {path} {args}
+            "
+        ))
+        .output()
+        .await
+        .wrap_err("test")?
+        .wrap()
+}
+
+/// expects node binary in $PWD/bin/
 #[instrument(skip(bench))]
 pub fn start_cluster(
     bench: &bench::Bench,
     nodes: &[Node],
-) -> Result<FuturesUnordered<impl Future<Output = Result<Output, std::io::Error>>>> {
+) -> Result<FuturesUnordered<impl Future<Output = Result<String>>>> {
     let mut path = env::current_dir()?;
     path.push("bin/node");
     let path = path.to_str().unwrap();
@@ -140,16 +157,7 @@ pub fn start_cluster(
         .enumerate()
         .map(|(id, node)| {
             let args = args(id, bench);
-            tokio::process::Command::new("ssh")
-                .arg("-t")
-                .arg(node)
-                .arg(format!(
-                    "rm -rf /tmp/govfs
-                mkdir -p /tmp/govfs
-                {path} {args}
-            "
-                ))
-                .output()
+            ssh_node(path.to_string(), node.to_string(), args)
         })
         .collect();
     Ok(nodes)
@@ -166,6 +174,7 @@ async fn ssh_client(path: String, node: String, args: String) -> Result<String> 
         .wrap()
 }
 
+/// expects bench_client binary in $PWD/bin/
 #[instrument]
 pub fn start_clients(
     command: bench::Command,
@@ -182,7 +191,7 @@ pub fn start_clients(
     Ok(nodes)
 }
 
-trait WrapOutput {
+pub trait WrapOutput {
     fn wrap(self) -> Result<String, Report>;
 }
 
@@ -192,8 +201,8 @@ impl WrapOutput for Output {
             let stderr = String::from_utf8(self.stderr).unwrap();
             let stdout = String::from_utf8(self.stdout).unwrap();
             Err(eyre!("Failed to reserve nodes")
-                .with_note(|| format!("stderr: {stderr}"))
-                .with_note(|| format!("stdout: {stdout}")))
+                .with_section(|| stderr.trim().to_string().header("Stdout:"))
+                .with_section(|| stdout.trim().to_string().header("Stdout:")))
         } else {
             let lines = String::from_utf8(self.stdout).unwrap();
             Ok(lines)

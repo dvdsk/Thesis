@@ -24,7 +24,7 @@ impl Operation {
             Operation::Write { path, range } => {
                 let mut file = client.open_writeable(path).await;
                 file.seek(range.start);
-                file.write(&mut buf[0..(range.end as usize)]).await;
+                file.write(&buf[0..(range.end as usize)]).await;
             }
         }
     }
@@ -96,8 +96,7 @@ impl Bench {
     }
     pub fn ls_batch(n_parts: usize) -> Bench {
         let dirs = (0..n_parts)
-            .map(|dir| iter::repeat(dir).take(1000))
-            .flatten();
+            .flat_map(|dir| iter::repeat(dir).take(1000));
         Self::ls_access(dirs, n_parts)
     }
 
@@ -111,7 +110,7 @@ impl Bench {
         let partitions = (0..n_parts)
             .into_iter()
             .map(|n| format!("/{n}"))
-            .map(|p| Partition{subtree: p.into(), clerks: 2})
+            .map(|p| Partition{subtree: p, clerks: 2})
             .collect();
         let setup = Vec::new();
 
