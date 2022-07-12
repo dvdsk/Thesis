@@ -1,5 +1,5 @@
 use client::Client;
-use std::{collections::HashSet, iter, ops::Range, path::PathBuf};
+use std::{collections::HashSet, iter, ops::Range, path::PathBuf, ffi::OsString};
 
 #[derive(Debug, Clone)]
 pub enum Operation {
@@ -140,11 +140,11 @@ impl From<&Command> for Bench {
 }
 
 impl Command {
-    pub fn args(&self) -> String {
+    pub fn args(&self) -> OsString {
         match self {
             Command::LsStride { n_parts } => format!("ls-stride {n_parts}"),
             Command::LsBatch { n_parts } => format!("ls-batch {n_parts}"),
-        }
+        }.into()
     }
 }
   

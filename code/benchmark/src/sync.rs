@@ -31,6 +31,9 @@ async fn run_server(n_clients: usize) {
         let (stream, _) = listener.accept().await.unwrap();
         tasks.spawn(handle_conn(stream, c));
     }
+    while let Some(res) = tasks.join_one().await {
+        res.unwrap();
+    }
 }
 
 pub struct Server(task::JoinHandle<()>);
