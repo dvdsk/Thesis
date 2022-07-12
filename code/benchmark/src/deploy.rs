@@ -3,6 +3,7 @@ use futures::stream::FuturesUnordered;
 use node::WrapErr;
 use std::{
     env,
+    ffi::OsString,
     future::Future,
     process::{Command, Output},
     thread::sleep,
@@ -121,24 +122,26 @@ fn args(id: usize, bench: &Bench) -> String {
         .partitions
         .iter()
         .map(|Partition { subtree, clerks }| format!("--partition {subtree}:{clerks}"));
+    let n_nodes = bench.fs_nodes();
     let partitions: String = Itertools::intersperse(partitions, " ".to_string()).collect();
-    let args = format!("--id {id} --database /tmp/govfs --run 0 {partitions}");
+    let args = format!("--id {id} --database /tmp/govfs --cluster-size {n_nodes} --run 0 {partitions}");
     args
 }
 
-async fn ssh_node(path: String, node: String, args: String) -> Result<String> {
+async fn ssh_node(bin: String, node: String, args: String) -> Result<String> {
+    let run_on_remote = format!(
+        "rm -rf /tmp/govfs
+mkdir -p /tmp/govfs
+{bin} {args}
+"
+    );
     tokio::process::Command::new("ssh")
         .arg("-t")
         .arg(node)
-        .arg(format!(
-            "rm -rf /tmp/govfs
-                mkdir -p /tmp/govfs
-                {path} {args}
-            "
-        ))
+        .arg(run_on_remote)
         .output()
         .await
-        .wrap_err("test")?
+        .wrap_err("could not start ssh")?
         .wrap("error on remote node")
 }
 
@@ -168,11 +171,15 @@ pub fn start_cluster(
     Ok(nodes)
 }
 
-async fn ssh_client(path: String, node: String, args: String) -> Result<String> {
+async fn ssh_client(bin: OsString, node: String, args: OsString) -> Result<String> {
+    let mut run_on_remote = bin;
+    run_on_remote.push(" ");
+    run_on_remote.push(args);
+
     tokio::process::Command::new("ssh")
         .arg("-t")
         .arg(node)
-        .arg(format!("{path} {args}"))
+        .arg(run_on_remote)
         .output()
         .await
         .wrap_err("test")?
@@ -193,10 +200,12 @@ pub fn start_clients(
             .suggestion("use `make benchmark` from the project root"));
     }
     let path = path.to_str().unwrap();
-    let args = command.args();
+    let mut args = gethostname::gethostname();
+    args.push(" ");
+    args.push(command.args());
     let nodes: FuturesUnordered<_> = nodes
         .iter()
-        .map(|node| ssh_client(path.to_string(), node.to_string(), args.clone()))
+        .map(|node| ssh_client(path.into(), node.to_string(), args.clone()))
         .collect();
     Ok(nodes)
 }
@@ -211,7 +220,7 @@ impl WrapOutput for Output {
             let stderr = String::from_utf8(self.stderr).unwrap();
             let stdout = String::from_utf8(self.stdout).unwrap();
             Err(eyre!(msg)
-                .with_section(|| stderr.trim().to_string().header("Stdout:"))
+                .with_section(|| stderr.trim().to_string().header("Stderr:"))
                 .with_section(|| stdout.trim().to_string().header("Stdout:")))
         } else {
             let lines = String::from_utf8(self.stdout).unwrap();

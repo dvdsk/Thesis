@@ -27,6 +27,8 @@ itertools = "0.10"
 thiserror = "1"
 result-tools = { git = "https://github.com/dvdsk/result-tools.git" }
 
+gethostname = "0.2.3"
+
 client = { path = "../client" }
 node = { path = "../node" }
 mktemp = "0.4"

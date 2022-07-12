@@ -8,6 +8,7 @@ use benchmark::{bench, deploy, sync};
 use bench::Bench;
 
 use color_eyre::{eyre::eyre, eyre::WrapErr, Help, Report, Result, SectionExt};
+use tracing::info;
 
 #[derive(Parser, Debug, Clone)]
 #[clap(author, version, about, long_about = None)]
@@ -17,8 +18,8 @@ pub struct Args {
 }
 
 async fn watch_nodes(
-    mut cluster: FuturesUnordered<impl Future<Output = Result<String, Report>>>,
-    clients: FuturesUnordered<impl Future<Output = Result<String, Report>>>,
+    cluster: &mut FuturesUnordered<impl Future<Output = Result<String, Report>>>,
+    clients: &mut FuturesUnordered<impl Future<Output = Result<String, Report>>>,
 ) -> Result<()> {
     use futures::future;
     let mut client_failures = clients.filter_map(|res| future::ready(res.err()));
@@ -28,7 +29,7 @@ async fn watch_nodes(
             match err.expect("should always be more then one node") {
                 Ok(output) => Err(eyre!("node exits early"))
                     .with_section(move || output.header("Output:")),
-                Err(e) => Err(e).wrap_err("node error"),
+                Err(err) => Err(err).wrap_err("node failed"),
             }
         }
         res = client_failures.next() => {
@@ -48,7 +49,7 @@ async fn main() -> Result<()> {
     let args = Args::parse();
     let bench = Bench::from(&args.command);
     let nodes = deploy::reserve(bench.needed_nodes())?;
-    let cluster = deploy::start_cluster(&bench, &nodes[0..bench.fs_nodes()])?;
+    let mut cluster = deploy::start_cluster(&bench, &nodes[0..bench.fs_nodes()])?;
 
     // do any prep work for the benchmark (make files etc)
     let find_nodes = client::ChartNodes::<3, 2>::new(8080);
@@ -56,17 +57,20 @@ async fn main() -> Result<()> {
     bench.prep(&mut client).await;
 
     let server = sync::server(bench.client_nodes());
-    let clients = deploy::start_clients(args.command, &nodes[bench.fs_nodes()..])?;
+    let mut clients = deploy::start_clients(args.command, &nodes[bench.fs_nodes()..])?;
 
     tokio::select! {
         res = server.block_till_synced() => {
+            info!("benchmark clients now synced");
             res?;
         }
-        res = watch_nodes(cluster, clients) => {
-            res?;
+        res = watch_nodes(&mut cluster, &mut clients) => {
+            return res;
         }
     }
 
+    watch_nodes(&mut cluster, &mut clients).await?;
+    info!("benchmark completed!");
     Ok(())
 }
 
