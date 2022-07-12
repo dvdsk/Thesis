@@ -95,7 +95,7 @@ pub struct Config {
     pub cluster_size: u16,
 
     /// use static subtree partitions.
-    #[clap(short, long)]
+    #[clap(short, long="partition")]
     pub partitions: Vec<Partition>,
 
     /// database path, change when running multiple instances on

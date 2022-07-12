@@ -1,5 +1,4 @@
 use client::Client;
-use node::Partition;
 use std::{collections::HashSet, iter, ops::Range, path::PathBuf};
 
 #[derive(Debug, Clone)]
@@ -40,10 +39,18 @@ impl Operation {
     }
 }
 
+
+#[derive(Clone, Debug)]
+pub struct Partition {
+    pub subtree: String,
+    pub clerks: usize,
+}
+
+#[derive(Debug)]
 pub struct Bench {
     operations: Vec<Operation>,
     clients: usize,
-    partitions: Vec<Partition>,
+    pub partitions: Vec<Partition>,
     /// operations to run before the benchmark
     setup: Vec<Operation>,
 }
@@ -104,13 +111,13 @@ impl Bench {
         let partitions = (0..n_parts)
             .into_iter()
             .map(|n| format!("/{n}"))
-            .map(|p| Partition::new(p, 2))
+            .map(|p| Partition{subtree: p.into(), clerks: 2})
             .collect();
         let setup = Vec::new();
 
         Bench {
             operations,
-            clients: 10,
+            clients: 3,
             partitions,
             setup,
         }
@@ -133,6 +140,15 @@ impl From<&Command> for Bench {
     }
 }
 
+impl Command {
+    pub fn args(&self) -> String {
+        match self {
+            Command::LsStride { n_parts } => format!("ls-stride {n_parts}"),
+            Command::LsBatch { n_parts } => format!("ls-batch {n_parts}"),
+        }
+    }
+}
+  
 // impl Command {
 //     pub fn serialize(&self) -> [u8;100] {
 //         let buf = [0u8;100];

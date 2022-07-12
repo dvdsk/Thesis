@@ -6,7 +6,7 @@ default-run = "benchmark"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [[bin]]
-name = "client"
+name = "bench_client"
 
 
 [dependencies]
@@ -14,7 +14,8 @@ instance-chart = { version = "0.2.1" }
 serde = { version = "1", features = ["derive"] }
 bincode = "1"
 
-tokio = { version = "^1.19.1", features = ["macros", "net", "time", "rt-multi-thread", "tracing", "sync"] }
+tokio = { version = "^1.19.1", features = ["macros", "net", "time", "rt-multi-thread", "tracing", "sync", "process"] }
+futures = "0.3"
 
 tracing = { version = "0.1" } #, features = ["release_max_level_error"] }
 tracing-error = "0.2"

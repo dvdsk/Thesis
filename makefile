@@ -15,10 +15,9 @@ tmp:
 	mkdir -p ${SCRATCH}/tmp
 	ln -s ${SCRATCH}/tmp tmp
 
-tmp/target/%: tmp
-	$(eval NAME := $(subst tmp/target/,,$@))
-	mkdir -p ${SCRATCH}/$@
-	ln --force --symbolic -T ${SCRATCH}/$@ $(NAME)/target 
+tmp/target: tmp
+	mkdir -p ${SCRATCH}/target
+	ln --force --symbolic -T ${SCRATCH}/target code/target 
 
 bin:
 	mkdir -p bin
@@ -38,10 +37,15 @@ tmp/cargo: | tmp
 # Executables 
 #----------------------------------------------------------------------------
 
-.PHONY: client_examples
-benchmark: REBUILD_ALWAYS
-benchmark: | bin
-benchmark: | tmp/cargo tmp/target/benchmark
-	tmp/cargo/bin/cargo build --examples --manifest-path code/benchmark/Cargo.toml --release
-	cp tmp/target/release/benchmark bin/benchmark
+# we let cargo decide if we should rebuild, marking phony ensures
+# make always calls cargo
+.PHONY: benchmark clean
 
+benchmark: | bin
+benchmark: | tmp/cargo tmp/target
+	export RUSTFLAGS="--cfg tokio_unstable"; \
+	tmp/cargo/bin/cargo build --manifest-path code/Cargo.toml --release
+	cp code/target/release/benchmark bin/benchmark
+
+clean:
+	rm -rf tmp/target
