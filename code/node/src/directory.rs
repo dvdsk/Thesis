@@ -1,4 +1,5 @@
 use std::ffi::OsStr;
+use std::fmt;
 use std::ops::Range;
 use std::os::unix::prelude::OsStrExt;
 use std::path::{Path, PathBuf};
@@ -26,6 +27,14 @@ pub struct LeaseGuard<'a> {
     pub dir: &'a Directory,
     pub path: &'a Path,
     pub key: AccessKey,
+}
+
+impl fmt::Debug for LeaseGuard<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("LeaseGuard")
+            .field("path", &self.path)
+            .finish()
+    }
 }
 
 impl<'a> LeaseGuard<'a> {
@@ -158,7 +167,7 @@ impl Directory {
     }
 
     /// None if the file is already being written to
-    #[instrument(skip(self), err)]
+    #[instrument(skip(self), err, ret)]
     pub(crate) fn get_write_access<'a>(
         &'a self,
         path: &'a Path,

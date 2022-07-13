@@ -3,6 +3,7 @@ use color_eyre::Help;
 use futures::{SinkExt, TryStreamExt};
 use protocol::connection::MsgStream;
 use protocol::{connection, Request, Response};
+use tokio::sync::mpsc::error::TrySendError;
 use std::collections::{HashMap, HashSet};
 use std::ops::Range;
 use std::path::PathBuf;
@@ -10,7 +11,7 @@ use tokio::net::TcpStream;
 use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio::task::JoinSet;
 use tokio::time::{sleep, timeout};
-use tracing::{error, instrument, warn};
+use tracing::{error, instrument, warn, debug};
 
 use crate::raft::{CONN_RETRY_PERIOD, HB_TIMEOUT};
 use crate::redirectory::ClientAddr;
@@ -157,9 +158,11 @@ impl Locks {
     }
 
     fn lock(&mut self, req: LockReq) {
+        debug!("locking: {req:?}");
         self.0.insert(req.key, (req.path, req.range));
     }
     fn unlock(&mut self, req: &UnlockReq) {
+        debug!("unlocking: {req:?}");
         self.0.remove(&req.key);
     }
 }
@@ -198,9 +201,11 @@ impl LockManager {
         key: AccessKey,
     ) -> Result<(), FanOutError> {
         let (tx, res) = oneshot::channel();
-        self.lock_req // TODO easy: make blocking send
-            .try_send((tx, LockReq { path, range, key }))
-            .map_err(|_| FanOutError::NoCapacity)?;
+        match self.lock_req.try_send((tx, LockReq { path, range, key })) {
+            Ok(_) => (),
+            Err(TrySendError::Full(_)) => return Err(FanOutError::NoCapacity),
+            Err(TrySendError::Closed(_)) => panic!("lock_req queue was closed"),
+        }
         res.await.expect("reciever used twice")
     }
 
