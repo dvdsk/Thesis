@@ -1,4 +1,4 @@
-Here we will go over the implementation of the design, which is implemented in \textit{Rust}. I begin by motivating the choice for \textit{Rust}. Following that I will go over the concurrency model. Then I will use small extracts of source code to discuss the structure of the implementation. Next we take a more detailed look at my implementation of the Raft (see: \cref{sec:raft}) and discuss why I did not use existing implementations.
+Here we will go over the implementation of the design, which is implemented in \textit{Rust}. I begin by motivating the choice for \textit{Rust}. Following that I will go over the concurrency model. Then I will use small extracts of source code to discuss the structure of the implementation. Next we take a more detailed look at my implementation of the Raft (see: \cref{sec:raft}) and discuss why I could not use existing implementations. Finally, we will see how the file leases are implemented.
 
 \subsection{Language}
 Distributed systems are notoriously hard to implement with many opportunities for subtle bugs to slip in. Therefore, it is important to choose a language with features that aid our implementation and make it harder to introduce bugs. Let's look at a feature that can help us and one that could become problematic.
@@ -11,7 +11,7 @@ Only the \textit{Rust} language has such a type system without using \ac{gc}. Th
 
 \subsection{Concurrency}
 While sending and receiving data over a network most time is spent waiting. Blocking the implementation while waiting is not at all efficient. Instead, we can use the valuable time to start and or finish sending and receiving other data concurrently. Usually this is solved by spawning a thread for each connection. Another way of doing this is using \textit{non-blocking IO}, however organizing a single thread of execution to use of non-blocking-IO becomes highly complex at scale. 
-Maintaining file leases requires us to hold many concurrent connections~\cref{sec:lease}. Using one thread for each connection could limit the number of connections, therefore we can only rely on Non-blocking IO. To get around the problamitic complexity we use: \textit{Async/await}\footnote{see \cref{app:async} for a introduction to Async/await}. Async/await is a language feature which allows us to construct and combine non-blocking functions as if they were normal functions. \textit{Rust} has native support for the needed syntax however requires a third party framework to provide the actual IO implementation, here I use the \textit{Tokio} project~\cite{tokio}.
+Maintaining file leases requires us to hold many concurrent connections~\cref{sec:lease}. Using one thread for each connection could limit the number of connections, therefore we can only rely on Non-blocking IO. To get around the problematic complexity we use: \textit{Async/await}\footnote{See \cref{app:async} for an introduction to Async/await}. Async/await is a language feature which allows us to construct and combine non-blocking functions as if they were normal functions. \textit{Rust} has native support for the needed syntax however requires a third party framework to provide the actual IO implementation, here I use the \textit{Tokio} project~\cite{tokio}.
 
 There is a trend in distributed systems to take scalability as the holy grail of performance~\cite{scaling}. While the design of the system focuses on scalability in my implementing I try to optimally use the underlying hardware. While \textit{Moors~Law} might by dying single machine performance will keep scaling horizontally~\cite{moore}. This means the implementation must take full advantage of the available task parallelism. Fortunately the above-mentioned framework \textit{Tokio} provides tasks which combine organized non-blocking-IO with parallel execution. All tasks are divided into groups with each group running on a single OS-thread. Creating and destroying tasks is fast compared to OS threads.
 
@@ -20,7 +20,7 @@ Concurrency is mostly achieved by passing messages between tasks. Where needed t
 \subsubsection*{Cancelling tasks}
 In \name's design we frequently need to abort a concurrently running task. Clerks for example handle client requests in a concurrently running task. When a clerk becomes president it needs to stop handling those requests. If we were using threads we would do this by changing a shared variable from the outside. The task would be written such that it frequently checks if the variable is changed and when it is the task returns. 
 
-Whenever an \textit{async} function has to await IO it returns control to the scheduler. When IO is ready the scheduler can choose to continue the function. We can ask it not to and instead cancel the task. As Rust enforces \acf{raii}~\cite[p.~389]{raii}~\footnote{A programming idiom where acquiring a resource is done when creating an object. When the object is destroyed code runs that release or cleans up the object"} the framework must drop all the objects in the scope of canceled tasks. 
+Whenever an \textit{async} function has to await IO it returns control to the scheduler. When IO is ready the scheduler can choose to continue the function. We can ask it not to and instead cancel the task. As Rust enforces \acf{raii}~\cite[p.~389]{raii}~\footnote{A programming idiom where acquiring a resource is done when creating an object. When the object is destroyed code runs that release or cleans up the object} the framework must drop all the objects in the scope of canceled tasks. 
 Task handles instruct the framework to cancel their task when they are dropped. A group of tasks can be canceled by dropping the data structure that contains the task handles. By organizing concurrent tasks as a tree with the root the \textsl{main function} cancelling and cleaning up a branch is as easy as dropping the task handle for the root of that branch. Concretely if we abort the \textsl{president} task we automatically end any tasks it created.
 
 \subsection{Structure}
@@ -89,7 +89,7 @@ pub(super) async fn work( ) -> crate::Role {
 }
 \end{lstlisting}
 
-The other work functions similarly select on multiple async tasks. The tasks themselves often create yet other tasks. This way the program builds up a tree of concurrently working functions. The tree is illustrated in \cref{fig:tree}.
+The other work functions similarly select on multiple async tasks. These tasks themselves create yet other tasks. This way the program builds up a tree of concurrently working functions. The tree is illustrated in \cref{fig:tree}. Work that scales with system load is divided over a variable amount concurrently running tasks. Each connection to a client for example is run in parallel on a separate task.
 %
 \clearpage
 \thispagestyle{empty}
@@ -100,6 +100,40 @@ The other work functions similarly select on multiple async tasks. The tasks the
 	\label{fig:tree}
 \end{figure}
 \clearpage
+
+\subsection{Raft}
+There are a lot of reliable \raft{} implementations. Developing my own took a lot of time and makes the system less reliable as my implementation has hardly been tested. \Name{} has two needs that where fulfilled by no existing implementation: 
+%
+\begin{itemize}
+	\item \Name{} uses the \raft{} heartbeat to maintain file system consensus (see:~\cref{sec:praft}). For example a fresh clerk needs to know when it is up-to-date\footnote{That is, the clerk has applied all log committed entries, and the last was committed within a \raft{} heartbeat of it being committed} and can begin serving clients. 
+	\item \Name{} needs a dictatorial version of \raft{}, one where elections are illegal and leaders (minsters) are assigned by a third party (the president). Multiple small dictatorships (or ministries) must be able to exist simultaneously. The log must stay consistent and clients should see no new entries of an old leader after assignment of a new leader. 
+\end{itemize}
+%
+To demonstrate that \name{} scales and can be optimized in future work\footnote{see:~\cref{sec:profile,sec:discussion}} the same must hold for the custom implementation. If it does not then the design of \name{} could be relying on an implementation detail that fundamentally limits its performance.
+%
+\subsubsection*{Perishable log entries}
+When a \raft{} message arrives it can cause entries in the log to become committed. At that point they are made available to the system. These could be old entries, long ago committed by other nodes. The message contains the index of the last committed entry or entries which we use to recognize if an entry is old. Newly committed messages can still become outdated if they are applied too slowly. This can happen if the server slows down due to bugs in \name{} or hardware issues. The system detects this by keeping the timestamp the message that made an entry committed together with the entry. This combination, a \textit{perishable entry} is made available to \name{}.
+
+\subsubsection*{Dictatorial Raft}
+Here a third party instructs a node to become the leader. Followers are not informed directly but rather accept the new leader as it has a higher term. When receiving a message the normal \raft{} rules apply therefore messages from the old leader\footnote{The third party replacing the leader usually indicates there is a problem with the current leader, making it doubly important that they are ignored} will be rejected as there term is too low.
+
+Nodes must be able to move between groups with assigned leaders. This present two problems, first:
+\begin{itemize}
+	\item Leader B receives message that follower x is assigned to it
+	\item Leader B appends to its log and sends an append request to its followers now including x
+	\item Follower x \emph{accepts} the request as x has a \emph{lower} term then the request
+	\item Follower x \emph{increases} its term to match B
+	\item Leader A receives a message that assigns x back to it
+	\item Leader A appends to its log and sends an append request to its followers which now again includes x
+	\item Follower x \emph{rejects} the request as x now has a \emph{higher} term then the request
+\end{itemize}
+Leader A must initially have a lower term then B and then a higher term then B. Secondly we need a follower to re-write its log after every move to match that of its new group. 
+
+To solve the first we make the third party change the term of the leader when it assigning it a node. If it guarantees the new term is the highest of all the groups every reassignment will succeed. It is simple to assure this using a single third party incrementing the term every assignment and re-assignment. 
+
+As the highest number is always unique this coincidentally also solves our second problem. The correct log for each group now has an increasing sequence of unique terms. If a node receives an append request and its previous log entries term and index do not match that of the leader it rejects the request. The leader then starts sending older log entries\footnote{This is optimized in \name{} by clearing the entire log if a clerk came from another ministry}. Given terms are now unique to groups a successful append can only happen on correct (partial) group log.
+
+
 
 % (mathy) conditions from 
 % note all are ranged just range > file for unranged
