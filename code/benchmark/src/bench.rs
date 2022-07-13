@@ -2,12 +2,14 @@ use client::Client;
 use itertools::{chain, Itertools};
 use std::{
     ffi::OsString,
-    iter,
     ops::Range,
     path::PathBuf,
     time::{Duration, Instant},
 };
 use tracing::instrument;
+
+mod ls;
+mod range;
 
 #[derive(Debug, Clone)]
 pub enum Operation {
@@ -56,7 +58,8 @@ pub struct Partition {
 #[derive(Debug)]
 pub struct Bench {
     operations: Vec<Operation>,
-    clients: usize,
+    client_nodes: usize,
+    clients_per_node: usize,
     pub partitions: Vec<Partition>,
     /// operations to run before the benchmark. The need files for reads/writes
     /// are created automatically
@@ -117,78 +120,43 @@ impl Bench {
     }
 
     pub fn client_nodes(&self) -> usize {
-        self.clients
-    }
-
-    pub fn ls_stride(n_parts: usize, n_ops: usize) -> Bench {
-        let dirs = chain!(
-            iter::once(String::from("/")),
-            (1..n_parts).map(|n| format!("/{n}"))
-        )
-        .cycle()
-        .take(n_ops * n_parts);
-        Self::ls_access(dirs, n_parts)
-    }
-    pub fn ls_batch(n_parts: usize, n_ops: usize) -> Bench {
-        let dirs = chain!(
-            iter::once(String::from("/")),
-            (0..n_parts).map(|n| format!("/{n}"))
-        )
-        .flat_map(|dir| iter::repeat(dir).take(n_ops));
-        Self::ls_access(dirs, n_parts)
-    }
-
-    fn ls_access(dirs: impl Iterator<Item = String>, n_parts: usize) -> Bench {
-        assert!(
-            n_parts < 10,
-            "update the files created on setup to support more then n_parts"
-        );
-
-        let operations = dirs
-            .map(PathBuf::from)
-            .map(|path| Operation::Ls { path })
-            .collect();
-
-        let partitions = iter::once("/".to_string())
-            .chain((1..n_parts).into_iter().map(|n| format!("/{n}")))
-            .map(|p| Partition {
-                subtree: p,
-                clerks: 2,
-            })
-            .collect();
-
-        let additional_setup = iter::once("/".to_string())
-            .chain((1..10).into_iter().map(|n| format!("/{n}/")))
-            .flat_map(|dir| {
-                (0..10)
-                    .into_iter()
-                    .map(move |file| format!("{dir}{file}"))
-                    .map(PathBuf::from)
-                    .map(|path| Operation::Touch { path })
-            })
-            .collect();
-
-        Bench {
-            operations,
-            clients: 3,
-            partitions,
-            additional_setup,
-        }
+        self.client_nodes
     }
 }
 
 use serde::{Deserialize, Serialize};
 #[derive(clap::Subcommand, Clone, Debug, Serialize, Deserialize)]
 pub enum Command {
-    LsStride { n_parts: usize },
-    LsBatch { n_parts: usize },
+    LsStride {
+        n_parts: usize,
+    },
+    LsBatch {
+        n_parts: usize,
+    },
+    RangeByRow {
+        rows: usize,
+        clients_per_node: usize,
+    },
+    RangeWholeFIle {
+        rows: usize,
+        clients_per_node: usize,
+    },
 }
 
 impl From<&Command> for Bench {
     fn from(cmd: &Command) -> Self {
-        match cmd {
-            Command::LsStride { n_parts } => Self::ls_stride(*n_parts, 1000),
-            Command::LsBatch { n_parts } => Self::ls_batch(*n_parts, 1000),
+        use Command::*;
+        match *cmd {
+            LsStride { n_parts } => ls::ls_stride(n_parts, 1000),
+            LsBatch { n_parts } => ls::ls_batch(n_parts, 1000),
+            RangeByRow {
+                rows,
+                clients_per_node,
+            } => range::by_row(rows, clients_per_node),
+            RangeWholeFIle {
+                rows,
+                clients_per_node,
+            } => range::whole_file(rows, clients_per_node),
         }
     }
 }
@@ -198,6 +166,14 @@ impl Command {
         match self {
             Command::LsStride { n_parts } => format!("ls-stride {n_parts}"),
             Command::LsBatch { n_parts } => format!("ls-batch {n_parts}"),
+            Command::RangeByRow {
+                rows,
+                clients_per_node,
+            } => format!("range-by-row {rows} {clients_per_node}"),
+            Command::RangeWholeFIle {
+                rows,
+                clients_per_node,
+            } => format!("range-whole-file {rows} {clients_per_node}"),
         }
         .into()
     }
