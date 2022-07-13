@@ -72,7 +72,6 @@ impl NodesList {
 
 #[async_trait::async_trait]
 impl RandomNode for NodesList {
-    #[instrument(skip_all, ret)]
     async fn random_node(&self) -> SocketAddr {
         let mut rng = rand::thread_rng();
         self.list.iter().choose(&mut rng).unwrap().clone()
@@ -135,7 +134,7 @@ fn setup_tracing() {
     use tracing_subscriber::{filter, fmt};
 
     let filter = filter::EnvFilter::builder()
-        .parse("info,instance_chart=trace,client=debug,benchmark=debug")
+        .parse("info,instance_chart=warn,client=error,benchmark=debug")
         .unwrap();
 
     let uptime = fmt::time::uptime();

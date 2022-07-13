@@ -153,7 +153,11 @@ impl ReDirectory {
                 return (staff.clone(), subtree.clone());
             }
         }
-        panic!("no root directory found or path without root")
+        if !path.starts_with("/") {
+            panic!("path without root: {path:?}");
+        } else {
+            panic!("no root directory: {:?}", *tree);
+        }
     }
 
     pub(crate) fn set_tree(&mut self, tree: Option<PathBuf>) {

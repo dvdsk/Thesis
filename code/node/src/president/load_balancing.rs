@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{PathBuf, Path};
 use std::str::FromStr;
 use std::time::Duration;
 use tokio::time::timeout;
@@ -130,6 +130,10 @@ impl Partition {
             clerks,
         }
     }
+}
+
+pub fn has_root(parts: &[Partition]) -> bool {
+    parts.iter().any(|p| p.subtree == Path::new("/") )
 }
 
 impl LoadBalancer {

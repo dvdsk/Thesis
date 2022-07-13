@@ -7,7 +7,7 @@ use std::{
     path::PathBuf,
     time::{Duration, Instant},
 };
-use tracing::{info, instrument};
+use tracing::instrument;
 
 #[derive(Debug, Clone)]
 pub enum Operation {
@@ -91,15 +91,15 @@ impl Bench {
             .collect();
 
         let mut buf = vec![0u8; 1_000_00];
-        let pb = ProgressBar::new((self.additional_setup.len() + needed_files.len()) as u64);
+        // let pb = ProgressBar::new((self.additional_setup.len() + needed_files.len()) as u64);
         for op in chain!(
             self.additional_setup.iter().cloned(),
             needed_files.into_iter()
         ) {
             op.clone().perform(client, &mut buf).await;
-            pb.inc(1);
+            // pb.inc(1);
         }
-        pb.finish();
+        // pb.finish();
     }
 }
 
@@ -120,42 +120,49 @@ impl Bench {
         self.clients
     }
 
-    pub fn ls_stride(n_parts: usize) -> Bench {
-        let dirs = (0..n_parts).cycle().take(1000 * n_parts);
+    pub fn ls_stride(n_parts: usize, n_ops: usize) -> Bench {
+        let dirs = chain!(
+            iter::once(String::from("/")),
+            (1..n_parts).map(|n| format!("/{n}"))
+        )
+        .cycle()
+        .take(n_ops * n_parts);
         Self::ls_access(dirs, n_parts)
     }
-    pub fn ls_batch(n_parts: usize) -> Bench {
-        let dirs = (0..n_parts).flat_map(|dir| iter::repeat(dir).take(1000));
+    pub fn ls_batch(n_parts: usize, n_ops: usize) -> Bench {
+        let dirs = chain!(
+            iter::once(String::from("/")),
+            (0..n_parts).map(|n| format!("/{n}"))
+        )
+        .flat_map(|dir| iter::repeat(dir).take(n_ops));
         Self::ls_access(dirs, n_parts)
     }
 
-    fn ls_access(dirs: impl Iterator<Item = usize>, n_parts: usize) -> Bench {
+    fn ls_access(dirs: impl Iterator<Item = String>, n_parts: usize) -> Bench {
         assert!(
             n_parts < 10,
             "update the files created on setup to support more then n_parts"
         );
 
         let operations = dirs
-            .map(|n| format!("/{n}"))
             .map(PathBuf::from)
             .map(|path| Operation::Ls { path })
             .collect();
 
-        let partitions = (0..n_parts)
-            .into_iter()
-            .map(|n| format!("/{n}"))
+        let partitions = iter::once("/".to_string())
+            .chain((1..n_parts).into_iter().map(|n| format!("/{n}")))
             .map(|p| Partition {
                 subtree: p,
                 clerks: 2,
             })
             .collect();
 
-        let additional_setup = (0..10)
-            .into_iter()
+        let additional_setup = iter::once("/".to_string())
+            .chain((1..10).into_iter().map(|n| format!("/{n}/")))
             .flat_map(|dir| {
                 (0..10)
                     .into_iter()
-                    .map(move |file| format!("/{dir}/{file}"))
+                    .map(move |file| format!("{dir}{file}"))
                     .map(PathBuf::from)
                     .map(|path| Operation::Touch { path })
             })
@@ -180,8 +187,8 @@ pub enum Command {
 impl From<&Command> for Bench {
     fn from(cmd: &Command) -> Self {
         match cmd {
-            Command::LsStride { n_parts } => Self::ls_stride(*n_parts),
-            Command::LsBatch { n_parts } => Self::ls_batch(*n_parts),
+            Command::LsStride { n_parts } => Self::ls_stride(*n_parts, 1000),
+            Command::LsBatch { n_parts } => Self::ls_batch(*n_parts, 1000),
         }
     }
 }

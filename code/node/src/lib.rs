@@ -26,7 +26,7 @@ pub type Idx = u32; // raft idx
 
 use instance_chart::Chart as mChart;
 
-pub use self::president::load_balancing::Partition;
+pub use self::president::load_balancing::{self, Partition};
 use self::redirectory::{Node, ReDirectory};
 use self::util::open_socket;
 type Chart = mChart<3, u16>;
@@ -95,7 +95,7 @@ pub struct Config {
     pub cluster_size: u16,
 
     /// use static subtree partitions.
-    #[clap(short, long="partition")]
+    #[clap(short, long = "partition")]
     pub partitions: Vec<Partition>,
 
     /// database path, change when running multiple instances on
@@ -117,6 +117,10 @@ struct State {
 #[instrument(level = "info")]
 pub async fn run(conf: Config) {
     assert!(conf.cluster_size > 3, "minimum cluster size is 4");
+    assert!(
+        load_balancing::has_root(&conf.partitions),
+        "one of the partitions has to be root"
+    );
 
     let (pres_listener, pres_port) = open_socket(conf.pres_port).await.unwrap();
     let (minister_listener, minister_port) = open_socket(conf.minister_port).await.unwrap();
