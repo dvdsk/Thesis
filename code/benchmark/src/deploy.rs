@@ -116,15 +116,16 @@ fn wait_for_allocation(ticket: usize) -> Result<()> {
     }
 }
 
-fn args(id: usize, bench: &Bench) -> String {
+fn args(id: usize, bench: &Bench, pres_port: u16, min_port: u16, client_port: u16) -> String {
     use itertools::Itertools;
     let partitions = bench
         .partitions
         .iter()
         .map(|Partition { subtree, clerks }| format!("--partition {subtree}:{clerks}"));
-    let n_nodes = bench.fs_nodes();
     let partitions: String = Itertools::intersperse(partitions, " ".to_string()).collect();
-    let args = format!("--id {id} --database /tmp/govfs --cluster-size {n_nodes} --run 0 {partitions}");
+    let n_nodes = bench.fs_nodes();
+    let args =
+        format!("--id {id} --pres-port {pres_port} --minister-port {min_port} --client-port {client_port} --database /tmp/govfs --cluster-size {n_nodes} --run 0 {partitions}");
     args
 }
 
@@ -150,6 +151,9 @@ mkdir -p /tmp/govfs
 pub fn start_cluster(
     bench: &bench::Bench,
     nodes: &[Node],
+    pres_port: u16,
+    min_port: u16,
+    client_port: u16,
 ) -> Result<FuturesUnordered<impl Future<Output = Result<String>>>> {
     let mut path = env::current_dir()?;
     path.push("bin/node");
@@ -164,7 +168,7 @@ pub fn start_cluster(
         .iter()
         .enumerate()
         .map(|(id, node)| {
-            let args = args(id, bench);
+            let args = args(id, bench, pres_port, min_port, client_port);
             ssh_node(path.to_string(), node.to_string(), args)
         })
         .collect();

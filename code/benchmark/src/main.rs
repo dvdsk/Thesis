@@ -1,14 +1,16 @@
+use std::net::{SocketAddr, ToSocketAddrs};
+
+use bench::Bench;
+use benchmark::{bench, deploy, sync};
 use clap::Parser;
+use client::RandomNode;
+use color_eyre::{eyre::eyre, eyre::WrapErr, Help, Report, Result, SectionExt};
 use futures::{
     stream::{FuturesUnordered, StreamExt},
     Future,
 };
-
-use bench::Bench;
-use benchmark::{bench, deploy, sync};
-
-use color_eyre::{eyre::eyre, eyre::WrapErr, Help, Report, Result, SectionExt};
-use tracing::{debug, info};
+use rand::prelude::*;
+use tracing::{debug, info, instrument};
 
 #[derive(Parser, Debug, Clone)]
 #[clap(author, version, about, long_about = None)]
@@ -45,22 +47,56 @@ async fn watch_nodes(
     }
 }
 
+struct NodesList {
+    list: Vec<SocketAddr>,
+}
+
+impl NodesList {
+    fn from_hostnames(names: &[String], port: u16) -> Result<Self> {
+        let mut list: Vec<SocketAddr> = Vec::new();
+        for host_name in names {
+            let addr: SocketAddr = format!("{host_name}:{port}")
+                .to_socket_addrs()
+                .wrap_err("Could not resolve host name")
+                .with_section(|| host_name.to_owned().header("hostname:"))?
+                .next()
+                .ok_or_else(|| {
+                    eyre!("Did not resolve to any adress")
+                        .with_section(|| host_name.to_owned().header("hostname:"))
+                })?;
+            list.push(addr);
+        }
+        Ok(Self { list })
+    }
+}
+
+#[async_trait::async_trait]
+impl RandomNode for NodesList {
+    #[instrument(skip_all, ret)]
+    async fn random_node(&self) -> SocketAddr {
+        let mut rng = rand::thread_rng();
+        self.list.iter().choose(&mut rng).unwrap().clone()
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     setup_tracing();
     color_eyre::install().unwrap();
+    let (pres_port, min_port, client_port) = (34784, 3987, 3978);
 
     let args = Args::parse();
     let bench = Bench::from(&args.command);
     let nodes = deploy::reserve(bench.needed_nodes())?;
-    let mut cluster = deploy::start_cluster(&bench, &nodes[0..bench.fs_nodes()])?;
+    let mut cluster = deploy::start_cluster(
+        &bench,
+        &nodes[0..bench.fs_nodes()],
+        pres_port,
+        min_port,
+        client_port,
+    )?;
 
-    // do any prep work for the benchmark (make files etc)
-    /* FIX: Can not find any nodes as the clusters head node is not on the
-     * same subnet/network as the servers. Should implementa node source 
-     * (see client RandomNode trait) that uses the list generated above
-     * to do so ports will need to be made fixed/static too <12-07-22> */
-    let find_nodes = client::ChartNodes::<3, 2>::new(8080);
+    let find_nodes = NodesList::from_hostnames(&nodes, client_port)?;
     let mut client = client::Client::new(find_nodes);
     tokio::select! {
         err = cluster.next() => {

@@ -16,6 +16,7 @@ bincode = "1"
 
 tokio = { version = "^1.19.1", features = ["macros", "net", "time", "rt-multi-thread", "tracing", "sync", "process"] }
 futures = "0.3"
+async-trait = "0.1.56"
 
 tracing = { version = "0.1" } #, features = ["release_max_level_error"] }
 tracing-error = "0.2"
@@ -29,6 +30,7 @@ result-tools = { git = "https://github.com/dvdsk/result-tools.git" }
 
 indicatif = "0.16.2"
 gethostname = "0.2.3"
+rand = "0.8.5"
 
 client = { path = "../client" }
 node = { path = "../node" }
