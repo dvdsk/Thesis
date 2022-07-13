@@ -46,7 +46,6 @@ pub enum Error {
     ConflictingWriteLease,
     #[error("Db operation returned an error")]
     Db(#[from] sled::Error),
-
 }
 
 impl Directory {
@@ -121,27 +120,27 @@ impl Directory {
         req_range: &Range<u64>,
     ) -> Result<LeaseGuard<'a>, Error> {
         let mut key = None;
-        self.tree
-            .update_and_fetch(dbkey(path), |bytes| {
-                let mut entry = Entry::from_bytes(bytes?);
-                if !entry.overlapping_write_access(req_range) {
-                    key = Some(entry.add_read_access(req_range));
-                    Some(entry.to_bytes())
-                } else {
-                    bytes.map(Vec::from)
-                }
-            })?;
+        self.tree.update_and_fetch(dbkey(path), |bytes| {
+            let mut entry = Entry::from_bytes(bytes?);
+            if !entry.overlapping_write_access(req_range) {
+                key = Some(entry.add_read_access(req_range));
+                Some(entry.to_bytes())
+            } else {
+                bytes.map(Vec::from)
+            }
+        })?;
 
         let key = key.ok_or(Error::ConflictingWriteLease)?;
         Ok(self.lease_guard(path, key))
     }
 
+    /// None if the file is already being written to
     #[instrument(skip(self), err)]
     pub(crate) fn get_exclusive_access(
         &self,
         path: &Path,
         req_range: &Range<u64>,
-    ) -> Result<AccessKey> {
+    ) -> Result<Option<AccessKey>> {
         let mut key = None;
         self.tree
             .update_and_fetch(dbkey(path), |bytes| {
@@ -155,18 +154,18 @@ impl Directory {
             })
             .wrap_err("internal db error")?;
 
-        let key = key.ok_or_else(|| eyre!("could not give access, overlapping writes"))?;
         Ok(key)
     }
 
+    /// None if the file is already being written to
     #[instrument(skip(self), err)]
     pub(crate) fn get_write_access<'a>(
         &'a self,
         path: &'a Path,
         req_range: &Range<u64>,
-    ) -> Result<LeaseGuard<'a>> {
+    ) -> Result<Option<LeaseGuard<'a>>> {
         self.get_exclusive_access(path, req_range)
-            .map(|key| self.lease_guard(path, key))
+            .map(|key| key.map(|key| self.lease_guard(path, key)))
     }
 
     pub(crate) fn revoke_access(&self, path: &Path, access: AccessKey) {

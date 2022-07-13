@@ -37,7 +37,10 @@ impl Locks {
         range: Range<u64>,
         remote_key: AccessKey,
     ) {
-        let local_key = dir.get_exclusive_access(&path, &range).unwrap();
+        let local_key = dir
+            .get_exclusive_access(&path, &range)
+            .unwrap()
+            .expect("path+range is already locked");
         let mut map = self.0.lock().await;
         let prev = map.insert((path, remote_key), local_key);
         assert!(prev.is_none(), "path+range was already locked");

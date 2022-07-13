@@ -94,7 +94,8 @@ pub struct Config {
     #[clap(short, long)]
     pub cluster_size: u16,
 
-    /// use static subtree partitions.
+    /// use static subtree partitions. One of the partitions must be 
+    /// the root partition
     #[clap(short, long = "partition")]
     pub partitions: Vec<Partition>,
 

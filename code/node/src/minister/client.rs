@@ -11,7 +11,7 @@ use tokio::net::{TcpListener, TcpStream};
 use protocol::{Request, Response};
 use time::OffsetDateTime;
 use tokio::task::JoinSet;
-use tokio::time::{sleep_until, timeout, timeout_at, Instant};
+use tokio::time::{sleep_until, timeout, timeout_at, Instant, sleep};
 use tracing::{debug, error, instrument, warn, Instrument};
 
 use crate::directory::{self, Directory};
@@ -158,9 +158,17 @@ async fn write_lease(
     dir: &mut Directory,
     manager: &mut LockManager,
 ) -> Result<Response> {
-    let dir_lease = match dir.get_write_access(&path, &range) {
-        Err(e) => return Ok(Response::Error(e.to_string())),
-        Ok(lease) => lease,
+    let mut retry = 0;
+    let dir_lease = loop {
+        match dir.get_write_access(&path, &range) {
+            Err(e) => return Ok(Response::Error(e.to_string())),
+            Ok(Some(lease)) => break lease,
+            Ok(None) if retry < 10 => {
+                retry += 1;
+                sleep(HB_TIMEOUT * retry).await;
+            }
+            Ok(None) => return Ok(Response::ConflictingWriteLease),
+        };
     };
 
     // revoke all reads for this file on the clerks, if this times

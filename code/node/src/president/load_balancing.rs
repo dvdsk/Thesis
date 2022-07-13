@@ -133,6 +133,9 @@ impl Partition {
 }
 
 pub fn has_root(parts: &[Partition]) -> bool {
+    if parts.is_empty() {
+        return true;
+    }
     parts.iter().any(|p| p.subtree == Path::new("/") )
 }
 

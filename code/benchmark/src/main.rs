@@ -10,7 +10,7 @@ use futures::{
     Future,
 };
 use rand::prelude::*;
-use tracing::{debug, info, instrument};
+use tracing::{debug, info};
 
 #[derive(Parser, Debug, Clone)]
 #[clap(author, version, about, long_about = None)]

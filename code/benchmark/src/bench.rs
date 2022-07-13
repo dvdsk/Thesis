@@ -55,11 +55,11 @@ pub struct Partition {
     pub clerks: usize,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Bench {
     operations: Vec<Operation>,
     client_nodes: usize,
-    clients_per_node: usize,
+    pub clients_per_node: usize,
     pub partitions: Vec<Partition>,
     /// operations to run before the benchmark. The need files for reads/writes
     /// are created automatically
@@ -94,15 +94,15 @@ impl Bench {
             .collect();
 
         let mut buf = vec![0u8; 1_000_00];
-        // let pb = ProgressBar::new((self.additional_setup.len() + needed_files.len()) as u64);
+        let pb = ProgressBar::new((self.additional_setup.len() + needed_files.len()) as u64);
         for op in chain!(
             self.additional_setup.iter().cloned(),
             needed_files.into_iter()
         ) {
             op.clone().perform(client, &mut buf).await;
-            // pb.inc(1);
+            pb.inc(1);
         }
-        // pb.finish();
+        pb.finish();
     }
 }
 
@@ -137,7 +137,7 @@ pub enum Command {
         rows: usize,
         clients_per_node: usize,
     },
-    RangeWholeFIle {
+    RangeWholeFile {
         rows: usize,
         clients_per_node: usize,
     },
@@ -153,7 +153,7 @@ impl From<&Command> for Bench {
                 rows,
                 clients_per_node,
             } => range::by_row(rows, clients_per_node),
-            RangeWholeFIle {
+            RangeWholeFile {
                 rows,
                 clients_per_node,
             } => range::whole_file(rows, clients_per_node),
@@ -170,7 +170,7 @@ impl Command {
                 rows,
                 clients_per_node,
             } => format!("range-by-row {rows} {clients_per_node}"),
-            Command::RangeWholeFIle {
+            Command::RangeWholeFile {
                 rows,
                 clients_per_node,
             } => format!("range-whole-file {rows} {clients_per_node}"),
