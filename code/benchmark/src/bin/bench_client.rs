@@ -2,6 +2,7 @@ use std::time::Duration;
 
 use clap::Parser;
 use color_eyre::{Result, eyre::WrapErr, Help};
+use itertools::Itertools;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio::time::sleep;
@@ -37,6 +38,7 @@ async fn main() -> Result<()> {
     let start_sync = stream.read_u8().await.unwrap(); // await sync start signal
     assert_eq!(start_sync, 42);
 
-    bench.perform(&mut client, &mut buf).await;
+    let results = bench.perform(&mut client, &mut buf).await;
+    println!("minmax: {:?}", results.iter().minmax());
     Ok(())
 }

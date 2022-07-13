@@ -4,11 +4,11 @@ use futures::{
     Future,
 };
 
-use benchmark::{bench, deploy, sync};
 use bench::Bench;
+use benchmark::{bench, deploy, sync};
 
 use color_eyre::{eyre::eyre, eyre::WrapErr, Help, Report, Result, SectionExt};
-use tracing::info;
+use tracing::{debug, info};
 
 #[derive(Parser, Debug, Clone)]
 #[clap(author, version, about, long_about = None)]
@@ -20,22 +20,26 @@ pub struct Args {
 async fn watch_nodes(
     cluster: &mut FuturesUnordered<impl Future<Output = Result<String, Report>>>,
     clients: &mut FuturesUnordered<impl Future<Output = Result<String, Report>>>,
-) -> Result<()> {
-    use futures::future;
-    let mut client_failures = clients.filter_map(|res| future::ready(res.err()));
+) -> Result<Vec<String>> {
+    let mut output = Vec::new();
 
-    tokio::select! {
-        err = cluster.next() => {
-            match err.expect("should always be more then one node") {
-                Ok(output) => Err(eyre!("node exits early"))
-                    .with_section(move || output.header("Output:")),
-                Err(err) => Err(err).wrap_err("node failed"),
+    loop {
+        tokio::select! {
+            err = cluster.next() => {
+                return match err.expect("should always be more then one node") {
+                    Ok(output) => Err(eyre!("node exits early"))
+                        .with_section(move || output.header("Output:")),
+                    Err(err) => Err(err).wrap_err("node failed"),
+                };
             }
-        }
-        res = client_failures.next() => {
-            match res {
-                Some(err) => Err(err.wrap_err("client failed")),
-                None => Ok(()),
+            res = clients.next() => {
+                match res {
+                    Some(res) => {
+                        let out = res.wrap_err("client failed")?;
+                        output.push(out);
+                    }
+                    None => return Ok(output), // all clients are done
+                }
             }
         }
     }
@@ -52,9 +56,22 @@ async fn main() -> Result<()> {
     let mut cluster = deploy::start_cluster(&bench, &nodes[0..bench.fs_nodes()])?;
 
     // do any prep work for the benchmark (make files etc)
+    /* FIX: Can not find any nodes as the clusters head node is not on the
+     * same subnet/network as the servers. Should implementa node source 
+     * (see client RandomNode trait) that uses the list generated above
+     * to do so ports will need to be made fixed/static too <12-07-22> */
     let find_nodes = client::ChartNodes::<3, 2>::new(8080);
     let mut client = client::Client::new(find_nodes);
-    bench.prep(&mut client).await;
+    tokio::select! {
+        err = cluster.next() => {
+            return match err.expect("should always be more then one node") {
+                Ok(output) => Err(eyre!("node exits early"))
+                    .with_section(move || output.header("Output:")),
+                Err(err) => Err(err).wrap_err("node failed"),
+            };
+        }
+        _ = bench.prep(&mut client) => (),
+    }
 
     let server = sync::server(bench.client_nodes());
     let mut clients = deploy::start_clients(args.command, &nodes[bench.fs_nodes()..])?;
@@ -65,12 +82,13 @@ async fn main() -> Result<()> {
             res?;
         }
         res = watch_nodes(&mut cluster, &mut clients) => {
-            return res;
+            return Err(res.expect_err("benchmark can not be done before clients are synced"));
         }
     }
 
-    watch_nodes(&mut cluster, &mut clients).await?;
+    let output = watch_nodes(&mut cluster, &mut clients).await?;
     info!("benchmark completed!");
+    debug!("node output: {output:?}");
     Ok(())
 }
 
@@ -81,7 +99,7 @@ fn setup_tracing() {
     use tracing_subscriber::{filter, fmt};
 
     let filter = filter::EnvFilter::builder()
-        .parse("info,instance_chart=warn,client=warn")
+        .parse("info,instance_chart=trace,client=debug,benchmark=debug")
         .unwrap();
 
     let uptime = fmt::time::uptime();

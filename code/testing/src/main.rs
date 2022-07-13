@@ -24,7 +24,7 @@ type Task = task::JoinHandle<()>;
 fn setup_node(id: u64, run_number: u16, parts: Vec<Partition>) -> Result<Task> {
     let config = Config {
         id: 0,
-        endpoint: IpAddr::V4(Ipv4Addr::LOCALHOST),
+        endpoint: Some(IpAddr::V4(Ipv4Addr::LOCALHOST)),
         run: run_number,
         local_instances: true,
         pres_port: None,
@@ -176,7 +176,7 @@ async fn main() -> Result<()> {
 
     println!("setting up log analyzer/collector (jeager)");
     start_jeager::start_if_not_running(runtime_dir()).await;
-    util::setup_tracing("testing".to_owned(), IpAddr::V4(Ipv4Addr::LOCALHOST), 10);
+    util::setup_tracing("testing".to_owned(), Some(IpAddr::V4(Ipv4Addr::LOCALHOST)), 10);
     println!("logging setup completed");
 
     match args.command {

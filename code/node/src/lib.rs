@@ -65,9 +65,9 @@ pub struct Config {
     /// Id of this node
     #[clap(short, long)]
     pub id: Id,
-    /// Instrumentation endpoint
-    #[clap(short, long, default_value = "127.0.0.1")]
-    pub endpoint: IpAddr,
+    /// Instrumentation endpoint, when running locally 127.0.0.1;
+    #[clap(short, long)]
+    pub endpoint: Option<IpAddr>,
     /// Run number (passed to opentelemetry backend)
     #[clap(short('u'), long)]
     pub run: u16,

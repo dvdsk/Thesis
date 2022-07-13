@@ -38,27 +38,39 @@ where
     tracing_opentelemetry::layer().with_tracer(tracer)
 }
 
-pub fn setup_tracing(instance: String, endpoint: IpAddr, run: u16) {
+pub fn setup_tracing(instance: String, endpoint: Option<IpAddr>, run: u16) {
     let filter = filter::EnvFilter::builder()
-        .parse("info,instance_chart=warn,client=info,node::minister=debug") 
+        .parse("info,instance_chart=warn,client=info,node::minister=debug")
         // .parse("info,instance_chart=warn,node::raft::subjects=trace") // debug subject send
-        // .parse("info,instance_chart=warn") 
+        // .parse("info,instance_chart=warn")
         .unwrap();
 
     let uptime = fmt::time::uptime();
-    let telemetry = opentelemetry(instance, endpoint, run);
-    let fmt_layer = fmt::layer()
-        .pretty()
-        .with_line_number(true)
-        .with_timer(uptime);
+    if let Some(endpoint) = endpoint {
+        // ugly code duplication, needed or generics get angry
+        let fmt_layer = fmt::layer()
+            .pretty()
+            .with_line_number(true)
+            .with_timer(uptime);
 
-    // console_subscriber::init();
-    let _ignore_err = tracing_subscriber::registry()
-        .with(ErrorLayer::default())
-        .with(filter)
-        .with(telemetry)
-        .with(fmt_layer)
-        .try_init();
+        let telemetry = opentelemetry(instance, endpoint, run);
+        let _ignore_err = tracing_subscriber::registry()
+            .with(ErrorLayer::default())
+            .with(filter)
+            .with(telemetry)
+            .with(fmt_layer)
+            .try_init();
+    } else {
+        let fmt_layer = fmt::layer()
+            .pretty()
+            .with_line_number(true)
+            .with_timer(uptime);
+        let _ignore_err = tracing_subscriber::registry()
+            .with(ErrorLayer::default())
+            .with(filter)
+            .with(fmt_layer)
+            .try_init();
+    }
 }
 
 #[allow(dead_code)] // used in integration testing

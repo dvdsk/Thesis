@@ -1,5 +1,13 @@
 use client::Client;
-use std::{collections::HashSet, iter, ops::Range, path::PathBuf, ffi::OsString};
+use itertools::{chain, Itertools};
+use std::{
+    ffi::OsString,
+    iter,
+    ops::Range,
+    path::PathBuf,
+    time::{Duration, Instant},
+};
+use tracing::{info, instrument};
 
 #[derive(Debug, Clone)]
 pub enum Operation {
@@ -39,7 +47,6 @@ impl Operation {
     }
 }
 
-
 #[derive(Clone, Debug)]
 pub struct Partition {
     pub subtree: String,
@@ -51,25 +58,48 @@ pub struct Bench {
     operations: Vec<Operation>,
     clients: usize,
     pub partitions: Vec<Partition>,
-    /// operations to run before the benchmark
-    setup: Vec<Operation>,
+    /// operations to run before the benchmark. The need files for reads/writes
+    /// are created automatically
+    additional_setup: Vec<Operation>,
 }
 
 impl Bench {
-    pub async fn perform<T: client::RandomNode>(self, client: &mut Client<T>, buf: &mut [u8]) {
+    pub async fn perform<T: client::RandomNode>(
+        self,
+        client: &mut Client<T>,
+        buf: &mut [u8],
+    ) -> Vec<Duration> {
+        let mut res = Vec::new();
         for op in self.operations.into_iter() {
+            let start = Instant::now();
             op.perform(client, buf).await;
+            res.push(start.elapsed());
         }
+        res
     }
 
+    #[instrument(skip_all)]
     pub async fn prep<T: client::RandomNode>(&self, client: &mut Client<T>) {
-        use itertools::chain;
-        let needed_files: HashSet<_> = chain!(self.operations.iter(), self.setup.iter())
+        use indicatif::ProgressBar;
+
+        let needed_files: Vec<_> = self
+            .operations
+            .iter()
             .filter_map(Operation::needed_file)
+            .unique()
+            .map(|path| Operation::Touch { path })
             .collect();
-        for path in needed_files {
-            client.create_file(path).await
+
+        let mut buf = vec![0u8; 1_000_00];
+        let pb = ProgressBar::new((self.additional_setup.len() + needed_files.len()) as u64);
+        for op in chain!(
+            self.additional_setup.iter().cloned(),
+            needed_files.into_iter()
+        ) {
+            op.clone().perform(client, &mut buf).await;
+            pb.inc(1);
         }
+        pb.finish();
     }
 }
 
@@ -95,12 +125,16 @@ impl Bench {
         Self::ls_access(dirs, n_parts)
     }
     pub fn ls_batch(n_parts: usize) -> Bench {
-        let dirs = (0..n_parts)
-            .flat_map(|dir| iter::repeat(dir).take(1000));
+        let dirs = (0..n_parts).flat_map(|dir| iter::repeat(dir).take(1000));
         Self::ls_access(dirs, n_parts)
     }
 
     fn ls_access(dirs: impl Iterator<Item = usize>, n_parts: usize) -> Bench {
+        assert!(
+            n_parts < 10,
+            "update the files created on setup to support more then n_parts"
+        );
+
         let operations = dirs
             .map(|n| format!("/{n}"))
             .map(PathBuf::from)
@@ -110,15 +144,28 @@ impl Bench {
         let partitions = (0..n_parts)
             .into_iter()
             .map(|n| format!("/{n}"))
-            .map(|p| Partition{subtree: p, clerks: 2})
+            .map(|p| Partition {
+                subtree: p,
+                clerks: 2,
+            })
             .collect();
-        let setup = Vec::new();
+
+        let additional_setup = (0..10)
+            .into_iter()
+            .flat_map(|dir| {
+                (0..10)
+                    .into_iter()
+                    .map(move |file| format!("/{dir}/{file}"))
+                    .map(PathBuf::from)
+                    .map(|path| Operation::Touch { path })
+            })
+            .collect();
 
         Bench {
             operations,
             clients: 3,
             partitions,
-            setup,
+            additional_setup,
         }
     }
 }
@@ -144,10 +191,11 @@ impl Command {
         match self {
             Command::LsStride { n_parts } => format!("ls-stride {n_parts}"),
             Command::LsBatch { n_parts } => format!("ls-batch {n_parts}"),
-        }.into()
+        }
+        .into()
     }
 }
-  
+
 // impl Command {
 //     pub fn serialize(&self) -> [u8;100] {
 //         let buf = [0u8;100];

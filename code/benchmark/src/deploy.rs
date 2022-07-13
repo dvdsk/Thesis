@@ -168,6 +168,7 @@ pub fn start_cluster(
             ssh_node(path.to_string(), node.to_string(), args)
         })
         .collect();
+    info!("started cluster nodes");
     Ok(nodes)
 }
 

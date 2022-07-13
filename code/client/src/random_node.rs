@@ -1,8 +1,8 @@
 use instance_chart::{discovery, Chart, ChartBuilder};
 use rand::prelude::*;
-use tracing::instrument;
 use std::net::SocketAddr;
 use tokio::task::JoinSet;
+use tracing::{debug, instrument};
 
 #[async_trait::async_trait]
 pub trait RandomNode {
@@ -52,6 +52,7 @@ impl<const N: usize, const IDX: usize> RandomNode for ChartNodes<N, IDX> {
             return addr;
         }
 
+        debug!("no node discoverable yet, waiting for node to be discoverd");
         notify
             .recv_nth_addr::<IDX>()
             .await
