@@ -53,8 +53,14 @@ pub async fn leases(client: &mut Client, readers: usize, writers: usize, spread:
     let readers: Vec<_> = (0..readers).map(make_client).collect();
     #[allow(clippy::needless_collect)]
     let writers: Vec<_> = (0..writers).map(make_client).collect();
-    let sleep = sleep(Duration::from_millis(500)); // give the clients time to map the cluster
-    tokio::join!(prep, sleep);
+    let do_sleep = sleep(Duration::from_millis(500)); 
+    // give the clients time to map the cluster while doing prep
+    tokio::join!(prep, do_sleep); 
+     /* ISSUE: workaround for create request not processed by 
+      * clerks before lock request is send <14-07-22> */
+    sleep(Duration::from_millis(140)).await; 
+   
+
 
     let readers: FuturesUnordered<_> = readers
         .into_iter()
