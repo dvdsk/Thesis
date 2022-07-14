@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use tokio::sync::Mutex;
+use tracing::instrument;
 
 use crate::directory::Directory;
 use protocol::AccessKey;
@@ -12,6 +13,7 @@ use protocol::AccessKey;
 pub struct Locks(Arc<Mutex<HashMap<(PathBuf, AccessKey), AccessKey>>>);
 
 impl Locks {
+    #[instrument(skip(self, dir))]
     pub(super) async fn reset(
         &mut self,
         path: PathBuf,
@@ -23,6 +25,7 @@ impl Locks {
         dir.revoke_access(&path, local_key)
     }
 
+    #[instrument(skip(self, dir))]
     pub(super) async fn reset_all(&mut self, dir: &mut Directory) {
         let mut map = self.0.lock().await;
         for ((path, _), local_key) in map.drain() {
@@ -30,6 +33,7 @@ impl Locks {
         }
     }
 
+    #[instrument(skip(self, dir))]
     pub(super) async fn add(
         &mut self,
         dir: &mut Directory,

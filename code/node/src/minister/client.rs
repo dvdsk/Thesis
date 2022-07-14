@@ -11,7 +11,7 @@ use tokio::net::{TcpListener, TcpStream};
 use protocol::{Request, Response};
 use time::OffsetDateTime;
 use tokio::task::JoinSet;
-use tokio::time::{sleep_until, timeout, timeout_at, Instant, sleep};
+use tokio::time::{sleep, timeout};
 use tracing::{debug, error, instrument, warn, Instrument};
 
 use crate::directory::{self, Directory};
@@ -41,6 +41,7 @@ pub async fn handle_requests(
             manager.clone(),
         )
         .in_current_span();
+
         request_handlers
             .build_task()
             .name("minister client conn")
@@ -158,6 +159,8 @@ async fn write_lease(
     dir: &mut Directory,
     manager: &mut LockManager,
 ) -> Result<Response> {
+    use FanOutError::*;
+
     let mut retry = 0;
     let dir_lease = loop {
         match dir.get_write_access(&path, &range) {
@@ -173,16 +176,12 @@ async fn write_lease(
 
     // revoke all reads for this file on the clerks, if this times
     // out the clerk or the client will already have dropped the lease
-    let deadline = Instant::now() + HB_TIMEOUT;
-    let lock_clerks = manager.lock(path.clone(), range.clone(), dir_lease.key());
-    match timeout_at(deadline, lock_clerks).await {
-        Err(..) => (),
-        Ok(Ok(_)) => (),
-        Ok(Err(FanOutError::NoCapacity)) => return Ok(Response::NoCapacity),
-        Ok(Err(e)) => {
-            warn!("error locking clerks: {e:?}");
-            // after this any inresponsive clecks will have resigned
-            sleep_until(deadline).await;
+    match manager.lock(path.clone(), range.clone(), dir_lease.key()).await {
+        Ok(_) | Err(ClerkIsDown | ConnectionLost | ClerkTimedOut) => (),
+        Err(NoCapacity) => return Ok(Response::NoCapacity),
+        Err(NoSubscribedNodes) => {
+            warn!("can not yet lock file since there are no clerks yet");
+            return Ok(Response::NoCapacity);
         }
     }
 

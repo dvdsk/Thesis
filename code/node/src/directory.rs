@@ -88,7 +88,7 @@ impl Directory {
         }
     }
 
-    #[instrument(skip(self))]
+    #[instrument(skip(self), ret)]
     pub fn update(&mut self, order: minister::Order) {
         use crate::minister::Order::*;
 
@@ -144,21 +144,22 @@ impl Directory {
     }
 
     /// None if the file is already being written to
-    #[instrument(skip(self), err)]
+    #[instrument(skip(self), err, ret)]
     pub(crate) fn get_exclusive_access(
         &self,
         path: &Path,
         req_range: &Range<u64>,
     ) -> Result<Option<AccessKey>> {
         let mut key = None;
-        self.tree
+        self.tree 
             .update_and_fetch(dbkey(path), |bytes| {
-                let mut entry = Entry::from_bytes(bytes?);
+                let bytes = bytes.expect("entry not found in directory");
+                let mut entry = Entry::from_bytes(bytes);
                 if !entry.overlapping_write_access(req_range) {
                     key = Some(entry.add_write_access(req_range));
                     Some(entry.to_bytes())
                 } else {
-                    bytes.map(Vec::from)
+                    Some(Vec::from(bytes))
                 }
             })
             .wrap_err("internal db error")?;

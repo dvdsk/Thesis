@@ -16,7 +16,7 @@ use protocol::{Request, Response};
 use tokio::sync::{Mutex, Notify};
 use tokio::task::JoinSet;
 use tokio::time::sleep;
-use tracing::{debug, error, instrument, trace, warn};
+use tracing::{debug, error, instrument, trace, warn, Instrument};
 
 use super::locks::Locks;
 use crate::directory::{self, Directory};
@@ -63,7 +63,23 @@ pub async fn handle_requests(
     let blocks = Locks::default();
     let mut request_handlers = JoinSet::new();
     loop {
-        let (conn, _addr) = listener.accept().await.unwrap();
+        let conn = if request_handlers.is_empty() {
+            let (conn, _) = listener.accept().await.unwrap();
+            conn
+        } else {
+            tokio::select! {
+                res = listener.accept() => {
+                    let (conn, _) = res.unwrap();
+                    conn
+                }
+                res = request_handlers.join_one() => {
+                    res.expect("request handlers empty check failed")
+                        .expect("crash in client request handler");
+                    continue;
+                }
+            }
+        };
+
         let handle = handle_conn(
             conn,
             state.clone(),
@@ -72,7 +88,8 @@ pub async fn handle_requests(
             dir.clone(),
             readers.clone(),
             blocks.clone(),
-        );
+        ).in_current_span();
+
         request_handlers
             .build_task()
             .name("clerk client conn")

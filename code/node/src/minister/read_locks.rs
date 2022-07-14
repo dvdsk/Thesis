@@ -3,15 +3,15 @@ use color_eyre::Help;
 use futures::{SinkExt, TryStreamExt};
 use protocol::connection::MsgStream;
 use protocol::{connection, Request, Response};
-use tokio::sync::mpsc::error::TrySendError;
 use std::collections::{HashMap, HashSet};
 use std::ops::Range;
 use std::path::PathBuf;
 use tokio::net::TcpStream;
+use tokio::sync::mpsc::error::TrySendError;
 use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio::task::JoinSet;
 use tokio::time::{sleep, timeout};
-use tracing::{error, instrument, warn, debug};
+use tracing::{debug, error, instrument, warn};
 
 use crate::raft::{CONN_RETRY_PERIOD, HB_TIMEOUT};
 use crate::redirectory::ClientAddr;
@@ -180,8 +180,8 @@ type Recievers = (
 
 impl LockManager {
     pub(super) fn new() -> (Self, Recievers) {
-        // unlock requests have a higher capacity, and are processed before 
-        // lock request. This ensures a server under high locking load will never 
+        // unlock requests have a higher capacity, and are processed before
+        // lock request. This ensures a server under high locking load will never
         // be able to unlock keeping the load high forever
         let (lock_req, rx_lock) = mpsc::channel(16);
         let (unlock_req, rx_unlock) = mpsc::channel(32);
@@ -194,6 +194,8 @@ impl LockManager {
         )
     }
 
+    // Note: blocks no longer then HB_TIMEOUT as lock manager can not
+    // block longer then that (timeout fan_out_req)
     pub async fn lock(
         &mut self,
         path: PathBuf,
@@ -209,6 +211,7 @@ impl LockManager {
         res.await.expect("reciever used twice")
     }
 
+    // Note: is non blocking
     pub fn unlock(&mut self, path: PathBuf, key: AccessKey) {
         // we do not wait for a result, failure in unlock means failure
         // of clerks, replacement clecks will not hold the lock
@@ -294,8 +297,24 @@ pub(super) async fn maintain_file_locks(
 #[derive(Debug)]
 pub enum FanOutError {
     NoSubscribedNodes,
-    ClerkDidNotRespond,
+    ClerkIsDown,
+    ConnectionLost,
+    ClerkTimedOut,
     NoCapacity,
+}
+
+async fn processed_by_all(
+    lock_broadcast: &mut broadcast::Sender<(AckSender, Request)>,
+    mut rx: mpsc::Receiver<Result<(), ()>>,
+) -> Result<(), FanOutError> {
+    use FanOutError::*;
+    for _ in 0..lock_broadcast.receiver_count() {
+        rx.recv()
+            .await
+            .ok_or(ClerkIsDown)?
+            .map_err(|_| ConnectionLost)?;
+    }
+    Ok(())
 }
 
 async fn fan_out_req(
@@ -303,13 +322,13 @@ async fn fan_out_req(
     req: Request,
 ) -> Result<(), FanOutError> {
     use FanOutError::*;
-    let (tx, mut rx) = mpsc::channel(16);
+    let (tx, rx) = mpsc::channel(16);
     let msg = (tx, req);
 
     lock_broadcast.send(msg).map_err(|_| NoSubscribedNodes)?;
-    for _ in 0..lock_broadcast.receiver_count() {
-        let _clerk_informed = rx.recv().await.ok_or(ClerkDidNotRespond)?;
-    }
+    timeout(HB_TIMEOUT, processed_by_all(lock_broadcast, rx))
+        .await
+        .map_err(|_| ClerkTimedOut)??;
 
     Ok(())
 }

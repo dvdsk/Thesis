@@ -4,12 +4,14 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use color_eyre::eyre::Result;
+use futures::stream::FuturesUnordered;
+use futures::StreamExt;
 use mktemp::Temp;
 use node::util::runtime_dir;
-use node::Config;
+use node::{Config, Id};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
-use tokio::task;
+use tokio::task::{self, JoinHandle};
 
 use node::util;
 use tokio::time::sleep;
@@ -60,6 +62,42 @@ async fn local_cluster(parts: &[Partition]) -> Result<HashMap<u64, Task>> {
     Ok(nodes)
 }
 
+async fn perform_command(
+    id: Id,
+    command: char,
+    cluster: &mut HashMap<u64, JoinHandle<()>>,
+    parts: &Vec<Partition>,
+) {
+    match command as char {
+        'k' => {
+            let task = cluster.remove(&id).unwrap();
+            if task.is_finished() {
+                let panic = task.await.unwrap_err().into_panic();
+                error!(
+                    "task paniced before it could be aborted [by remote request]\npanic: {panic:?}"
+                );
+            } else {
+                task.abort();
+                task.await.unwrap_err().is_cancelled();
+                warn!("killed node {id} [by remote request]");
+            }
+        }
+        'r' => {
+            // `ressurrect` a node
+            let node = setup_node(id, 4242, parts.clone()).unwrap();
+            cluster.insert(id as u64, node);
+            warn!("resurrected node {id} [by remote request]");
+        }
+        'a' => {
+            // add new node
+            let id = cluster.len() as u64;
+            cluster.insert(id, setup_node(id, 4242, parts.clone()).unwrap());
+            warn!("added node {id} [by remote request]");
+        }
+        _ => panic!("recieved incorrect command"),
+    }
+}
+
 async fn manage_cluster(parts: Vec<Partition>) {
     let mut cluster = local_cluster(&parts).await.unwrap();
     let listener = TcpListener::bind("127.0.0.1:4242").await.unwrap();
@@ -67,34 +105,16 @@ async fn manage_cluster(parts: Vec<Partition>) {
         let (mut socket, _) = listener.accept().await.unwrap();
         loop {
             let mut buf = [0u8; 2];
+            {
+                let mut nodes: FuturesUnordered<_> = cluster.iter_mut().map(|(_, h)| h).collect();
+                tokio::select! {
+                    down = nodes.next() => panic!("node went down: {down:?}"),
+                    res = socket.read_exact(&mut buf) => {res.unwrap();}
+                }
+            }
             socket.read_exact(&mut buf).await.unwrap();
             let [command, id] = buf;
-            match command as char {
-                'k' => {
-                    let task = cluster.remove(&(id as u64)).unwrap();
-                    if task.is_finished() {
-                        let panic = task.await.unwrap_err().into_panic();
-                        error!("task paniced before it could be aborted [by remote request]\npanic: {panic:?}");
-                    } else {
-                        task.abort();
-                        task.await.unwrap_err().is_cancelled();
-                        warn!("killed node {id} [by remote request]");
-                    }
-                }
-                'r' => {
-                    // `ressurrect` a node
-                    let node = setup_node(id as u64, 4242, parts.clone()).unwrap();
-                    cluster.insert(id as u64, node);
-                    warn!("resurrected node {id} [by remote request]");
-                }
-                'a' => {
-                    // add new node
-                    let id = cluster.len() as u64;
-                    cluster.insert(id, setup_node(id, 4242, parts.clone()).unwrap());
-                    warn!("added node {id} [by remote request]");
-                }
-                _ => panic!("recieved incorrect command"),
-            }
+            perform_command(id as u64, command as char, &mut cluster, &parts).await;
         }
     }
 }
@@ -176,7 +196,11 @@ async fn main() -> Result<()> {
 
     println!("setting up log analyzer/collector (jeager)");
     start_jeager::start_if_not_running(runtime_dir()).await;
-    util::setup_tracing("testing".to_owned(), Some(IpAddr::V4(Ipv4Addr::LOCALHOST)), 10);
+    util::setup_tracing(
+        "testing".to_owned(),
+        Some(IpAddr::V4(Ipv4Addr::LOCALHOST)),
+        10,
+    );
     println!("logging setup completed");
 
     match args.command {
