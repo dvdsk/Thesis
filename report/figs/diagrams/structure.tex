@@ -74,7 +74,7 @@
 	\draw[text_small] (instruct) to [out=0, in=180] node [] {} ($(in_manage_clerk.north west)!.5!(in_dead_clerk.south west)-(0.5,0)$);
 	
 	\draw[bracket2] (new_clerk.north west) to [out=270, in=90] node [] {} (manage_clerk.south west);
-	\draw[text_small] (pres_orders) to [out=0, in=180] node [] {} ($(new_clerk.north west)!.5!(manage_clerk.south west)-(0.5,0)$);
+	\draw[text_small] (locks) to [out=0, in=180] node [] {} ($(new_clerk.north west)!.5!(manage_clerk.south west)-(0.5,0)$);
 
 
 	\node (president) [future, below left=1 and 8 of manage_clerk.west, anchor=north west] {perform president role};
@@ -84,8 +84,7 @@
 			\node (in_manage_clerk) [tasks, right= 6 of instruct.west] {manage node};
 			\node (in_new_clerk) [future, below=of in_manage_clerk.west, anchor=north west] {add new node};
 			\node (in_dead_clerk) [future, below=of in_new_clerk.west, anchor=north west] {remove dead node};
-		\node (locks) [future, below=of instruct.west, anchor=north west] {manage read locks};
-		\node (pres_orders) [future, below=of locks.west, anchor=north west] {handle presidents orders};
+		\node (pres_orders) [future, below=of instruct.west, anchor=north west] {handle presidents orders};
 		
 	\draw[bracket2] (redirect.north west) to [out=270, in=90] node [] {} (pres_orders.south west);
 	\draw[text_small] ($(president.south) - (1,0)$) to [out=270, in=180] node [] {} ($(redirect.north west)!.5!(pres_orders.south west)-(0.5,0)$);
