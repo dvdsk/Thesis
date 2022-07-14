@@ -114,7 +114,7 @@ To demonstrate that \name{} scales and can be optimized in future work\footnote{
 \subsubsection*{Perishable log entries}
 When a \raft{} message arrives it can cause entries in the log to become committed. At that point they are made available to the system. These could be old entries, long ago committed by other nodes. The message contains the index of the last committed entry or entries which we use to recognize if an entry is old. Newly committed messages can still become outdated if they are applied too slowly. This can happen if the server slows down due to bugs in \name{} or hardware issues. The system detects this by keeping the timestamp the message that made an entry committed together with the entry. This combination, a \textit{perishable entry} is made available to \name{}.
 
-\subsubsection*{Dictatorial Raft}
+\subsubsection*{Dictatorial Raft} \label{sec:dictraft}
 Here a third party instructs a node to become the leader. Followers are not informed directly but rather accept the new leader as it has a higher term. When receiving a message the normal \raft{} rules apply therefore messages from the old leader\footnote{The third party replacing the leader usually indicates there is a problem with the current leader, making it doubly important that they are ignored} will be rejected as there term is too low.
 
 Nodes must be able to move between groups with assigned leaders. This present two problems, first:
@@ -140,6 +140,7 @@ Managing these read locks is the responsibility of the \textit{lock manager} whi
 
 Leases are not stored to hard drive they are volatile. When a clerk goes down all leases issued by it are lost and clients will need to reacquire them. A minister going down means loss of all the write-leases however the clerks can keep issuing leases as usual. The new minister will unlock all files when it comes online. These rules allow \name{} to use simple TCP messaging instead of relying on \raft{}. Assuming files access more common than file creation and removal optimizing lease management will speed up \name{}.
 
+\subsubsection*{Locking Rules}
 The \textit{lock manager} times its lock requests to clients to ensure consistency and correctness. It is easiest to explain this at the hand of an example. Here a clerk gets partitioned off from the rest of the cluster at the worst possible time:
 %
 \begin{itemize}
@@ -154,12 +155,12 @@ The \textit{lock manager} times its lock requests to clients to ensure consisten
 	\item The minister issues the write-lease for F
 \end{itemize}
 %
-We see that $2H$ after the lock manager started trying to lock the file it can assume the file locked. A clerk going offline will increase file access for $2H$ but in all other cases file access time should be dominated by the latency of a TCP roundtrip.
+We see that $2H$ after the lock manager started trying to lock the file it can assume the file locked. A clerk going offline will increase file access for $2H$. If the manager keeps trying to reach it we keep this $2H$ overhead. Instead, the manager will remove the clerk before handling another request. Without any failures file write access time should be dominated by the latency of the lock TCP roundtrips.
 
-The lock manager has been written to handle many simultaneous requests is completely lockless
-The lock manager keeps an open TCP connection to the clerks. When a new clerk gets assigned by the president the lock manager recieves a message.
+\subsubsection*{Performance}
+The lock manager has been written to handle many simultaneous requests. It is therefore lockless and holds open TCP connection to its clerks. The minister communicates with the manager through message passing. When clerk gets assigned by the president the lock manager receives a message. It then opens up a connection in a new concurrent task dedicated to this clerk. 
 
-% note issues:
-% imposter can send lock request (node that fell asleep)
-% initial locks need not be recieved before client can start awnsering reads
+The decisions the lock manager makes directly impact the rest of the cluster. Each lock placed on a clerk potentially blocks read-leases which potentially slows down read performance. Therefore, it is important to unlock as soon as possible. The lock manager thus prioritizes unlock above lock requests.
 
+\subsubsection*{Known problems}
+The current implementation still has three known problems and solutions. First, an imposter or failing node can still send unlock requests. Including the current minister term in the request and checking if its valid would solve this\footnote{Similar to dictatorial Raft, see~\cref{sec:dictraft}}. Secondly a newly assigned clerk can serve clients before it has processed all the existing locks. Clerks already get their ministerial \raft{} log up-to-date before they start serving requests. The same should be done for lock requests. Finally, a network fault could make it impossible for \textit{only} a minister, and thus lock manager, to reach one of its clerks. Traffic from the president and clients would still reach the clerk. In this case the lock manager will assume a file locked after $2H$ while the clerk does not miss a heartbeat and stays up. This clerk could now enable reading to a file that is being written to. We can prevent this by making the minister inform the president off the clerk's failure. The president would then exclude the clerk from heartbeats triggering its shutdown on time.
