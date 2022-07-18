@@ -1,3 +1,5 @@
+use tracing::warn;
+
 use crate::Id;
 use std::cmp::Ordering;
 use std::collections::{BinaryHeap, HashMap, HashSet};
@@ -27,6 +29,7 @@ impl fmt::Debug for Issues {
 
 impl Issues {
     pub(super) fn add(&mut self, issue: Issue) {
+        warn!("Adding issue: {issue:?}");
         self.by_priority.push(issue.clone());
         self.active.insert(issue);
     }

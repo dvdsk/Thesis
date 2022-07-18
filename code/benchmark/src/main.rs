@@ -1,4 +1,4 @@
-use std::net::{SocketAddr, ToSocketAddrs};
+use std::{net::{SocketAddr, ToSocketAddrs}, time::Duration};
 
 use bench::Bench;
 use benchmark::{bench, deploy, sync};
@@ -10,6 +10,7 @@ use futures::{
     Future,
 };
 use rand::prelude::*;
+use tokio::time::sleep;
 use tracing::{debug, info};
 
 #[derive(Parser, Debug, Clone)]
@@ -107,6 +108,9 @@ async fn main() -> Result<()> {
         }
         _ = bench.prep(&mut client) => (),
     }
+    // workaround to ensure create is done by all clerks before 
+    // we start the benchmark
+    sleep(Duration::from_millis(200)).await;
 
     let server = sync::server(bench.client_nodes());
     let mut clients = deploy::start_clients(args.command, &nodes[bench.fs_nodes()..])?;

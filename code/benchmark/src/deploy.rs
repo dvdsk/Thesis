@@ -129,11 +129,11 @@ fn args(id: usize, bench: &Bench, pres_port: u16, min_port: u16, client_port: u1
     args
 }
 
-async fn ssh_node(bin: String, node: String, args: String) -> Result<String> {
+async fn ssh_node(bin: String, node: String, args: String, log_path: String) -> Result<String> {
     let run_on_remote = format!(
         "rm -rf /tmp/govfs
 mkdir -p /tmp/govfs
-{bin} {args}
+{bin} {args} > {log_path}
 "
     );
     tokio::process::Command::new("ssh")
@@ -169,7 +169,8 @@ pub fn start_cluster(
         .enumerate()
         .map(|(id, node)| {
             let args = args(id, bench, pres_port, min_port, client_port);
-            ssh_node(path.to_string(), node.to_string(), args)
+            let log_path = format!("node_{id}.txt"); // dumps logs in working dir
+            ssh_node(path.to_string(), node.to_string(), args, log_path)
         })
         .collect();
     info!("started cluster nodes");
@@ -177,10 +178,12 @@ pub fn start_cluster(
 }
 
 async fn ssh_client(bin: OsString, node: String, args: OsString) -> Result<String> {
+    let log_path = format!("client_{node}.txt"); // dumps logs in working dir
     let mut run_on_remote = bin;
     run_on_remote.push(" ");
     run_on_remote.push(args);
-
+    run_on_remote.push(" > ");
+    run_on_remote.push(log_path);
     tokio::process::Command::new("ssh")
         .arg("-t")
         .arg(node)
