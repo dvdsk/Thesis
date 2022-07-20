@@ -1,10 +1,12 @@
+use std::fs;
+use std::io::Write;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use clap::Parser;
 use color_eyre::SectionExt;
 use color_eyre::{eyre::WrapErr, Help, Result};
-use itertools::Itertools;
+use itertools::{Itertools, intersperse};
 use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
@@ -37,14 +39,27 @@ pub async fn bench_task(notify: Arc<Notify>, bench: Bench, id: usize) -> Vec<(In
 }
 
 #[derive(Serialize, Deserialize)]
-struct Row {
+struct Record {
     client: usize,
     // seconds since synchronized benchmark begin
     time_start: Vec<f32>,
     time_end: Vec<f32>,
 }
 
-impl Row {
+impl Record {
+    fn encode(self) -> String {
+        let Self { client, time_start, time_end } = self;
+        let mut res = String::new();
+        res += &format!("client: {client}\n");
+        let vals = time_start.into_iter().map(|v| v.to_string());
+        let vals: String = intersperse(vals, " ".to_string()).collect();
+        res += &format!("{vals}\n");
+        let vals = time_end.into_iter().map(|v| v.to_string());
+        let vals: String = intersperse(vals, " ".to_string()).collect();
+        res += &format!("{vals}\n\n");
+        res
+    }
+
     fn from(client: usize, data: Vec<(Instant, Instant)>, start_time: Instant) -> Self {
         let time_start = data
             .iter()
@@ -100,14 +115,11 @@ async fn main() -> Result<()> {
     let path = args.command.results_file(&args.id);
     std::fs::create_dir_all(&path.parent().unwrap())
         .wrap_err("Could not create directory for results")?;
-    let mut wtr = csv::WriterBuilder::new()
-        .has_headers(false)
-        .from_path(&path)
-        .wrap_err("Could not create/overwrite results file")
-        .with_section(|| path.to_string_lossy().into_owned().header("Path:"))?;
+    let mut file = fs::File::create(&path)?;
 
     for (client, data) in results.into_iter().enumerate() {
-        wtr.serialize(Row::from(client, data, start_time))?;
+        let record = Record::from(client, data, start_time);
+        file.write_all(record.encode().as_bytes())?;
     }
 
     Ok(())
