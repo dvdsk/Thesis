@@ -4,7 +4,7 @@ use std::{
     ffi::OsString,
     ops::Range,
     path::PathBuf,
-    time::{Duration, Instant},
+    time::Instant,
 };
 use tracing::instrument;
 
@@ -71,12 +71,13 @@ impl Bench {
         self,
         client: &mut Client<T>,
         buf: &mut [u8],
-    ) -> Vec<Duration> {
+    ) -> Vec<(Instant, Instant)> {
         let mut res = Vec::new();
         for op in self.operations.into_iter() {
             let start = Instant::now();
             op.perform(client, buf).await;
-            res.push(start.elapsed());
+            let stop = Instant::now();
+            res.push((start, stop));
         }
         res
     }
@@ -177,17 +178,20 @@ impl Command {
         }
         .into()
     }
-}
 
-// impl Command {
-//     pub fn serialize(&self) -> [u8;100] {
-//         let buf = [0u8;100];
-//         let mut buf = io::Cursor::new(buf);
-//         bincode::serialize_into(&mut buf, self);
-//         buf.into_inner()
-//     }
-//
-//     pub fn deserialize(buf: [u8; 100]) -> color_eyre::Result<Self> {
-//         Ok(bincode::deserialize(&buf)?)
-//     }
-// }
+    pub fn results_file(&self) -> PathBuf {
+        let path = match self {
+            Command::LsStride { n_parts } => format!("LsStride/{n_parts}"),
+            Command::LsBatch { n_parts } => format!("LsBatch/{n_parts}"),
+            Command::RangeByRow {
+                rows,
+                clients_per_node,
+            } => format!("RangeByRow/{rows}_{clients_per_node}"),
+            Command::RangeWholeFile {
+                rows,
+                clients_per_node,
+            } => format!("RangeWholeFile/{rows}_{clients_per_node}"),
+        };
+        PathBuf::from(format!("data/{path}.csv"))
+    }
+}
