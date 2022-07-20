@@ -179,7 +179,7 @@ impl Command {
         .into()
     }
 
-    pub fn results_file(&self) -> PathBuf {
+    pub fn results_file(&self, id: &str) -> PathBuf {
         let path = match self {
             Command::LsStride { n_parts } => format!("LsStride/{n_parts}"),
             Command::LsBatch { n_parts } => format!("LsBatch/{n_parts}"),
@@ -192,6 +192,6 @@ impl Command {
                 clients_per_node,
             } => format!("RangeWholeFile/{rows}_{clients_per_node}"),
         };
-        PathBuf::from(format!("data/{path}.csv"))
+        PathBuf::from(format!("data/{path}/{id}.csv"))
     }
 }

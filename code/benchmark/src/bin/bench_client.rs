@@ -2,6 +2,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use clap::Parser;
+use color_eyre::SectionExt;
 use color_eyre::{eyre::WrapErr, Help, Result};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
@@ -17,6 +18,8 @@ use benchmark::sync;
 #[derive(Parser, Debug, Clone)]
 #[clap(author, version, about, long_about = None)]
 pub struct Args {
+    /// Id to recognize different client machines in results
+    id: String,
     sync_server: String,
     #[clap(subcommand)]
     command: bench::Command,
@@ -94,12 +97,14 @@ async fn main() -> Result<()> {
         results.push(res);
     }
 
-    let path = args.command.results_file();
-    std::fs::create_dir_all(&path).wrap_err("Could not create directory for results")?;
+    let path = args.command.results_file(&args.id);
+    std::fs::create_dir_all(&path.parent().unwrap())
+        .wrap_err("Could not create directory for results")?;
     let mut wtr = csv::WriterBuilder::new()
         .has_headers(false)
-        .from_path(path)
-        .wrap_err("Could not create/overwrite results file")?;
+        .from_path(&path)
+        .wrap_err("Could not create/overwrite results file")
+        .with_section(|| path.to_string_lossy().into_owned().header("Path:"))?;
 
     for (client, data) in results.into_iter().enumerate() {
         wtr.serialize(Row::from(client, data, start_time))?;

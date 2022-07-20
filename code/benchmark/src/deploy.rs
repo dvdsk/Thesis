@@ -1,6 +1,5 @@
-use color_eyre::{eyre::eyre, Help, Report, Result, SectionExt};
+use color_eyre::{eyre::eyre, Help, Report, Result, SectionExt, eyre::WrapErr};
 use futures::stream::FuturesUnordered;
-use node::WrapErr;
 use std::{
     env,
     ffi::OsString,
@@ -32,9 +31,14 @@ fn cancel_existing() -> Result<()> {
         .wrap_err("Could not find command")?
         .wrap("preserve failed to list reservations")?;
 
+    let me = users::get_current_username()
+        .unwrap()
+        .into_string()
+        .expect("username contains strange characters");
     let tickets = output
         .lines()
         .skip(3)
+        .filter(|l| l.contains(&me))
         .map(|l| l.split_once('\t').unwrap().0)
         .map(|d| d.parse::<usize>().unwrap());
 
@@ -180,8 +184,9 @@ pub fn start_cluster(
 async fn ssh_client(bin: OsString, node: String, args: OsString) -> Result<String> {
     let log_path = format!("client_{node}.txt"); // dumps logs in working dir
     let mut run_on_remote = bin;
+    run_on_remote.push(format!(" {node}")); // id
     run_on_remote.push(" ");
-    run_on_remote.push(args);
+    run_on_remote.push(args); // hostname and command
     run_on_remote.push(" > ");
     run_on_remote.push(log_path);
     tokio::process::Command::new("ssh")

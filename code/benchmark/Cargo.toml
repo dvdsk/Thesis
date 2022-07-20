@@ -30,6 +30,7 @@ thiserror = "1"
 result-tools = { git = "https://github.com/dvdsk/result-tools.git" }
 
 indicatif = "0.16.2"
+users = "0.11"
 gethostname = "0.2.3"
 rand = "0.8.5"
 
