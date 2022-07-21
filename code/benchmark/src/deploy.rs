@@ -1,4 +1,4 @@
-use color_eyre::{eyre::eyre, Help, Report, Result, SectionExt, eyre::WrapErr};
+use color_eyre::{eyre::eyre, eyre::WrapErr, Help, Report, Result, SectionExt};
 use futures::stream::FuturesUnordered;
 use std::{
     env,
@@ -181,10 +181,15 @@ pub fn start_cluster(
     Ok(nodes)
 }
 
-async fn ssh_client(bin: OsString, node: String, args: OsString) -> Result<String> {
+async fn ssh_client(
+    bin: OsString,
+    node: String,
+    args: OsString,
+    run_numb: usize,
+) -> Result<String> {
     let log_path = format!("client_{node}.txt"); // dumps logs in working dir
     let mut run_on_remote = bin;
-    run_on_remote.push(format!(" {node}")); // id
+    run_on_remote.push(format!(" {node}_{run_numb}")); // id
     run_on_remote.push(" ");
     run_on_remote.push(args); // hostname and command
     run_on_remote.push(" > ");
@@ -202,8 +207,9 @@ async fn ssh_client(bin: OsString, node: String, args: OsString) -> Result<Strin
 /// expects bench_client binary in $PWD/bin/
 #[instrument]
 pub fn start_clients(
-    command: bench::Command,
+    command: &bench::Command,
     nodes: &[Node],
+    run_numb: usize,
 ) -> Result<FuturesUnordered<impl Future<Output = Result<String>>>> {
     let mut path = env::current_dir()?;
     path.push("bin/bench_client");
@@ -218,7 +224,7 @@ pub fn start_clients(
     args.push(command.args());
     let nodes: FuturesUnordered<_> = nodes
         .iter()
-        .map(|node| ssh_client(path.into(), node.to_string(), args.clone()))
+        .map(|node| ssh_client(path.into(), node.to_string(), args.clone(), run_numb))
         .collect();
     Ok(nodes)
 }

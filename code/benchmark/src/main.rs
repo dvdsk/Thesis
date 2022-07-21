@@ -1,4 +1,7 @@
-use std::{net::{SocketAddr, ToSocketAddrs}, time::Duration};
+use std::{
+    net::{SocketAddr, ToSocketAddrs},
+    time::Duration,
+};
 
 use bench::Bench;
 use benchmark::{bench, deploy, sync};
@@ -13,11 +16,17 @@ use rand::prelude::*;
 use tokio::time::sleep;
 use tracing::{debug, info};
 
+#[derive(clap::Subcommand, Clone, Debug)]
+pub enum Command {
+    Ls,
+    Range,
+}
+
 #[derive(Parser, Debug, Clone)]
 #[clap(author, version, about, long_about = None)]
 pub struct Args {
     #[clap(subcommand)]
-    command: bench::Command,
+    command: Command,
 }
 
 async fn watch_nodes(
@@ -79,15 +88,16 @@ impl RandomNode for NodesList {
     }
 }
 
-#[tokio::main]
-async fn main() -> Result<()> {
-    setup_tracing();
-    color_eyre::install().unwrap();
-    let (pres_port, min_port, client_port) = (34784, 3987, 3978);
-
-    let args = Args::parse();
-    let bench = Bench::from(&args.command);
+async fn run_benchmark(
+    run_numb: usize,
+    bench: &Bench,
+    pres_port: u16,
+    min_port: u16,
+    client_port: u16,
+    command: &bench::Command,
+) -> Result<Vec<String>> {
     let nodes = deploy::reserve(bench.needed_nodes())?;
+
     let mut cluster = deploy::start_cluster(
         &bench,
         &nodes[0..bench.fs_nodes()],
@@ -108,12 +118,12 @@ async fn main() -> Result<()> {
         }
         _ = bench.prep(&mut client) => (),
     }
-    // workaround to ensure create is done by all clerks before 
+    // workaround to ensure create is done by all clerks before
     // we start the benchmark
     sleep(Duration::from_millis(200)).await;
 
     let server = sync::server(bench.client_nodes());
-    let mut clients = deploy::start_clients(args.command, &nodes[bench.fs_nodes()..])?;
+    let mut clients = deploy::start_clients(command, &nodes[bench.fs_nodes()..], run_numb)?;
 
     tokio::select! {
         res = server.block_till_synced() => {
@@ -126,8 +136,34 @@ async fn main() -> Result<()> {
     }
 
     let output = watch_nodes(&mut cluster, &mut clients).await?;
-    info!("benchmark completed!");
-    debug!("node output: {output:?}");
+    Ok(output)
+}
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    setup_tracing();
+    color_eyre::install().unwrap();
+    let (pres_port, min_port, client_port) = (34784, 3987, 3978);
+    let args = Args::parse();
+
+    match args.command {
+        Command::Ls => {
+            for run_numb in 0..5 {
+                for n_parts in 1..=5 {
+                    let command = bench::Command::LsBatch { n_parts };
+                    let bench = Bench::from(&command);
+
+                    let output =
+                        run_benchmark(run_numb, &bench, pres_port, min_port, client_port, &command)
+                            .await?;
+                    debug!("n_parts: {n_parts} output: {output:?}");
+                }
+                info!("benchmark run {run_numb} completed!");
+            }
+        }
+        _ => todo!(),
+    }
+
     Ok(())
 }
 

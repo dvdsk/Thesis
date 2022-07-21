@@ -21,7 +21,7 @@ use benchmark::sync;
 #[clap(author, version, about, long_about = None)]
 pub struct Args {
     /// Id to recognize different client machines in results
-    id: String,
+    output_name: String,
     sync_server: String,
     #[clap(subcommand)]
     command: bench::Command,
@@ -112,7 +112,7 @@ async fn main() -> Result<()> {
         results.push(res);
     }
 
-    let path = args.command.results_file(&args.id);
+    let path = args.command.results_file(&args.output_name);
     std::fs::create_dir_all(&path.parent().unwrap())
         .wrap_err("Could not create directory for results")?;
     let mut file = fs::File::create(&path)?;
