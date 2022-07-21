@@ -14,7 +14,7 @@ use futures::{
 };
 use rand::prelude::*;
 use tokio::time::sleep;
-use tracing::{debug, info};
+use tracing::{info, warn};
 
 #[derive(clap::Subcommand, Clone, Debug)]
 pub enum Command {
@@ -105,6 +105,9 @@ async fn run_benchmark(
         min_port,
         client_port,
     )?;
+    // workaround for cluster
+    // we start the benchmark
+    sleep(Duration::from_millis(200)).await;
 
     let find_nodes = NodesList::from_hostnames(&nodes, client_port)?;
     let mut client = client::Client::new(find_nodes);
@@ -141,6 +144,52 @@ async fn run_benchmark(
     Ok(output)
 }
 
+async fn bench_ls(pres_port: u16, min_port: u16, client_port: u16) {
+    async fn bench(
+        pres_port: u16,
+        min_port: u16,
+        client_port: u16,
+        i: &mut u16,
+        run_numb: usize,
+        command: bench::Command,
+    ) {
+        let bench = Bench::from(&command);
+        let output = loop {
+            *i += 1; // socket might close inproperly, increment ports
+                     // so we need not wait for the host to make the port availible again
+            match run_benchmark(
+                run_numb,
+                &bench,
+                pres_port + *i,
+                min_port + *i,
+                client_port + *i,
+                &command,
+            )
+            .await
+            {
+                Ok(output) => {
+                    break output;
+                }
+                Err(err) => {
+                    warn!("run failed retrying, err: {err:?}");
+                }
+            }
+        };
+        info!("benchmark output: {output:?}");
+    }
+
+    let mut i = 0;
+    for run_numb in 0..5 {
+        for n_parts in 1..=5 {
+            let command = bench::Command::LsBatch { n_parts };
+            bench(pres_port, min_port, client_port, &mut i, run_numb, command).await;
+            let command = bench::Command::LsStride { n_parts };
+            bench(pres_port, min_port, client_port, &mut i, run_numb, command).await;
+        }
+        info!("benchmark run {run_numb} completed!");
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     setup_tracing();
@@ -150,31 +199,8 @@ async fn main() -> Result<()> {
     let (pres_port, min_port, client_port) = (65000, 65100, 65400);
     let args = Args::parse();
 
-    let mut i = 0;
     match args.command {
-        Command::Ls => {
-            for run_numb in 0..5 {
-                for n_parts in 1..=5 {
-                    let command = bench::Command::LsBatch { n_parts };
-                    let bench = Bench::from(&command);
-
-                    let output = run_benchmark(
-                        run_numb,
-                        &bench,
-                        pres_port + i,
-                        min_port + i,
-                        client_port + i,
-                        &command,
-                    )
-                    .await?;
-                    debug!("n_parts: {n_parts} output: {output:?}");
-                    i += 1; // socket might close inproperly, increment ports 
-                            // so we need not wait for the host to make the port availible again
-                    sleep(Duration::from_secs(1)).await
-                }
-                info!("benchmark run {run_numb} completed!");
-            }
-        }
+        Command::Ls => bench_ls(pres_port, min_port, client_port).await,
         _ => todo!(),
     }
 
