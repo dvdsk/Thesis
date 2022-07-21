@@ -84,6 +84,7 @@ impl Record {
 #[tokio::main]
 async fn main() -> Result<()> {
     color_eyre::install().unwrap();
+    setup_tracing();
     let args = Args::parse();
     let bench = Bench::from(&args.command);
 
@@ -122,4 +123,27 @@ async fn main() -> Result<()> {
     }
 
     Ok(())
+}
+
+fn setup_tracing() {
+    use tracing_error::ErrorLayer;
+    use tracing_subscriber::layer::SubscriberExt;
+    use tracing_subscriber::util::SubscriberInitExt;
+    use tracing_subscriber::{filter, fmt};
+
+    let filter = filter::EnvFilter::builder()
+        .parse("info,instance_chart=warn")
+        .unwrap();
+
+    let uptime = fmt::time::uptime();
+    let fmt_layer = fmt::layer()
+        .pretty()
+        .with_line_number(true)
+        .with_timer(uptime);
+
+    let _ignore_err = tracing_subscriber::registry()
+        .with(ErrorLayer::default())
+        .with(filter)
+        .with(fmt_layer)
+        .try_init();
 }

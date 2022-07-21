@@ -168,7 +168,8 @@ impl<T: RandomNode> super::Client<T> {
                     }
                 }
                 Ok(Some(Response::CouldNotRedirect)) => {
-                    self.map.invalidate(path, self.conn.as_ref().unwrap().peer);
+                    let wrong_conn = self.conn.take();
+                    self.map.invalidate(path, wrong_conn.unwrap().peer);
                     sleep(redirect.next().unwrap()).await;
                     continue;
                 }
