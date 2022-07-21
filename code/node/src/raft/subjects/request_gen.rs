@@ -3,6 +3,7 @@ use core::fmt;
 use tracing::instrument;
 
 use super::super::state::append::Request;
+use crate::raft::state::append::FIRST_LOG_TERM;
 use crate::{raft, Id, Idx, Term};
 use raft::state::{append::LogEntry, LogMeta};
 use raft::Order;
@@ -73,7 +74,14 @@ where
 
     #[instrument(skip_all, level = "trace")]
     pub fn decrement_idx(&mut self) {
+        assert!(self.next_idx != 0, "can not decrement idx if its zero");
         self.next_idx -= 1;
+
+        if self.next_idx == 0 {
+            self.prev_log_term = FIRST_LOG_TERM;
+            return;
+        }
+
         let prev_entry = self.state.entry(self.next_idx - 1).unwrap();
         self.prev_log_term = prev_entry.term;
     }

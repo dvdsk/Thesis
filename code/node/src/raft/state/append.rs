@@ -94,10 +94,11 @@ pub struct LogEntry<O> {
     pub order: O,
 }
 
+pub const FIRST_LOG_TERM: Term = 0;
 impl<O: Order> Default for LogEntry<O> {
     fn default() -> Self {
         Self {
-            term: 0,
+            term: FIRST_LOG_TERM,
             order: O::none(),
         }
     }
