@@ -69,17 +69,19 @@ async fn handle_conn(stream: TcpStream, redirect: ReDirectory) {
             | Create(path)
             | IsCommitted { path, .. }
             | Write { path, .. }
-            | Read { path, .. } => {
-                let (staff, subtree) = redirect.to_staff(&path).await;
-                Response::Redirect {
+            | Read { path, .. } => match redirect.to_staff(&path).await {
+                Some((staff, subtree)) => Response::Redirect {
                     staff: staff.for_client(),
                     subtree,
-                }
-            }
+                },
+                None => Response::CouldNotRedirect,
+            },
             UnlockAll { .. } => {
-                debug!("idle node recieved UnlockAll, this indictates its a subject of 
+                debug!(
+                    "idle node recieved UnlockAll, this indictates its a subject of 
                        a minister but has not yet recieved the presidents order to become clerk.
-                       Not an issue as idle nodes have nothign to unlock");
+                       Not an issue as idle nodes have nothign to unlock"
+                );
                 continue;
             }
             RefreshLease | Lock { .. } | Unlock { .. } | HighestCommited => {

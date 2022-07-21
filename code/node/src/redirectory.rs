@@ -145,19 +145,20 @@ impl ReDirectory {
         }
     }
 
+    /// It is rare but possible for this to return None, this can happen 
+    /// when the redirectory is not yet up to date (has not yet processed
+    /// all AssignMinistry calls) and we already need to direct a request
     #[instrument(level = "debug", skip(self), ret)]
-    pub async fn to_staff(&self, path: &Path) -> (Staff, PathBuf) {
+    pub async fn to_staff(&self, path: &Path) -> Option<(Staff, PathBuf)> {
         let tree = self.trees.read().await;
         for (subtree, staff) in tree.iter().rev() {
             if path.starts_with(subtree) {
-                return (staff.clone(), subtree.clone());
+                return Some((staff.clone(), subtree.clone()));
             }
         }
-        if !path.starts_with("/") {
-            panic!("path without root: {path:?}");
-        } else {
-            panic!("no root directory: {:?}", *tree);
-        }
+
+        assert!(path.starts_with("/"), "request path does not start with root, requested: {path:?}");
+        None
     }
 
     pub(crate) fn set_tree(&mut self, tree: Option<PathBuf>) {

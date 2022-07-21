@@ -78,6 +78,11 @@ async fn update_dir(orders: &mut ObserverLog<minister::Order>, dir: &mut Directo
         };
         dir.update(order.order.clone());
 
+        /* FIX: we leave this before we have processed all 
+         * orders if the orders themselfs are fresh on the minister
+         * for example when starting with multiple partitions 
+         * <dvdsk noreply@davidsk.dev> */
+
         // reached fresh orders => now up to date
         if !order.perished() {
             return Ok(());

@@ -167,6 +167,11 @@ impl<T: RandomNode> super::Client<T> {
                         Err(_) => continue, // send the request again
                     }
                 }
+                Ok(Some(Response::CouldNotRedirect)) => {
+                    self.map.invalidate(path, self.conn.as_ref().unwrap().peer);
+                    sleep(redirect.next().unwrap()).await;
+                    continue;
+                }
                 Ok(Some(Response::Redirect { staff, subtree })) => {
                     info!("updating staff: {staff:?}");
                     self.map.insert(Ministry { staff, subtree });

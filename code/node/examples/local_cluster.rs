@@ -16,7 +16,7 @@ async fn main() {
 
     let config = Config {
         id: 0,
-        endpoint: IpAddr::V4(Ipv4Addr::LOCALHOST),
+        endpoint: Some(IpAddr::V4(Ipv4Addr::LOCALHOST)),
         run: util::run_number(&runtime_dir()),
         local_instances: true,
         pres_port: None,

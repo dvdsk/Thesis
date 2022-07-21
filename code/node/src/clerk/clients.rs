@@ -88,7 +88,8 @@ pub async fn handle_requests(
             dir.clone(),
             readers.clone(),
             blocks.clone(),
-        ).in_current_span();
+        )
+        .in_current_span();
 
         request_handlers
             .build_task()
@@ -106,29 +107,38 @@ async fn check_subtree(
 
     match req {
         List(path) | Read { path, .. } | IsCommitted { path, .. } => {
-            let (staff, subtree) = redirect.to_staff(path).await;
-            if subtree != *our_subtree {
+            if let Some((staff, subtree)) = redirect.to_staff(path).await {
+                if subtree != *our_subtree {
+                    return Some(Response::Redirect {
+                        staff: staff.for_client(),
+                        subtree,
+                    });
+                }
+            } else {
+                return Some(Response::CouldNotRedirect);
+            }
+        }
+        Lock { path, .. } | Unlock { path, .. } => {
+            if let Some((_, subtree)) = redirect.to_staff(path).await {
+                if subtree != *our_subtree {
+                    error!("got lock request for invalid path");
+                    return Some(Response::Error(format!(
+                        "invalid path!, clerk subtree: {our_subtree:?}"
+                    )));
+                }
+            } else {
+                return Some(Response::CouldNotRedirect);
+            }
+        }
+        Create(path) | Write { path, .. } => {
+            if let Some((staff, subtree)) = redirect.to_staff(path).await {
                 return Some(Response::Redirect {
                     staff: staff.for_client(),
                     subtree,
                 });
+            } else {
+                return Some(Response::CouldNotRedirect);
             }
-        }
-        Lock { path, .. } | Unlock { path, .. } => {
-            let (_, subtree) = redirect.to_staff(path).await;
-            if subtree != *our_subtree {
-                error!("got lock request for invalid path");
-                return Some(Response::Error(format!(
-                    "invalid path!, clerk subtree: {our_subtree:?}"
-                )));
-            }
-        }
-        Create(path) | Write { path, .. } => {
-            let (staff, subtree) = redirect.to_staff(path).await;
-            return Some(Response::Redirect {
-                staff: staff.for_client(),
-                subtree,
-            });
         }
         UnlockAll | HighestCommited | RefreshLease => (),
     }

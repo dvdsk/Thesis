@@ -104,6 +104,8 @@ pub enum Response {
         subtree: PathBuf,
         staff: Staff,
     },
+    /// wrong subtree but could not redirect, please go away
+    CouldNotRedirect,
     /// change not yet done, starting comit with index
     Ticket {
         idx: Idx,

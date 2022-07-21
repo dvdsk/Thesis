@@ -59,22 +59,21 @@ async fn check_subtree(
     use Request::*;
 
     match req {
-        List(path) | Read { path, .. } => {
-            let (staff, subtree) = redirect.to_staff(path).await;
-            Some(Response::Redirect {
+        List(path) | Read { path, .. } => match redirect.to_staff(path).await {
+            Some((staff, subtree)) => Some(Response::Redirect {
                 staff: staff.for_client(),
                 subtree,
-            })
-        }
+            }),
+            None => Some(Response::CouldNotRedirect),
+        },
         Create(path) | Write { path, .. } | IsCommitted { path, .. } => {
-            let (staff, subtree) = redirect.to_staff(path).await;
-            if subtree == *our_subtree {
-                None
-            } else {
-                Some(Response::Redirect {
+            match redirect.to_staff(path).await {
+                Some((_, subtree)) if subtree == *our_subtree => None,
+                Some((staff, subtree)) => Some(Response::Redirect {
                     staff: staff.for_client(),
                     subtree,
-                })
+                }),
+                _ => Some(Response::CouldNotRedirect),
             }
         }
         _ => None,
@@ -176,7 +175,10 @@ async fn write_lease(
 
     // revoke all reads for this file on the clerks, if this times
     // out the clerk or the client will already have dropped the lease
-    match manager.lock(path.clone(), range.clone(), dir_lease.key()).await {
+    match manager
+        .lock(path.clone(), range.clone(), dir_lease.key())
+        .await
+    {
         Ok(_) | Err(ClerkIsDown | ConnectionLost | ClerkTimedOut) => (),
         Err(NoCapacity) => return Ok(Response::NoCapacity),
         Err(NoSubscribedNodes) => {

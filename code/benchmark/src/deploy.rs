@@ -175,7 +175,7 @@ pub fn start_cluster(
         .enumerate()
         .map(|(id, node)| {
             let args = args(id, bench, pres_port, min_port, client_port);
-            let log_path = format!("node_{id}.txt"); // dumps logs in working dir
+            let log_path = format!("node_{node}.txt"); // dumps logs in working dir
             ssh_node(path.to_string(), node.to_string(), args, log_path)
         })
         .collect();

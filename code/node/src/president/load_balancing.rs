@@ -274,7 +274,7 @@ impl Init {
             }
         }
 
-        const STARTUP_DUR: Duration = Duration::from_millis(200);
+        const STARTUP_DUR: Duration = Duration::from_millis(2000);
         let res = timeout(STARTUP_DUR, process_current_state(self)).await;
         if res.is_err() {
             warn!(
