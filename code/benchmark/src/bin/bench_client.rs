@@ -4,7 +4,6 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use clap::Parser;
-use color_eyre::SectionExt;
 use color_eyre::{eyre::WrapErr, Help, Result};
 use itertools::{Itertools, intersperse};
 use serde::{Deserialize, Serialize};

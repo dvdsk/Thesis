@@ -141,6 +141,8 @@ mkdir -p /tmp/govfs
 "
     );
     tokio::process::Command::new("ssh")
+        .kill_on_drop(true)
+        .args(["-o", "ConnectTimeout=1", "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=no"])
         .arg("-t")
         .arg(node)
         .arg(run_on_remote)
@@ -195,6 +197,8 @@ async fn ssh_client(
     run_on_remote.push(" > ");
     run_on_remote.push(log_path);
     tokio::process::Command::new("ssh")
+        .kill_on_drop(true)
+        .args(["-o", "ConnectTimeout=1", "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=no"])
         .arg("-t")
         .arg(node)
         .arg(run_on_remote)

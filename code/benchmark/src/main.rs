@@ -136,6 +136,8 @@ async fn run_benchmark(
     }
 
     let output = watch_nodes(&mut cluster, &mut clients).await?;
+    cluster.clear();
+    clients.clear();
     Ok(output)
 }
 
@@ -143,9 +145,12 @@ async fn run_benchmark(
 async fn main() -> Result<()> {
     setup_tracing();
     color_eyre::install().unwrap();
-    let (pres_port, min_port, client_port) = (34784, 3987, 3978);
+    // These port numbers are "randomly" picked to be usually free
+    // on cluster nodes. Feel free to move them around
+    let (pres_port, min_port, client_port) = (65000, 65100, 65400);
     let args = Args::parse();
 
+    let mut i = 0;
     match args.command {
         Command::Ls => {
             for run_numb in 0..5 {
@@ -153,10 +158,19 @@ async fn main() -> Result<()> {
                     let command = bench::Command::LsBatch { n_parts };
                     let bench = Bench::from(&command);
 
-                    let output =
-                        run_benchmark(run_numb, &bench, pres_port, min_port, client_port, &command)
-                            .await?;
+                    let output = run_benchmark(
+                        run_numb,
+                        &bench,
+                        pres_port + i,
+                        min_port + i,
+                        client_port + i,
+                        &command,
+                    )
+                    .await?;
                     debug!("n_parts: {n_parts} output: {output:?}");
+                    i += 1; // socket might close inproperly, increment ports 
+                            // so we need not wait for the host to make the port availible again
+                    sleep(Duration::from_secs(1)).await
                 }
                 info!("benchmark run {run_numb} completed!");
             }
