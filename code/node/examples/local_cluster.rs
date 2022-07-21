@@ -24,6 +24,7 @@ async fn main() {
         client_port: None,
         cluster_size: 4,
         database: PathBuf::from("changed in loop"),
+        partitions: Vec::new(),
     };
 
     util::setup_tracing("test".into(), config.endpoint, config.run);
