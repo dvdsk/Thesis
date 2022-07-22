@@ -77,7 +77,7 @@ where
         assert!(self.next_idx != 0, "can not decrement idx if its zero");
         self.next_idx -= 1;
 
-        if self.next_idx == 0 {
+        if self.next_idx == 1 {
             self.prev_log_term = FIRST_LOG_TERM;
             return;
         }

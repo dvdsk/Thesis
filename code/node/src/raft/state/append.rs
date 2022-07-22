@@ -38,6 +38,7 @@ impl<O: Order> State<O> {
 
             // From here on we need to be locked, are locked by the election_office
             if !self.log_contains(req.prev_log_idx, req.prev_log_term) {
+                assert_ne!(req.prev_log_idx, 0, "appending to log at index 1 should always be defined");
                 return Ok(Reply::InconsistentLog);
             }
 
