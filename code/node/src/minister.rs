@@ -1,6 +1,6 @@
 use std::path::PathBuf;
+use std::sync::atomic::{self, AtomicU32};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU32, self};
 
 use color_eyre::Result;
 use serde::{Deserialize, Serialize};
@@ -49,8 +49,10 @@ async fn handle_pres_orders(
                     return Ok(Role::Clerk { subtree });
                 }
 
-                register.update(staff.clerks);
-                term.update(staff.term);
+                if subtree == *our_subtree {
+                    register.update(staff.clerks);
+                    term.update(staff.term);
+                }
             }
             #[cfg(test)]
             Test(_) => todo!(),
