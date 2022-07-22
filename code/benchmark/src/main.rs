@@ -123,7 +123,7 @@ async fn run_benchmark(
     }
     // workaround to ensure create is done by all clerks before
     // we start the benchmark
-    sleep(Duration::from_millis(200)).await;
+    sleep(Duration::from_millis(2000)).await;
 
     let server = sync::server(bench.client_nodes());
     let mut clients = deploy::start_clients(command, &nodes[bench.fs_nodes()..], run_numb)?;
@@ -139,54 +139,55 @@ async fn run_benchmark(
     }
 
     let output = watch_nodes(&mut cluster, &mut clients).await?;
-    cluster.clear();
+    cluster.clear(); /* TODO: see if we can remove this <dvdsk noreply@davidsk.dev> */
     clients.clear();
     Ok(output)
 }
 
-async fn bench_ls(pres_port: u16, min_port: u16, client_port: u16) {
-    async fn bench(
-        pres_port: u16,
-        min_port: u16,
-        client_port: u16,
-        i: &mut u16,
-        run_numb: usize,
-        command: bench::Command,
-    ) {
-        let bench = Bench::from(&command);
-        let output = loop {
-            *i += 1; // socket might close inproperly, increment ports
-                     // so we need not wait for the host to make the port availible again
-            match run_benchmark(
-                run_numb,
-                &bench,
-                pres_port + *i,
-                min_port + *i,
-                client_port + *i,
-                &command,
-            )
-            .await
-            {
-                Ok(output) => {
-                    break output;
-                }
-                Err(err) => {
-                    warn!("run failed retrying, err: {err:?}");
-                }
+async fn bench_until_success(
+    pres_port: u16,
+    min_port: u16,
+    client_port: u16,
+    i: &mut u16,
+    run_numb: usize,
+    command: bench::Command,
+) {
+    let bench = Bench::from(&command);
+    let output = loop {
+        *i += 1; // socket might close inproperly, increment ports
+                 // so we need not wait for the host to make the port availible again
+        match run_benchmark(
+            run_numb,
+            &bench,
+            pres_port + *i,
+            min_port + *i,
+            client_port + *i,
+            &command,
+        )
+        .await
+        {
+            Ok(output) => {
+                break output;
             }
-        };
-        info!("benchmark output: {output:?}");
-    }
+            Err(err) => {
+                warn!("run failed retrying, err: {err:?}");
+                panic!();
+            }
+        }
+    };
+    info!("benchmark output: {output:?}");
+}
 
+async fn bench_ls(pres_port: u16, min_port: u16, client_port: u16) {
     let mut i = 0;
     for run_numb in 0..5 {
         for n_parts in 1..=5 {
             let command = bench::Command::LsBatch { n_parts };
-            bench(pres_port, min_port, client_port, &mut i, run_numb, command).await;
+            bench_until_success(pres_port, min_port, client_port, &mut i, run_numb, command).await;
             let command = bench::Command::LsStride { n_parts };
-            bench(pres_port, min_port, client_port, &mut i, run_numb, command).await;
+            bench_until_success(pres_port, min_port, client_port, &mut i, run_numb, command).await;
+            info!("bench: nparts {n_parts}, run_numb: {run_numb} completed!");
         }
-        info!("benchmark run {run_numb} completed!");
     }
 }
 
@@ -198,6 +199,9 @@ async fn main() -> Result<()> {
     // on cluster nodes. Feel free to move them around
     let (pres_port, min_port, client_port) = (65000, 65100, 65400);
     let args = Args::parse();
+
+    // let command = bench::Command::LsBatch { n_parts: 3 };
+    // bench_until_success(pres_port, min_port, client_port, &mut 1, 1, command).await;
 
     match args.command {
         Command::Ls => bench_ls(pres_port, min_port, client_port).await,
@@ -214,7 +218,8 @@ fn setup_tracing() {
     use tracing_subscriber::{filter, fmt};
 
     let filter = filter::EnvFilter::builder()
-        .parse("info,instance_chart=warn,client=error,benchmark=debug")
+        // .parse("warn,benchmark=info,benchmark::deploy=warn")
+        .parse("info")
         .unwrap();
 
     let uptime = fmt::time::uptime();

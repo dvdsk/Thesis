@@ -11,7 +11,7 @@ use tracing::instrument;
 mod ls;
 mod range;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum Operation {
     Ls { path: PathBuf },
     Touch { path: PathBuf },
@@ -23,7 +23,9 @@ impl Operation {
     async fn perform<T: client::RandomNode>(self, client: &mut Client<T>, buf: &mut [u8]) {
         match self {
             Operation::Ls { path } => {
-                client.list(path).await;
+                let res = client.list(path.clone()).await;
+            /* TODO: remove during bench <dvdsk noreply@davidsk.dev> */
+                assert!(res.len() > 0, "no files on path: {path:?}"); 
             }
             Operation::Touch { path } => client.create_file(path).await,
             Operation::Read { path, range } => {
@@ -148,8 +150,8 @@ impl From<&Command> for Bench {
     fn from(cmd: &Command) -> Self {
         use Command::*;
         match *cmd {
-            LsStride { n_parts } => ls::ls_stride(n_parts, 1000),
-            LsBatch { n_parts } => ls::ls_batch(n_parts, 1000),
+            LsStride { n_parts } => ls::ls_stride(n_parts, 3),
+            LsBatch { n_parts } => ls::ls_batch(n_parts, 3),
             RangeByRow {
                 rows,
                 clients_per_node,
