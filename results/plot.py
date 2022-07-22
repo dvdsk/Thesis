@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from collections import defaultdict
 from typing import List
 import os
 
@@ -26,26 +27,42 @@ def client_from(lines: List[str]) -> Client:
 
 
 @dataclass
-class Node:
-    name: str
+class Run:
+    numb: int
     clients: List[Client]
 
     def durations(self) -> np.ndarray:
-        res = []
-        for client in self.clients:
-            res.append(client.durations())
+        res = [client.durations() for client in self.clients]
         return np.hstack(res)
 
 
-def node_from(path: str) -> Node:
-    name = os.path.basename(path).split(",")[0]
+def run_from(path: str) -> Run:
+    numb = os.path.basename(path).split("_")[0]
     lines = None
     with open(path) as file:
         lines = file.readlines()
     clients = []
     for i in range(0, len(lines), 4):
         clients.append(client_from(lines[i:i+3]))
-    return Node(name, clients)
+    return Run(numb, clients)
+
+
+@dataclass
+class Node:
+    name: str
+    runs: List[Run]
+
+    def durations(self) -> np.ndarray:
+        res = [run.durations() for run in self.runs]
+        return np.hstack(res)
+
+
+def node_from(dir, node, n_runs) -> Node:
+    runs = []
+    for run in range(0, n_runs):
+        path = f"{dir}/{node}_{run}.csv"
+        runs.append(run_from(path))
+    return Node(node, runs)
 
 
 @dataclass
@@ -53,17 +70,19 @@ class Data:
     nodes: List[Node]
 
     def durations(self) -> np.ndarray:
-        res = []
-        for node in self.nodes:
-            res.append(node.durations())
+        res = [node.durations() for node in self.nodes]
         return np.hstack(res)
 
 
 def data_from(dir: str) -> Data:
+    node_runs = defaultdict(lambda: 0)
+    for fname in os.listdir(dir):
+        node = fname.split("_")[0]
+        numb = int(fname.split("_")[1].split(".")[0])
+        node_runs[node] = max(node_runs[node], numb)
     nodes = []
-    for node in os.listdir(dir):
-        f = os.path.join(dir, node)
-        nodes.append(node_from(f))
+    for node, n_runs in node_runs.items():
+        nodes.append(node_from(dir, node, n_runs))
     return Data(nodes)
 
 
