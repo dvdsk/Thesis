@@ -176,10 +176,6 @@ async fn replicate_orders<O, S, T>(
             return;
         }
 
-        // FIXME this timeout sometimes takes way to long
-        // - next_hb is correct (sometimes even zero)
-        // - some other task must be blocking a long time
-
         // recieve for as long as possible,
         match timeout_at(next_hb, recieve_reply(stream, req_gen, appended))
             .instrument(trace_span!("timeout recieve"))

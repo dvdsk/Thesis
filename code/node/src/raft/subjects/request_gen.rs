@@ -86,7 +86,7 @@ where
         self.prev_log_term = prev_entry.term;
     }
 
-    #[instrument(skip_all, level = "trace")]
+    #[instrument(skip_all, level = "debug", ret)]
     pub fn append(&mut self) -> Request<<S as StateInfo>::Order> {
         let entry = self.state.entry(self.next_idx).unwrap();
         let req = Request {
