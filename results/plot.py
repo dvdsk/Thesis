@@ -47,6 +47,7 @@ def run_from(path: str) -> Run:
     return Run(numb, clients)
 
 
+# TODO: switch Node and Run <22-07-22, dvdsk noreply@davidsk.dev> 
 @dataclass
 class Node:
     name: str

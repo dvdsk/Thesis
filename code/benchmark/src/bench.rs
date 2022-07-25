@@ -150,8 +150,8 @@ impl From<&Command> for Bench {
     fn from(cmd: &Command) -> Self {
         use Command::*;
         match *cmd {
-            LsStride { n_parts } => ls::ls_stride(n_parts, 3),
-            LsBatch { n_parts } => ls::ls_batch(n_parts, 3),
+            LsStride { n_parts } => ls::ls_stride(n_parts, 2_000),
+            LsBatch { n_parts } => ls::ls_batch(n_parts, 2_000),
             RangeByRow {
                 rows,
                 clients_per_node,

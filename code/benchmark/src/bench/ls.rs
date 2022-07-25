@@ -53,8 +53,8 @@ fn ls_access(dirs: impl Iterator<Item = String>, n_parts: usize) -> Bench {
 
     Bench {
         operations,
-        client_nodes: 1,
-        clients_per_node: 1,
+        client_nodes: 3,
+        clients_per_node: 10,
         partitions,
         additional_setup,
     }

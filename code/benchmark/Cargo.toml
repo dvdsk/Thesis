@@ -8,6 +8,8 @@ default-run = "benchmark"
 [[bin]]
 name = "bench_client"
 
+[features]
+bench = ["client/bench", "node/bench"]
 
 [dependencies]
 instance-chart = { version = "0.2.1" }

@@ -123,7 +123,7 @@ async fn run_benchmark(
     }
     // workaround to ensure create is done by all clerks before
     // we start the benchmark
-    sleep(Duration::from_millis(2000)).await;
+    sleep(Duration::from_millis(200)).await;
 
     let server = sync::server(bench.client_nodes());
     let mut clients = deploy::start_clients(command, &nodes[bench.fs_nodes()..], run_numb)?;
@@ -171,7 +171,6 @@ async fn bench_until_success(
             }
             Err(err) => {
                 warn!("run failed retrying, err: {err:?}");
-                panic!();
             }
         }
     };
@@ -186,7 +185,7 @@ async fn bench_ls(pres_port: u16, min_port: u16, client_port: u16) {
             bench_until_success(pres_port, min_port, client_port, &mut i, run_numb, command).await;
             let command = bench::Command::LsStride { n_parts };
             bench_until_success(pres_port, min_port, client_port, &mut i, run_numb, command).await;
-            info!("bench: nparts {n_parts}, run_numb: {run_numb} completed!");
+            println!("bench: nparts {n_parts}, run_numb: {run_numb} completed!");
         }
     }
 }
@@ -199,9 +198,6 @@ async fn main() -> Result<()> {
     // on cluster nodes. Feel free to move them around
     let (pres_port, min_port, client_port) = (65000, 65100, 65400);
     let args = Args::parse();
-
-    // let command = bench::Command::LsBatch { n_parts: 3 };
-    // bench_until_success(pres_port, min_port, client_port, &mut 1, 1, command).await;
 
     match args.command {
         Command::Ls => bench_ls(pres_port, min_port, client_port).await,
@@ -218,8 +214,7 @@ fn setup_tracing() {
     use tracing_subscriber::{filter, fmt};
 
     let filter = filter::EnvFilter::builder()
-        // .parse("warn,benchmark=info,benchmark::deploy=warn")
-        .parse("info")
+        .parse("warn,benchmark=info,benchmark::deploy=warn")
         .unwrap();
 
     let uptime = fmt::time::uptime();

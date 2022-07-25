@@ -74,7 +74,10 @@ where
 
     #[instrument(skip_all, level = "trace")]
     pub fn decrement_idx(&mut self) {
-        assert!(self.next_idx != 0, "can not decrement idx if its zero");
+        assert!(
+            self.next_idx > 0,
+            "decrementing the index to zero makes no sense"
+        );
         self.next_idx -= 1;
 
         if self.next_idx == 1 {
@@ -82,8 +85,17 @@ where
             return;
         }
 
-        let prev_entry = self.state.entry(self.next_idx - 1).unwrap();
-        self.prev_log_term = prev_entry.term;
+        let prev_log_entry = self.state.entry(self.next_idx - 1);
+        match prev_log_entry {
+            Some(prev_entry) => self.prev_log_term = prev_entry.term,
+            None => {
+                let meta = self.state.last_meta();
+                panic!(
+                    "prev_log entry was None, log meta: {meta:?}, prev_loidx: {}",
+                    self.next_idx - 1
+                );
+            }
+        }
     }
 
     #[instrument(skip_all, level = "debug", ret)]

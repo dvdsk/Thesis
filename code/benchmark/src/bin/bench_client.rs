@@ -132,7 +132,7 @@ fn setup_tracing() {
     use tracing_subscriber::{filter, fmt};
 
     let filter = filter::EnvFilter::builder()
-        .parse("info")
+        .parse("info,client=warn")
         .unwrap();
 
     let uptime = fmt::time::uptime();
