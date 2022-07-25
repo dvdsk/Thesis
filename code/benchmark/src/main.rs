@@ -1,6 +1,6 @@
 use std::{
     net::{SocketAddr, ToSocketAddrs},
-    time::Duration,
+    time::Duration, path::PathBuf,
 };
 
 use bench::Bench;
@@ -20,6 +20,7 @@ use tracing::{info, warn};
 pub enum Command {
     Ls,
     Range,
+    Touch,
 }
 
 #[derive(Parser, Debug, Clone)]
@@ -126,7 +127,12 @@ async fn run_benchmark(
     sleep(Duration::from_millis(200)).await;
 
     let server = sync::server(bench.client_nodes());
-    let mut clients = deploy::start_clients(command, &nodes[bench.fs_nodes()..], run_numb)?;
+    let mut clients = deploy::start_clients(
+        command,
+        &nodes[bench.fs_nodes()..],
+        run_numb,
+        bench.clients_per_node,
+    )?;
 
     tokio::select! {
         res = server.block_till_synced() => {
@@ -144,6 +150,26 @@ async fn run_benchmark(
     Ok(output)
 }
 
+fn results_present(run_numb: usize, command: &bench::Command, bench: &Bench) -> bool {
+    let file = command.results_file("split");
+    let mut dir = PathBuf::from("..");
+    dir.push(file.parent().unwrap());
+    let files_for_run_numb = std::fs::read_dir(dir)
+        .unwrap()
+        .map(Result::unwrap)
+        .map(|entry| entry.path())
+        .filter(|p| p.is_file())
+        .map(|p| {
+            let name = p.file_stem().unwrap().to_str().unwrap();
+            let digit = name.split_once('_').unwrap().1;
+            digit.parse::<usize>().unwrap()
+        })
+        .filter(|run| *run == run_numb)
+        .count();
+
+    files_for_run_numb == bench.client_nodes()
+}
+
 async fn bench_until_success(
     pres_port: u16,
     min_port: u16,
@@ -152,7 +178,12 @@ async fn bench_until_success(
     run_numb: usize,
     command: bench::Command,
 ) {
-    let bench = Bench::from(&command);
+    let bench = Bench::from(&command, 0);
+    if results_present(run_numb, &command, &bench) {
+        info!("skipping run: {run_numb}, found results");
+        return;
+    }
+
     let output = loop {
         *i += 1; // socket might close inproperly, increment ports
                  // so we need not wait for the host to make the port availible again
@@ -190,6 +221,17 @@ async fn bench_ls(pres_port: u16, min_port: u16, client_port: u16) {
     }
 }
 
+async fn bench_touch(pres_port: u16, min_port: u16, client_port: u16) {
+    let mut i = 0;
+    for run_numb in 0..5 {
+        for n_parts in 1..=5 {
+            let command = bench::Command::Touch { n_parts };
+            bench_until_success(pres_port, min_port, client_port, &mut i, run_numb, command).await;
+            println!("bench: nparts {n_parts}, run_numb: {run_numb} completed!");
+        }
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     setup_tracing();
@@ -201,6 +243,7 @@ async fn main() -> Result<()> {
 
     match args.command {
         Command::Ls => bench_ls(pres_port, min_port, client_port).await,
+        Command::Touch => bench_touch(pres_port, min_port, client_port).await,
         _ => todo!(),
     }
 

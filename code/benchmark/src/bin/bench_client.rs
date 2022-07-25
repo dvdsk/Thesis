@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 
 use clap::Parser;
 use color_eyre::{eyre::WrapErr, Help, Result};
-use itertools::{Itertools, intersperse};
+use itertools::{intersperse, Itertools};
 use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
@@ -20,18 +20,24 @@ use benchmark::sync;
 #[clap(author, version, about, long_about = None)]
 pub struct Args {
     /// Id to recognize different client machines in results
-    output_name: String,
+    base_id: usize,
+    output_file: String,
     sync_server: String,
     #[clap(subcommand)]
     command: bench::Command,
 }
 
-pub async fn bench_task(notify: Arc<Notify>, bench: Bench, id: usize) -> Vec<(Instant, Instant)> {
+pub async fn bench_task(
+    notify: Arc<Notify>,
+    bench: bench::Command,
+    id: usize,
+) -> Vec<(Instant, Instant)> {
     let nodes = client::ChartNodes::<3, 2>::new(8080);
     let mut client = client::Client::new(nodes);
     let mut buf = vec![0u8; 500_000_000]; // eat/reserve 500 mB of ram
     notify.notified().await;
 
+    let bench = Bench::from(&bench, id);
     let results = bench.perform(&mut client, &mut buf).await;
     println!("id: {id}, minmax: {:?}", results.iter().minmax());
     results
@@ -47,7 +53,11 @@ struct Record {
 
 impl Record {
     fn encode(self) -> String {
-        let Self { client, time_start, time_end } = self;
+        let Self {
+            client,
+            time_start,
+            time_end,
+        } = self;
         let mut res = String::new();
         res += &format!("client: {client}\n");
         let vals = time_start.into_iter().map(|v| v.to_string());
@@ -86,12 +96,13 @@ async fn main() -> Result<()> {
     color_eyre::install().unwrap();
     setup_tracing();
     let args = Args::parse();
-    let bench = Bench::from(&args.command);
+    let bench = Bench::from(&args.command, 0);
 
     let mut benchmarks = JoinSet::new();
     let notify = Arc::new(Notify::new());
     for id in 0..bench.clients_per_node {
-        let task = bench_task(notify.clone(), bench.clone(), id);
+        let id = args.base_id + id;
+        let task = bench_task(notify.clone(), args.command.clone(), id);
         benchmarks.spawn(task);
     }
     sleep(Duration::from_millis(500)).await; // let the client discover the nodes
@@ -112,7 +123,7 @@ async fn main() -> Result<()> {
         results.push(res);
     }
 
-    let path = args.command.results_file(&args.output_name);
+    let path = args.command.results_file(&args.output_file);
     std::fs::create_dir_all(&path.parent().unwrap())
         .wrap_err("Could not create directory for results")?;
     let mut file = fs::File::create(&path)?;

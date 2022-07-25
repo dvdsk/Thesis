@@ -142,7 +142,14 @@ mkdir -p /tmp/govfs
     );
     tokio::process::Command::new("ssh")
         .kill_on_drop(true)
-        .args(["-o", "ConnectTimeout=1", "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=no"])
+        .args([
+            "-o",
+            "ConnectTimeout=1",
+            "-o",
+            "BatchMode=yes",
+            "-o",
+            "StrictHostKeyChecking=no",
+        ])
         .arg("-t")
         .arg(node)
         .arg(run_on_remote)
@@ -188,17 +195,25 @@ async fn ssh_client(
     node: String,
     args: OsString,
     run_numb: usize,
+    id: usize,
 ) -> Result<String> {
     let log_path = format!("client_{node}.txt"); // dumps logs in working dir
     let mut run_on_remote = bin;
-    run_on_remote.push(format!(" {node}_{run_numb}")); // id
+    run_on_remote.push(format!(" {id} {node}_{run_numb}")); // output file
     run_on_remote.push(" ");
     run_on_remote.push(args); // hostname and command
     run_on_remote.push(" > ");
     run_on_remote.push(log_path);
     tokio::process::Command::new("ssh")
         .kill_on_drop(true)
-        .args(["-o", "ConnectTimeout=1", "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=no"])
+        .args([
+            "-o",
+            "ConnectTimeout=1",
+            "-o",
+            "BatchMode=yes",
+            "-o",
+            "StrictHostKeyChecking=no",
+        ])
         .arg("-t")
         .arg(node)
         .arg(run_on_remote)
@@ -214,6 +229,7 @@ pub fn start_clients(
     command: &bench::Command,
     nodes: &[Node],
     run_numb: usize,
+    clients_per_node: usize,
 ) -> Result<FuturesUnordered<impl Future<Output = Result<String>>>> {
     let mut path = env::current_dir()?;
     path.push("bin/bench_client");
@@ -228,7 +244,11 @@ pub fn start_clients(
     args.push(command.args());
     let nodes: FuturesUnordered<_> = nodes
         .iter()
-        .map(|node| ssh_client(path.into(), node.to_string(), args.clone(), run_numb))
+        .enumerate()
+        .map(|(id, node)| {
+            let id = id * clients_per_node;
+            ssh_client(path.into(), node.to_string(), args.clone(), run_numb, id)}
+            )
         .collect();
     Ok(nodes)
 }

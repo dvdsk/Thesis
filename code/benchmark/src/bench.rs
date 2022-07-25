@@ -9,6 +9,7 @@ use std::{
 use tracing::instrument;
 
 mod ls;
+mod touch;
 mod range;
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
@@ -128,6 +129,7 @@ impl Bench {
 }
 
 use serde::{Deserialize, Serialize};
+
 #[derive(clap::Subcommand, Clone, Debug, Serialize, Deserialize)]
 pub enum Command {
     LsStride {
@@ -144,14 +146,21 @@ pub enum Command {
         rows: usize,
         clients_per_node: usize,
     },
+    /// each client creates n files at unique paths
+    Touch {
+        n_parts: usize,
+    },
+    
 }
 
-impl From<&Command> for Bench {
-    fn from(cmd: &Command) -> Self {
+impl Bench {
+    pub fn from(cmd: &Command, id: usize) -> Self {
+        use ls::{stride, batch};
         use Command::*;
+
         match *cmd {
-            LsStride { n_parts } => ls::ls_stride(n_parts, 2_000),
-            LsBatch { n_parts } => ls::ls_batch(n_parts, 2_000),
+            LsStride { n_parts } => stride(n_parts, 2_000, ls::ls),
+            LsBatch { n_parts } => batch(n_parts, 2_000, ls::ls),
             RangeByRow {
                 rows,
                 clients_per_node,
@@ -160,6 +169,7 @@ impl From<&Command> for Bench {
                 rows,
                 clients_per_node,
             } => range::whole_file(rows, clients_per_node),
+            Touch { n_parts } => touch::touch(n_parts, id),
         }
     }
 }
@@ -177,11 +187,12 @@ impl Command {
                 rows,
                 clients_per_node,
             } => format!("range-whole-file {rows} {clients_per_node}"),
+            Command::Touch { n_parts } => format!("touch {n_parts}"),
         }
         .into()
     }
 
-    pub fn results_file(&self, id: &str) -> PathBuf {
+    pub fn results_file(&self, node: &str) -> PathBuf {
         let path = match self {
             Command::LsStride { n_parts } => format!("LsStride/{n_parts}"),
             Command::LsBatch { n_parts } => format!("LsBatch/{n_parts}"),
@@ -193,7 +204,8 @@ impl Command {
                 rows,
                 clients_per_node,
             } => format!("RangeWholeFile/{rows}_{clients_per_node}"),
+            Command::Touch { n_parts } => format!("Touch/{n_parts}"),
         };
-        PathBuf::from(format!("data/{path}/{id}.csv"))
+        PathBuf::from(format!("data/{path}/{node}.csv"))
     }
 }

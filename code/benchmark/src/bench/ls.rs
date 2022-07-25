@@ -3,25 +3,32 @@ use crate::bench::{Operation, Partition};
 use itertools::chain;
 use std::{iter, path::PathBuf};
 
-pub fn ls_stride(n_parts: usize, n_ops: usize) -> Bench {
-    let dirs = chain!(
+pub fn stride<F>(n_parts: usize, n_ops: usize, access: F) -> Bench
+where
+    F: Fn(&mut dyn Iterator<Item = String>, usize) -> Bench,
+{
+    let mut dirs = chain!(
         iter::once(String::from("/")),
         (1..n_parts).map(|n| format!("/{n}"))
     )
     .cycle()
     .take(n_ops * n_parts);
-    ls_access(dirs, n_parts)
+    access(&mut dirs, n_parts)
 }
-pub fn ls_batch(n_parts: usize, n_ops: usize) -> Bench {
-    let dirs = chain!(
+
+pub fn batch<F>(n_parts: usize, n_ops: usize, access: F) -> Bench
+where
+    F: Fn(&mut dyn Iterator<Item = String>, usize) -> Bench,
+{
+    let mut dirs = chain!(
         iter::once(String::from("/")),
         (1..n_parts).map(|n| format!("/{n}"))
     )
     .flat_map(|dir| iter::repeat(dir).take(n_ops));
-    ls_access(dirs, n_parts)
+    access(&mut dirs, n_parts)
 }
 
-fn ls_access(dirs: impl Iterator<Item = String>, n_parts: usize) -> Bench {
+pub fn ls(dirs: &mut dyn Iterator<Item = String>, n_parts: usize) -> Bench {
     assert!(
         n_parts < 10,
         "update the files created on setup to support more then n_parts"
@@ -67,9 +74,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn ls_access() {
-        let bench_stride = ls_stride(3, 3);
-        let bench_batch = ls_batch(3, 3);
+    fn batch_vs_stride() {
+        let bench_stride = stride(3, 3, ls);
+        let bench_batch = batch(3, 3, ls);
 
         dbg!(&bench_batch);
         dbg!(&bench_stride);
@@ -77,7 +84,13 @@ mod tests {
         assert_eq!(bench_stride.additional_setup, bench_batch.additional_setup);
         let stride_accesses: HashSet<_> = bench_stride.operations.into_iter().collect();
         let batch_accesses: HashSet<_> = bench_batch.operations.into_iter().collect();
-        let diff: Vec<_> = stride_accesses.symmetric_difference(&batch_accesses).collect();
-        assert_eq!(diff, Vec::<&Operation>::new(), "there should be no difference (left empty)");
+        let diff: Vec<_> = stride_accesses
+            .symmetric_difference(&batch_accesses)
+            .collect();
+        assert_eq!(
+            diff,
+            Vec::<&Operation>::new(),
+            "there should be no difference (left empty)"
+        );
     }
 }
