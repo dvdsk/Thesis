@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from collections import defaultdict
-from typing import List
+from typing import List, Tuple
 import os
 
 import numpy as np
@@ -72,6 +72,16 @@ class Data:
         res = [node.durations() for node in self.runs]
         return np.hstack(res)
 
+    def flatten(self) -> Tuple[np.ndarray, np.ndarray]:
+        start_times = []
+        end_times = []
+        for run in self.runs:
+            for node in run.nodes:
+                for client in node.clients:
+                    start_times.append(client.start_times)
+                    end_times.append(client.end_times)
+        return np.hstack(start_times), np.hstack(end_times)
+
 
 def data_from(dir: str) -> Data:
     nodes_by_run = defaultdict(list)
@@ -110,8 +120,7 @@ def Remove_Outlier_Indices(df):
     return trueList
 
 
-def ls():
-
+def ls_duration():
     # headers: n_ministeries, duration, access_pattern
     data = {
         "number of ministries": [],
@@ -148,4 +157,76 @@ def ls():
     plt.show()
 
 
-ls()
+def dur_dist(bench: str):
+    # headers: n_ministeries, duration, access_pattern
+    data = {
+        "number of ministries": [],
+        "create duration": [],
+    }
+    print(data)
+
+    for n in [1, 2, 3, 4, 5]:
+        durations = data_from(f"data/{bench}/{n}").durations()
+        data["create duration"].append(durations)
+        data["number of ministries"].append(np.full(durations.size, n))
+
+    for key in data.keys():
+        data[key] = np.hstack(data[key])
+
+    data = pd.DataFrame(data)
+    filterd = remove_outliers(data, "create duration", 4)
+
+    plt.plot()
+
+    # plt.yscale("log") # do log when keeping outliers
+    # sns.boxplot(x="number of ministries", y="create duration",
+    #             data=data, showfliers=True)
+
+    # sns.violinplot(x="number of ministries", y="create duration", data=data)
+
+    # sns.stripplot(x="number of ministries", y="create duration",
+    #               data=data, jitter=0.40)
+
+    sns.histplot(
+        data=filterd,
+        x="create duration", hue="number of ministries",
+        multiple="stack",
+        palette=sns.color_palette("Set2", n_colors=5),
+        edgecolor=".3",
+        linewidth=.5,
+        log_scale=False,
+    )
+    plt.show()
+
+
+def dur_vs_time(bench: str):
+    data = {
+        "start_time": [],
+        "duration": [],
+        "number of ministries": []
+    }
+
+    for n in [1, 2, 3, 4, 5]:
+        start_times, end_times = data_from(f"data/{bench}/{n}").flatten()
+        durations = end_times - start_times
+        assert(start_times.size == durations.size)
+        data["start_time"].append(start_times)
+        data["duration"].append(durations)
+        data["number of ministries"].append(np.full(start_times.size, n))
+
+    for key in data.keys():
+        data[key] = np.hstack(data[key])
+
+    data = pd.DataFrame(data)
+
+    plt.plot()
+    plt.xscale("log")
+    sns.scatterplot(data=data, x="start_time", y="duration",
+                    hue="number of ministries")
+    plt.show()
+
+
+# ls_duration()
+dur_dist("LsStride")
+# dur_dist("Touch")
+# dur_vs_time("Touch")
