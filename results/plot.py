@@ -27,8 +27,8 @@ def client_from(lines: List[str]) -> Client:
 
 
 @dataclass
-class Run:
-    numb: int
+class Node:
+    name: str
     clients: List[Client]
 
     def durations(self) -> np.ndarray:
@@ -36,38 +36,19 @@ class Run:
         return np.hstack(res)
 
 
-def run_from(path: str) -> Run:
-    numb = os.path.basename(path).split("_")[0]
-    lines = None
+def node_from(path: str, name: str) -> Node:
     with open(path) as file:
         lines = file.readlines()
     clients = []
     for i in range(0, len(lines), 4):
         clients.append(client_from(lines[i:i+3]))
-    return Run(numb, clients)
+    return Node(name, clients)
 
 
-# TODO: switch Node and Run <22-07-22, dvdsk noreply@davidsk.dev> 
+# TODO: switch Node and Run <22-07-22, dvdsk noreply@davidsk.dev>
 @dataclass
-class Node:
-    name: str
-    runs: List[Run]
-
-    def durations(self) -> np.ndarray:
-        res = [run.durations() for run in self.runs]
-        return np.hstack(res)
-
-
-def node_from(dir, node, n_runs) -> Node:
-    runs = []
-    for run in range(0, n_runs):
-        path = f"{dir}/{node}_{run}.csv"
-        runs.append(run_from(path))
-    return Node(node, runs)
-
-
-@dataclass
-class Data:
+class Run:
+    run: int
     nodes: List[Node]
 
     def durations(self) -> np.ndarray:
@@ -75,16 +56,34 @@ class Data:
         return np.hstack(res)
 
 
+def run_from(dir: str, run: int, nodes: List[str]) -> Run:
+    runs = []
+    for node in nodes:
+        path = f"{dir}/{node}_{run}.csv"
+        runs.append(node_from(path, node))
+    return Run(run, runs)
+
+
+@dataclass
+class Data:
+    runs: List[Run]
+
+    def durations(self) -> np.ndarray:
+        res = [node.durations() for node in self.runs]
+        return np.hstack(res)
+
+
 def data_from(dir: str) -> Data:
-    node_runs = defaultdict(lambda: 0)
+    nodes_by_run = defaultdict(list)
     for fname in os.listdir(dir):
         node = fname.split("_")[0]
-        numb = int(fname.split("_")[1].split(".")[0])
-        node_runs[node] = max(node_runs[node], numb)
-    nodes = []
-    for node, n_runs in node_runs.items():
-        nodes.append(node_from(dir, node, n_runs))
-    return Data(nodes)
+        run = int(fname.split("_")[1].split(".")[0])
+        nodes_by_run[run].append(node)
+
+    runs = []
+    for run, nodes in nodes_by_run.items():
+        runs.append(run_from(dir, run, nodes))
+    return Data(runs)
 
 
 def read_and_writes():
