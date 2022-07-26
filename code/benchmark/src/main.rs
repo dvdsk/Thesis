@@ -1,6 +1,7 @@
 use std::{
     net::{SocketAddr, ToSocketAddrs},
-    time::Duration, path::PathBuf,
+    path::PathBuf,
+    time::Duration,
 };
 
 use bench::Bench;
@@ -154,6 +155,11 @@ fn results_present(run_numb: usize, command: &bench::Command, bench: &Bench) -> 
     let file = command.results_file("split");
     let mut dir = PathBuf::from("..");
     dir.push(file.parent().unwrap());
+
+    if !dir.exists() {
+        return false;
+    }
+
     let files_for_run_numb = std::fs::read_dir(dir)
         .unwrap()
         .map(Result::unwrap)
@@ -202,6 +208,7 @@ async fn bench_until_success(
             }
             Err(err) => {
                 warn!("run failed retrying, err: {err:?}");
+                panic!();
             }
         }
     };
@@ -232,6 +239,25 @@ async fn bench_touch(pres_port: u16, min_port: u16, client_port: u16) {
     }
 }
 
+async fn bench_range(pres_port: u16, min_port: u16, client_port: u16) {
+    let mut i = 0;
+    for run_numb in 0..5 {
+        for rows_len in [1_000, 10_000, 100_000, 1_000_000] {
+            let command = bench::Command::RangeByRow {
+                rows_len,
+                clients_per_node: 3,
+            };
+            bench_until_success(pres_port, min_port, client_port, &mut i, run_numb, command).await;
+            let command = bench::Command::RangeWholeFile {
+                rows_len,
+                clients_per_node: 3,
+            };
+            bench_until_success(pres_port, min_port, client_port, &mut i, run_numb, command).await;
+            println!("run_numb: {run_numb} (rows len: {rows_len}) completed!");
+        }
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     setup_tracing();
@@ -241,11 +267,17 @@ async fn main() -> Result<()> {
     let (pres_port, min_port, client_port) = (65000, 65100, 65400);
     let args = Args::parse();
 
-    match args.command {
-        Command::Ls => bench_ls(pres_port, min_port, client_port).await,
-        Command::Touch => bench_touch(pres_port, min_port, client_port).await,
-        _ => todo!(),
-    }
+    let command = bench::Command::RangeByRow {
+        rows_len: 1000,
+        clients_per_node: 3,
+    };
+    bench_until_success(pres_port, min_port, client_port, &mut 1, 1, command).await;
+
+    // match args.command {
+    //     Command::Ls => bench_ls(pres_port, min_port, client_port).await,
+    //     Command::Touch => bench_touch(pres_port, min_port, client_port).await,
+    //     Command::Range => bench_range(pres_port, min_port, client_port).await,
+    // }
 
     Ok(())
 }

@@ -139,11 +139,11 @@ pub enum Command {
         n_parts: usize,
     },
     RangeByRow {
-        rows: usize,
+        rows_len: usize,
         clients_per_node: usize,
     },
     RangeWholeFile {
-        rows: usize,
+        rows_len: usize,
         clients_per_node: usize,
     },
     /// each client creates n files at unique paths
@@ -162,11 +162,11 @@ impl Bench {
             LsStride { n_parts } => stride(n_parts, 2_000, ls::ls),
             LsBatch { n_parts } => batch(n_parts, 2_000, ls::ls),
             RangeByRow {
-                rows,
+                rows_len,
                 clients_per_node,
-            } => range::by_row(rows, clients_per_node),
+            } => range::by_row(rows_len, clients_per_node),
             RangeWholeFile {
-                rows,
+                rows_len: rows,
                 clients_per_node,
             } => range::whole_file(rows, clients_per_node),
             Touch { n_parts } => touch::touch(n_parts, id),
@@ -180,13 +180,13 @@ impl Command {
             Command::LsStride { n_parts } => format!("ls-stride {n_parts}"),
             Command::LsBatch { n_parts } => format!("ls-batch {n_parts}"),
             Command::RangeByRow {
-                rows,
+                rows_len,
                 clients_per_node,
-            } => format!("range-by-row {rows} {clients_per_node}"),
+            } => format!("range-by-row {rows_len} {clients_per_node}"),
             Command::RangeWholeFile {
-                rows,
+                rows_len,
                 clients_per_node,
-            } => format!("range-whole-file {rows} {clients_per_node}"),
+            } => format!("range-whole-file {rows_len} {clients_per_node}"),
             Command::Touch { n_parts } => format!("touch {n_parts}"),
         }
         .into()
@@ -197,13 +197,13 @@ impl Command {
             Command::LsStride { n_parts } => format!("LsStride/{n_parts}"),
             Command::LsBatch { n_parts } => format!("LsBatch/{n_parts}"),
             Command::RangeByRow {
-                rows,
+                rows_len,
                 clients_per_node,
-            } => format!("RangeByRow/{rows}_{clients_per_node}"),
+            } => format!("RangeByRow/{rows_len}_{clients_per_node}"),
             Command::RangeWholeFile {
-                rows,
+                rows_len,
                 clients_per_node,
-            } => format!("RangeWholeFile/{rows}_{clients_per_node}"),
+            } => format!("RangeWholeFile/{rows_len}_{clients_per_node}"),
             Command::Touch { n_parts } => format!("Touch/{n_parts}"),
         };
         PathBuf::from(format!("data/{path}/{node}.csv"))
