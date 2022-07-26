@@ -75,10 +75,10 @@ where
     #[instrument(skip_all, level = "trace")]
     pub fn decrement_idx(&mut self) {
         assert!(
-            self.next_idx > 0,
+            self.next_idx > 1,
             "decrementing the index to zero makes no sense"
         );
-        self.next_idx -= 1;
+        self.next_idx -= 1; // do the decrement
 
         if self.next_idx == 1 {
             self.prev_log_term = FIRST_LOG_TERM;
@@ -91,8 +91,9 @@ where
             None => {
                 let meta = self.state.last_meta();
                 panic!(
-                    "prev_log entry was None, log meta: {meta:?}, prev_loidx: {}",
-                    self.next_idx - 1
+                    "prev_log entry was None, log meta: {meta:?}, self.next_idx: {}, prev_log_idx: {}",
+                    self.next_idx,
+                    self.next_idx - 1,
                 );
             }
         }
