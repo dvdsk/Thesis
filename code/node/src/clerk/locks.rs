@@ -13,7 +13,7 @@ use protocol::AccessKey;
 pub struct Locks(Arc<Mutex<HashMap<(PathBuf, AccessKey), AccessKey>>>);
 
 impl Locks {
-    #[instrument(skip(self, dir))]
+    #[instrument(skip(self, dir), ret)]
     pub(super) async fn reset(
         &mut self,
         path: PathBuf,
@@ -25,7 +25,7 @@ impl Locks {
         dir.revoke_access(&path, local_key)
     }
 
-    #[instrument(skip(self, dir))]
+    #[instrument(skip(self, dir), ret)]
     pub(super) async fn reset_all(&mut self, dir: &mut Directory) {
         let mut map = self.0.lock().await;
         for ((path, _), local_key) in map.drain() {
@@ -45,6 +45,9 @@ impl Locks {
             .get_exclusive_access(&path, &range)
             .unwrap()
             .expect("path+range is already locked");
+        /* FIX: Race condition, this function can be canceld here
+         * meaning the lock is never registerd in the map and therefore 
+         * never unlocked <26-07-22> */
         let mut map = self.0.lock().await;
         let prev = map.insert((path, remote_key), local_key);
         assert!(prev.is_none(), "path+range was already locked");

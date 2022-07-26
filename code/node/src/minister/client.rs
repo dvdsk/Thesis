@@ -82,6 +82,7 @@ async fn check_subtree(
 
 type ClientStream<'a> = Pin<&'a mut Peekable<MsgStream<Request, Response>>>;
 
+#[instrument(level="debug", skip(log, our_subtree, redirect, dir, manager))]
 async fn handle_conn(
     stream: TcpStream,
     mut log: LogWriter<super::Order, AtomicTerm>,
@@ -172,6 +173,7 @@ async fn write_lease(
             Ok(None) => return Ok(Response::ConflictingWriteLease),
         };
     };
+    debug!("got write access from dir: {dir_lease:?}");
 
     // revoke all reads for this file on the clerks, if this times
     // out the clerk or the client will already have dropped the lease

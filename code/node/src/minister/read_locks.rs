@@ -158,13 +158,25 @@ impl Locks {
             .collect()
     }
 
+    #[instrument(level = "debug", skip(self))]
     fn lock(&mut self, req: LockReq) {
         debug!("locking: {req:?}");
-        self.0.insert(req.key, (req.path, req.range));
+        let existing = self.0.insert(req.key, (req.path, req.range));
+        assert_eq!(
+            existing, None,
+            "locks are unique, this should have been enforced 
+             by `dir get write access` in minister::clients::write_lease"
+        );
     }
+
+    #[instrument(level = "debug", skip(self))]
     fn unlock(&mut self, req: &UnlockReq) {
         debug!("unlocking: {req:?}");
-        self.0.remove(&req.key);
+        let removed = self.0.remove(&req.key);
+        assert!(
+            removed.is_some(),
+            "can not unlock something thats not there"
+        );
     }
 }
 
