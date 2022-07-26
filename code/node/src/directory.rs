@@ -33,6 +33,7 @@ impl fmt::Debug for LeaseGuard<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("LeaseGuard")
             .field("path", &self.path)
+            .field("key", &self.key)
             .finish()
     }
 }
@@ -151,7 +152,7 @@ impl Directory {
         req_range: &Range<u64>,
     ) -> Result<Option<AccessKey>> {
         let mut key = None;
-        self.tree 
+        self.tree
             .update_and_fetch(dbkey(path), |bytes| {
                 let bytes = bytes.expect("entry not found in directory");
                 let mut entry = Entry::from_bytes(bytes);
@@ -159,6 +160,9 @@ impl Directory {
                     key = Some(entry.add_write_access(req_range));
                     Some(entry.to_bytes())
                 } else {
+                    // before finishing update another thread might 
+                    // get write access invalidating the key
+                    key = None; 
                     Some(Vec::from(bytes))
                 }
             })
@@ -174,8 +178,9 @@ impl Directory {
         path: &'a Path,
         req_range: &Range<u64>,
     ) -> Result<Option<LeaseGuard<'a>>> {
-        self.get_exclusive_access(path, req_range)
-            .map(|key| key.map(|key| self.lease_guard(path, key)))
+        Ok(self
+            .get_exclusive_access(path, req_range)?
+            .map(|key| self.lease_guard(path, key)))
     }
 
     pub(crate) fn revoke_access(&self, path: &Path, access: AccessKey) {
@@ -207,5 +212,38 @@ impl Directory {
             .wrap_err("internal db error")?
             .ok_or_else(|| eyre!("no entry for path"))?;
         Ok(overlapping)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    impl Directory {
+        fn mock() -> Self {
+            let db = sled::Config::default().temporary(true).open().unwrap();
+            Self {
+                tree: db.open_tree("mock").unwrap(),
+            }
+        }
+    }
+    /* TODO: maybe test is succeeding even though it will
+     * fail in threaded environment? <26-07-22> */
+    #[test]
+    fn write_access_is_unique() {
+        let path = Path::new("/0/0");
+        let range = &(0..10);
+
+        let mut dir = Directory::mock();
+        dir.add_entry(path);
+
+        let res = dir.get_write_access(path, range).unwrap();
+        let lease = res.unwrap();
+        let res = dir.get_write_access(path, range).unwrap();
+        assert!(res.is_none());
+
+        drop(lease);
+        let res = dir.get_write_access(path, range).unwrap();
+        assert!(res.is_some());
     }
 }
