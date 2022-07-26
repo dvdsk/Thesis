@@ -59,6 +59,7 @@ async fn connect(address: &ClientAddr) -> MsgStream<Response, Request> {
     loop {
         match TcpStream::connect(address.as_untyped()).await {
             Ok(stream) => {
+                stream.set_nodelay(true).unwrap();
                 let stream = connection::wrap(stream);
                 break stream;
             }
