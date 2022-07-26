@@ -154,6 +154,7 @@ async fn control_cluster() -> Result<()> {
     test the cluster using many clients
     bench_leases <#readers> <#writers>: sim. read and write from many clients
     bench_meta <#creaters> <#listers>: sim. creating and listing from many clients
+    colliding_writers <#writers> <#row_len>: sim. many writers on the same file using range API
         "
         );
 

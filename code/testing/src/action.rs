@@ -54,15 +54,20 @@ pub async fn bench(client: &mut Client, buffer: String) -> Result<()> {
             .map(|r| r.wrap_err("argument should be a signed interger"))
     };
     match cmd {
-        Some("bench_leases") => {
+        Some("bench_leases") | Some("bl_") => {
             let readers = next_arg().ok_or_else(|| eyre!("first arg should be #readers"))??;
             let writers = next_arg().ok_or_else(|| eyre!("second arg should be #writers"))??;
             bench::leases(client, readers, writers, 2).await;
         }
-        Some("bench_meta") => {
+        Some("bench_meta") | Some("bm_") => {
             let creators = next_arg().ok_or_else(|| eyre!("first arg should be #creators"))??;
             let listers = next_arg().ok_or_else(|| eyre!("second arg should be #listers"))??;
             bench::meta(creators, listers, 2).await;
+        }
+        Some("colliding_writers") | Some("cw_") => {
+            let writers = next_arg().ok_or_else(|| eyre!("first arg should be #writers"))??;
+            let row_len = next_arg().ok_or_else(|| eyre!("second arg should be #row len"))??;
+            bench::colliding(client, writers, row_len as u64).await;
         }
         _ => panic!("invalid command: {cmd:?}"),
     }

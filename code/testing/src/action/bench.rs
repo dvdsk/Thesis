@@ -53,14 +53,12 @@ pub async fn leases(client: &mut Client, readers: usize, writers: usize, spread:
     let readers: Vec<_> = (0..readers).map(make_client).collect();
     #[allow(clippy::needless_collect)]
     let writers: Vec<_> = (0..writers).map(make_client).collect();
-    let do_sleep = sleep(Duration::from_millis(500)); 
+    let do_sleep = sleep(Duration::from_millis(500));
     // give the clients time to map the cluster while doing prep
-    tokio::join!(prep, do_sleep); 
-     /* ISSUE: workaround for create request not processed by 
-      * clerks before lock request is send <14-07-22> */
-    sleep(Duration::from_millis(140)).await; 
-   
-
+    tokio::join!(prep, do_sleep);
+    /* ISSUE: workaround for create request not processed by
+     * clerks before lock request is send <14-07-22> */
+    sleep(Duration::from_millis(140)).await;
 
     let readers: FuturesUnordered<_> = readers
         .into_iter()
@@ -127,4 +125,39 @@ pub async fn meta(creators: usize, listers: usize, spread: usize) {
     let create = creators.collect::<Vec<()>>();
     let list = listers.collect::<Vec<()>>();
     let (_create_res, _list_res) = tokio::join!(create, list);
+}
+
+/// bench writing, target single file load `spread` rows
+#[instrument(skip(client))]
+pub async fn colliding(client: &mut Client, writers: usize, row_len: u64) {
+    use futures::stream::{FuturesUnordered, StreamExt};
+
+    let make_client = |id: usize| {
+        let nodes = client::ChartNodes::<3, 2>::new(8080);
+        (id, Client::new(nodes))
+    };
+
+    let prep = prep_dir(client, 1, 1, 1);
+    #[allow(clippy::needless_collect)]
+    let writers: Vec<_> = (0..writers).map(make_client).collect();
+    let do_sleep = sleep(Duration::from_millis(500));
+    // give the clients time to map the cluster while doing prep
+    tokio::join!(prep, do_sleep);
+    /* ISSUE: workaround for create request not processed by
+     * clerks before lock request is send <14-07-22> */
+    sleep(Duration::from_millis(140)).await;
+
+    let colliding_write = |id_client| colliding_write(id_client, row_len);
+    let writers: FuturesUnordered<_> = writers.into_iter().map(colliding_write).collect();
+
+    writers.collect::<Vec<()>>().await;
+}
+
+async fn colliding_write((_id, mut client): (usize, Client), row_len: u64) {
+    let mock_data = vec![0u8; row_len as usize];
+    let mut file = client.open_writeable("/0/0".into()).await;
+    for row in 0..10 {
+        file.seek(row * row_len);
+        file.write(&mock_data).await;
+    }
 }
