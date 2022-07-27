@@ -1,5 +1,6 @@
 use std::{
     net::{SocketAddr, ToSocketAddrs},
+    ops::AddAssign,
     path::PathBuf,
     time::Duration,
 };
@@ -14,7 +15,7 @@ use futures::{
     Future,
 };
 use rand::prelude::*;
-use tokio::time::sleep;
+use tokio::time::{sleep, timeout};
 use tracing::{info, warn};
 
 #[derive(clap::Subcommand, Clone, Debug)]
@@ -93,9 +94,7 @@ impl RandomNode for NodesList {
 async fn run_benchmark(
     run_numb: usize,
     bench: &Bench,
-    pres_port: u16,
-    min_port: u16,
-    client_port: u16,
+    ports: Ports,
     command: &bench::Command,
 ) -> Result<Vec<String>> {
     let nodes = deploy::reserve(bench.needed_nodes())?;
@@ -103,15 +102,15 @@ async fn run_benchmark(
     let mut cluster = deploy::start_cluster(
         &bench,
         &nodes[0..bench.fs_nodes()],
-        pres_port,
-        min_port,
-        client_port,
+        ports.president,
+        ports.minister,
+        ports.client,
     )?;
     // workaround for cluster
     // we start the benchmark
     sleep(Duration::from_millis(200)).await;
 
-    let find_nodes = NodesList::from_hostnames(&nodes, client_port)?;
+    let find_nodes = NodesList::from_hostnames(&nodes, ports.client)?;
     let mut client = client::Client::new(find_nodes);
     tokio::select! {
         err = cluster.next() => {
@@ -176,13 +175,36 @@ fn results_present(run_numb: usize, command: &bench::Command, bench: &Bench) -> 
     files_for_run_numb == bench.client_nodes()
 }
 
+#[derive(Debug, Clone)]
+struct Ports {
+    pub president: u16,
+    pub minister: u16,
+    pub client: u16,
+}
+
+impl Default for Ports {
+    fn default() -> Self {
+        Self {
+            president: 65000,
+            minister: 65100,
+            client: 65400,
+        }
+    }
+}
+
+impl AddAssign<u16> for Ports {
+    fn add_assign(&mut self, rhs: u16) {
+        self.president += rhs;
+        self.minister += rhs;
+        self.client += rhs;
+    }
+}
+
 async fn bench_until_success(
-    pres_port: u16,
-    min_port: u16,
-    client_port: u16,
-    i: &mut u16,
+    ports: &mut Ports,
     run_numb: usize,
     command: bench::Command,
+    max_duration: Duration,
 ) {
     let bench = Bench::from(&command, 0);
     if results_present(run_numb, &command, &bench) {
@@ -191,68 +213,62 @@ async fn bench_until_success(
     }
 
     let output = loop {
-        *i += 1; // socket might close inproperly, increment ports
-                 // so we need not wait for the host to make the port availible again
-        match run_benchmark(
-            run_numb,
-            &bench,
-            pres_port + *i,
-            min_port + *i,
-            client_port + *i,
-            &command,
-        )
-        .await
-        {
-            Ok(output) => {
+        *ports += 1; // socket might close inproperly, increment ports
+                     // so we need not wait for the host to make the port availible again
+        let benchmark = run_benchmark(run_numb, &bench, ports.clone(), &command);
+
+        match timeout(max_duration, benchmark).await {
+            Ok(Ok(output)) => {
                 break output;
             }
-            Err(err) => {
+            Ok(Err(err)) => {
                 warn!("run failed retrying, err: {err:?}");
                 panic!();
             }
+            Err(_) => warn!("benchmark timed out"),
         }
     };
     info!("benchmark output: {output:?}");
 }
 
-async fn bench_ls(pres_port: u16, min_port: u16, client_port: u16) {
-    let mut i = 0;
+async fn bench_ls(mut ports: Ports) {
+    let max_duration = Duration::from_secs(120);
     for run_numb in 0..5 {
         for n_parts in 1..=5 {
             let command = bench::Command::LsBatch { n_parts };
-            bench_until_success(pres_port, min_port, client_port, &mut i, run_numb, command).await;
+            bench_until_success(&mut ports, run_numb, command, max_duration).await;
             let command = bench::Command::LsStride { n_parts };
-            bench_until_success(pres_port, min_port, client_port, &mut i, run_numb, command).await;
+            bench_until_success(&mut ports, run_numb, command, max_duration).await;
             println!("bench: nparts {n_parts}, run_numb: {run_numb} completed!");
         }
     }
 }
 
-async fn bench_touch(pres_port: u16, min_port: u16, client_port: u16) {
-    let mut i = 0;
+async fn bench_touch(mut ports: Ports) {
+    let max_duration = Duration::from_secs(120);
     for run_numb in 0..5 {
         for n_parts in 1..=5 {
             let command = bench::Command::Touch { n_parts };
-            bench_until_success(pres_port, min_port, client_port, &mut i, run_numb, command).await;
+            bench_until_success(&mut ports, run_numb, command, max_duration).await;
             println!("bench: nparts {n_parts}, run_numb: {run_numb} completed!");
         }
     }
 }
 
-async fn bench_range(pres_port: u16, min_port: u16, client_port: u16) {
-    let mut i = 0;
+async fn bench_range(mut ports: Ports) {
+    let max_duration = Duration::from_secs(120);
     for run_numb in 0..5 {
         for rows_len in [1_000, 10_000, 100_000, 1_000_000] {
             let command = bench::Command::RangeByRow {
                 rows_len,
                 clients_per_node: 3,
             };
-            bench_until_success(pres_port, min_port, client_port, &mut i, run_numb, command).await;
+            bench_until_success(&mut ports, run_numb, command, max_duration).await;
             let command = bench::Command::RangeWholeFile {
                 rows_len,
                 clients_per_node: 3,
             };
-            bench_until_success(pres_port, min_port, client_port, &mut i, run_numb, command).await;
+            bench_until_success(&mut ports, run_numb, command, max_duration).await;
             println!("run_numb: {run_numb} (rows len: {rows_len}) completed!");
         }
     }
@@ -264,20 +280,14 @@ async fn main() -> Result<()> {
     color_eyre::install().unwrap();
     // These port numbers are "randomly" picked to be usually free
     // on cluster nodes. Feel free to move them around
-    let (pres_port, min_port, client_port) = (65000, 65100, 65400);
+    let ports = Ports::default();
     let args = Args::parse();
 
-    let command = bench::Command::RangeByRow {
-        rows_len: 1000,
-        clients_per_node: 3,
-    };
-    bench_until_success(pres_port, min_port, client_port, &mut 1, 1, command).await;
-
-    // match args.command {
-    //     Command::Ls => bench_ls(pres_port, min_port, client_port).await,
-    //     Command::Touch => bench_touch(pres_port, min_port, client_port).await,
-    //     Command::Range => bench_range(pres_port, min_port, client_port).await,
-    // }
+    match args.command {
+        Command::Ls => bench_ls(ports).await,
+        Command::Touch => bench_touch(ports).await,
+        Command::Range => bench_range(ports).await,
+    }
 
     Ok(())
 }
