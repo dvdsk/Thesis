@@ -153,6 +153,7 @@ pub async fn colliding(client: &mut Client, writers: usize, row_len: u64) {
     writers.collect::<Vec<()>>().await;
 }
 
+#[instrument(skip(client, row_len))]
 async fn colliding_write((_id, mut client): (usize, Client), row_len: u64) {
     let mock_data = vec![0u8; row_len as usize];
     let mut file = client.open_writeable("/0/0".into()).await;

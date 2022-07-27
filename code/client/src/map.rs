@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 
 use rand::prelude::SliceRandom;
 use rand::thread_rng;
-use tracing::{debug, instrument};
+use tracing::{instrument, info, debug};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct Ministry {
@@ -73,9 +73,12 @@ impl Map {
         match res {
             Ok(idx) => {
                 debug!("updating existing map entry");
+                *self.0.get_mut(idx).unwrap() = ministry;
+            }
+            Err(idx) => { 
+                debug!("adding new map entry");
                 self.0.insert(idx, ministry);
             }
-            Err(idx) => self.0.insert(idx, ministry),
         };
     }
 }
@@ -119,5 +122,25 @@ mod tests {
             map.staff_for(&PathBuf::from("/testA/teetB/hello")).unwrap(),
             &test_ministry("/testA").staff
         );
+    }
+
+    fn test_ministry_with_port(path: &'static str, port: u16) -> Ministry {
+        Ministry {
+            staff: Staff {
+                minister: Some(format!("0.0.0.0:{port}").parse().unwrap()),
+                clerks: Vec::new(),
+            },
+            subtree: PathBuf::from(path),
+        }
+    }
+
+    #[test]
+    fn test_map_replace() {
+        let mut map = Map::default();
+        for i in 0..10 {
+            map.insert(test_ministry_with_port("/", i));
+        }
+
+        assert_eq!(map.0.len(), 1);
     }
 }

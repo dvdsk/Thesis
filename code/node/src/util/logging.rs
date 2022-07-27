@@ -40,7 +40,7 @@ where
 
 pub fn setup_tracing(instance: String, endpoint: Option<IpAddr>, run: u16) {
     let filter = filter::EnvFilter::builder()
-        .parse("warn,client=info,node::minister=debug,node::clerk=debug")
+        .parse("warn,client=info,node::minister=debug,node::clerk=debug,testing::action::bench=info")
         // .parse("info,instance_chart=warn,node::raft::subjects=trace") // debug subject send
         // .parse("info,instance_chart=warn")
         .unwrap();
