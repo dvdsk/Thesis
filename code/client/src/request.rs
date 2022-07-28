@@ -194,7 +194,7 @@ impl<T: RandomNode> super::Client<T> {
                     self.map.invalidate(path, broken.peer);
                 }
                 Err(e) => {
-                    warn!("Error connecting: {e:?}");
+                    debug!("Error connecting: {e:?}");
                     let broken = self.conn.take().unwrap();
                     self.map.invalidate(path, broken.peer);
                 }

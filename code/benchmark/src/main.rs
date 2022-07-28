@@ -224,7 +224,6 @@ async fn bench_until_success(
             }
             Ok(Err(err)) => {
                 warn!("run failed retrying, err: {err:?}");
-                panic!();
             }
             Err(_) => warn!("benchmark timed out"),
         }
@@ -287,13 +286,13 @@ async fn bench_range_vs_rowlen(mut ports: Ports) {
         for rows_len in [1_000, 10_000, 100_000, 1_000_000] {
             let command = bench::Command::RangeByRow {
                 rows_len,
-                clients_per_node: 3,
+                clients_per_node: 2,
                 client_nodes: 3,
             };
             bench_until_success(&mut ports, run_numb, command, max_duration).await;
             let command = bench::Command::RangeWholeFile {
                 rows_len,
-                clients_per_node: 3,
+                clients_per_node: 2,
                 client_nodes: 3,
             };
             bench_until_success(&mut ports, run_numb, command, max_duration).await;
