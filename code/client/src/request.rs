@@ -45,7 +45,7 @@ async fn connect(initial_addr: Option<SocketAddr>, nodes: &impl RandomNode) -> C
 
     loop {
         match Connection::connect(addr).await {
-            Err(e) => warn!("failed to connect to {addr:?}, error: {e:?}"),
+            Err(e) => debug!("failed to connect to {addr:?}, error: {e:?}"),
             Ok(conn) => return conn,
         }
         sleep(Duration::from_millis(100)).await;
