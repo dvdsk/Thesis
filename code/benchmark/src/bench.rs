@@ -141,10 +141,12 @@ pub enum Command {
     RangeByRow {
         rows_len: usize,
         clients_per_node: usize,
+        client_nodes: usize,
     },
     RangeWholeFile {
         rows_len: usize,
         clients_per_node: usize,
+        client_nodes: usize,
     },
     /// each client creates n files at unique paths
     Touch {
@@ -164,11 +166,13 @@ impl Bench {
             RangeByRow {
                 rows_len,
                 clients_per_node,
-            } => range::by_row(rows_len, clients_per_node),
+                client_nodes,
+            } => range::by_row(rows_len, clients_per_node, client_nodes),
             RangeWholeFile {
                 rows_len: rows,
                 clients_per_node,
-            } => range::whole_file(rows, clients_per_node),
+                client_nodes,
+            } => range::whole_file(rows, clients_per_node, client_nodes),
             Touch { n_parts } => touch::touch(n_parts, id),
         }
     }
@@ -182,11 +186,13 @@ impl Command {
             Command::RangeByRow {
                 rows_len,
                 clients_per_node,
-            } => format!("range-by-row {rows_len} {clients_per_node}"),
+                client_nodes,
+            } => format!("range-by-row {rows_len} {clients_per_node} {client_nodes}"),
             Command::RangeWholeFile {
                 rows_len,
                 clients_per_node,
-            } => format!("range-whole-file {rows_len} {clients_per_node}"),
+                client_nodes
+            } => format!("range-whole-file {rows_len} {clients_per_node} {client_nodes}"),
             Command::Touch { n_parts } => format!("touch {n_parts}"),
         }
         .into()
@@ -199,11 +205,13 @@ impl Command {
             Command::RangeByRow {
                 rows_len,
                 clients_per_node,
-            } => format!("RangeByRow/{rows_len}_{clients_per_node}"),
+                client_nodes
+            } => format!("RangeByRow/{rows_len}_{clients_per_node}_{client_nodes}"),
             Command::RangeWholeFile {
                 rows_len,
                 clients_per_node,
-            } => format!("RangeWholeFile/{rows_len}_{clients_per_node}"),
+                client_nodes,
+            } => format!("RangeWholeFile/{rows_len}_{clients_per_node}_{client_nodes}"),
             Command::Touch { n_parts } => format!("Touch/{n_parts}"),
         };
         PathBuf::from(format!("data/{path}/{node}.csv"))

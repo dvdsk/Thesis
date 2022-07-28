@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 
 use rand::prelude::SliceRandom;
 use rand::thread_rng;
-use tracing::{instrument, info, debug};
+use tracing::{instrument, debug};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct Ministry {

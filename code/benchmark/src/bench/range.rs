@@ -3,7 +3,7 @@ use crate::bench::Operation;
 use std::path::PathBuf;
 
 /// simulate writing 10 long rows
-pub fn by_row(rows_len: usize, clients_per_node: usize) -> Bench {
+pub fn by_row(rows_len: usize, clients_per_node: usize, client_nodes: usize) -> Bench {
     let path: PathBuf = "/mat".into();
     let operations = (0..10)
         .into_iter()
@@ -17,7 +17,7 @@ pub fn by_row(rows_len: usize, clients_per_node: usize) -> Bench {
 
     Bench {
         operations,
-        client_nodes: 3,
+        client_nodes,
         clients_per_node, 
         partitions: Vec::new(),
         additional_setup,
@@ -25,7 +25,7 @@ pub fn by_row(rows_len: usize, clients_per_node: usize) -> Bench {
 }
 
 /// read the entire file in one go
-pub fn whole_file(rows_len: usize, clients_per_node: usize) -> Bench {
+pub fn whole_file(rows_len: usize, clients_per_node: usize, client_nodes: usize) -> Bench {
     let path: PathBuf = "/mat".into();
     let operations = vec![Operation::Write {
         path: path.clone(),
@@ -36,7 +36,7 @@ pub fn whole_file(rows_len: usize, clients_per_node: usize) -> Bench {
 
     Bench {
         operations,
-        client_nodes: 3,
+        client_nodes,
         clients_per_node,
         partitions: Vec::new(),
         additional_setup,

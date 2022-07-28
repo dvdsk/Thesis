@@ -21,7 +21,8 @@ use tracing::{info, warn};
 #[derive(clap::Subcommand, Clone, Debug)]
 pub enum Command {
     Ls,
-    Range,
+    RangeVsRowlen,
+    RangeVsNWriters,
     Touch,
 }
 
@@ -255,18 +256,45 @@ async fn bench_touch(mut ports: Ports) {
     }
 }
 
-async fn bench_range(mut ports: Ports) {
+async fn bench_range_vs_n_writers(mut ports: Ports) {
+    const MAX_PER_NODE: f32 = 4.0;
+    let max_duration = Duration::from_secs(120);
+    let rows_len = 1_000;
+    for run_numb in 0..5 {
+        for clients in [1, 2, 4, 8, 16, 32] {
+            let client_nodes = ((clients as f32) / MAX_PER_NODE).ceil() as usize;
+            let clients_per_node = clients / client_nodes;
+            let command = bench::Command::RangeByRow {
+                rows_len,
+                clients_per_node,
+                client_nodes,
+            };
+            bench_until_success(&mut ports, run_numb, command, max_duration).await;
+            let command = bench::Command::RangeWholeFile {
+                rows_len,
+                clients_per_node,
+                client_nodes,
+            };
+            bench_until_success(&mut ports, run_numb, command, max_duration).await;
+            dbg!(run_numb, clients, clients_per_node, client_nodes);
+        }
+    }
+}
+
+async fn bench_range_vs_rowlen(mut ports: Ports) {
     let max_duration = Duration::from_secs(120);
     for run_numb in 0..5 {
         for rows_len in [1_000, 10_000, 100_000, 1_000_000] {
             let command = bench::Command::RangeByRow {
                 rows_len,
                 clients_per_node: 3,
+                client_nodes: 3,
             };
             bench_until_success(&mut ports, run_numb, command, max_duration).await;
             let command = bench::Command::RangeWholeFile {
                 rows_len,
                 clients_per_node: 3,
+                client_nodes: 3,
             };
             bench_until_success(&mut ports, run_numb, command, max_duration).await;
             println!("run_numb: {run_numb} (rows len: {rows_len}) completed!");
@@ -286,7 +314,8 @@ async fn main() -> Result<()> {
     match args.command {
         Command::Ls => bench_ls(ports).await,
         Command::Touch => bench_touch(ports).await,
-        Command::Range => bench_range(ports).await,
+        Command::RangeVsRowlen => bench_range_vs_rowlen(ports).await,
+        Command::RangeVsNWriters => bench_range_vs_n_writers(ports).await,
     }
 
     Ok(())
