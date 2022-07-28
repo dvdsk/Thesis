@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from collections import defaultdict
-from typing import List, Tuple
+from typing import List, Tuple, Dict
 import os
 
 import numpy as np
@@ -120,48 +120,52 @@ def Remove_Outlier_Indices(df):
     return trueList
 
 
-def ls_duration():
+def catargory_dur(catagories: Dict[str, str], hue_title: str,
+                  operation: str, x_label: str, x_values=[1, 2, 3, 4, 5],
+                  x_append: str = ""):
     # headers: n_ministeries, duration, access_pattern
     data = {
-        "number of ministries": [],
-        "ls duration": [],
-        "access pattern": [],
+        x_label: [],
+        operation: [],
+        hue_title: [],
     }
     print(data)
 
-    for (pattern, dir) in [("batch", "LsBatch"), ("stride", "LsStride")]:
-        for n in [1, 2, 3, 4, 5]:
-            durations = data_from(f"data/{dir}/{n}").durations()
-            data["ls duration"].append(durations)
-            data["number of ministries"].append(np.full(durations.size, n))
-            data["access pattern"].append(np.full(durations.size, pattern))
+    for (catarory, dir) in catagories.items():
+        for n in x_values:
+            durations = data_from(f"data/{dir}/{n}{x_append}").durations()
+            data[operation].append(durations)
+            data[x_label].append(np.full(durations.size, n))
+            data[hue_title].append(np.full(durations.size, catarory))
 
     for key in data.keys():
         data[key] = np.hstack(data[key])
 
     data = pd.DataFrame(data)
-    filterd = remove_outliers(data, "ls duration", 2)
+    filterd = remove_outliers(data, operation, 2)
 
     plt.plot()
 
     # plt.yscale("log") # do log when keeping outliers
-    # sns.boxplot(x="number of ministries", y="ls duration",
-    #             hue="access pattern", data=data, showfliers = False)
+    # sns.boxplot(x=x_label, y=operation,
+    #             hue=hue_title, data=data, showfliers = False)
+    # sns.scatterplot(x=x_label, y=operation,
+    #                 hue=hue_title, data=data)
 
-    sns.violinplot(x="number of ministries", y="ls duration",
-                   hue="access pattern", data=filterd)
+    sns.violinplot(x=x_label, y=operation,
+                   hue=hue_title, data=filterd)
 
-    # sns.swarmplot(x="number of ministries", y="ls duration",
-    #               hue="access pattern", data=filterd)
+    # sns.swarmplot(x=x_label, y=operation,
+    #               hue=hue_title, data=filterd)
 
     plt.show()
 
 
-def dur_dist(bench: str):
+def dur_dist(bench: str, operation: str):
     # headers: n_ministeries, duration, access_pattern
     data = {
         "number of ministries": [],
-        "create duration": [],
+        f"{operation} duration": [],
     }
     print(data)
 
@@ -226,7 +230,11 @@ def dur_vs_time(bench: str):
     plt.show()
 
 
-# ls_duration()
-dur_dist("LsStride")
-# dur_dist("Touch")
+catargory_dur({"write by row": "RangeByRow", "write entire file": "RangeWholeFile"},
+              "write pattern", "write", "row length (Kb)",
+              x_values=[1000, 10_000, 100_000, 1_000_000], x_append="_3")
+# catargory_dur({"batch": "LsBatch", "stride": "LsStride"},
+#               "access pattern", "number of ministries")
+# dur_dist("LsStride", "ls")
+# dur_dist("Touch", "create")
 # dur_vs_time("Touch")
