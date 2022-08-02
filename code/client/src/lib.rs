@@ -64,7 +64,7 @@ async fn mock_read(buf: &mut [u8], n_read: &mut usize) {
 
 #[instrument(skip(buf))]
 async fn mock_write(buf: &[u8], n_written: &mut usize) {
-    let write_speed: usize = 200_000_000 / 1000; // 500 mb/s in bytes per millisec
+    let write_speed: usize = 200_000_000 / 1000; // 200 mb/s in bytes per millisec
     mock_data_plane_interaction(buf, n_written, write_speed).await;
 }
 
