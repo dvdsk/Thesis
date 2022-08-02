@@ -18,6 +18,9 @@ class Client:
     def durations(self) -> np.ndarray:
         return self.end_times - self.start_times
 
+    def sum(self) -> float:
+        return self.durations().sum()
+
 
 def client_from(lines: List[str]) -> Client:
     numb = int(''.join(ch for ch in lines[0] if ch.isdigit()))
@@ -82,6 +85,14 @@ class Data:
                     end_times.append(client.end_times)
         return np.hstack(start_times), np.hstack(end_times)
 
+    def client_sums(self) -> np.ndarray:
+        res = []
+        for run in self.runs:
+            for node in run.nodes:
+                for client in node.clients:
+                    res.append(client.sum())
+        return np.hstack(res)
+
 
 def data_from(dir: str) -> Data:
     nodes_by_run = defaultdict(list)
@@ -134,7 +145,12 @@ def catargory_dur(catagories: Dict[str, str], hue_title: Optional[str],
 
     for (catarory, dir) in catagories.items():
         for (subdir, label) in x_values.items():
-            durations = data_from(f"data/{dir}/{subdir}").durations() * y_mul
+            if catarory == "write by row":
+                durations = data_from(
+                    f"data/{dir}/{subdir}").client_sums() * y_mul
+            else:
+                durations = data_from(
+                    f"data/{dir}/{subdir}").durations() * y_mul
             data[operation].append(durations)
             data[x_label].append(np.full(durations.size, label))
             if hue_title is not None:
@@ -151,19 +167,23 @@ def catargory_dur(catagories: Dict[str, str], hue_title: Optional[str],
     sns.despine(bottom=True)
     # plt.yscale("log") # do log when keeping outliers
     if violinplot is None:
-        sns.boxplot(x=x_label, y=operation,
-                    hue=hue_title, data=filterd, showfliers=False)
+        # sns.boxplot(x=x_label, y=operation,
+        #             hue=hue_title, data=filterd, showfliers=False)
+        # sns.swarmplot(x=x_label, y=operation,
+        #               hue=hue_title, data=filterd)
+        # ax = sns.boxplot(x=x_label, y=operation,
+        #             hue=hue_title, data=filterd, showfliers=False, whis=np.inf, dodge=True)
+        # ax = sns.swarmplot(x=x_label, y=operation, size=3,
+        #               hue=hue_title, data=filterd, ax=ax, dodge=True, color="0.7")
+        ax = sns.swarmplot(x=x_label, y=operation, size=3,
+                           hue=hue_title, data=filterd, dodge=False)
     else:
         sns.violinplot(x=x_label, y=operation,
                        hue=hue_title, data=filterd, cut=0, **violinplot)
 
-    # sns.swarmplot(x=x_label, y=operation,
-    #               hue=hue_title, data=filterd)
-
 
 def dur_dist(bench: str, operation: str, ylabel: str, xlabel: str,
              xlim: Optional[Tuple[float, float]] = None, histplot: bool = False):
-    # headers: n_ministeries, duration, access_pattern
     x_mul = 1000
     data = {
         "number of ministries": [],
@@ -182,14 +202,14 @@ def dur_dist(bench: str, operation: str, ylabel: str, xlabel: str,
     data = pd.DataFrame(data)
     filterd = remove_outliers(data, f"{operation} duration", 4)
 
-    plt.plot()
+    plt.figure()
     sns.despine()
 
     if xlim is not None:
         plt.xlim(tuple([x_mul*lim for lim in xlim]))
 
     if histplot:
-        sns.histplot(
+        ax = sns.histplot(
             data=filterd,
             x=f"{operation} duration", hue="number of ministries",
             multiple="stack",
@@ -198,7 +218,7 @@ def dur_dist(bench: str, operation: str, ylabel: str, xlabel: str,
             linewidth=.1,
         )
     else:
-        sns.ecdfplot(
+        ax = sns.ecdfplot(
             data=filterd,
             x=f"{operation} duration", hue="number of ministries",
             # multiple="stack",
@@ -206,6 +226,8 @@ def dur_dist(bench: str, operation: str, ylabel: str, xlabel: str,
         )
     plt.ylabel(ylabel)
     plt.xlabel(xlabel)
+
+    return ax
 
 
 def dur_vs_time(bench: str):
@@ -241,50 +263,55 @@ def dur_vs_time(bench: str):
 
 os.makedirs("plots", exist_ok=True)
 
-# catargory_dur({"write by row": "RangeByRow", "write entire file": "RangeWholeFile"},
-#               "write pattern", "write duration (ms)", "number of writers",
-#               {"1000_1_1": "1", "1000_2_1": "2", "1000_4_1": "4",
-#                "1000_4_2": "8", "1000_4_4": "16", "1000_4_8": "32"},
-#               violinplot={"bw": 0.01, "linewidth": 0.3, "inner": None,
-#                           "scale": "width", "scale_hue": False}, y_mul=1000)
-# plt.savefig("plots/range_vs_writers_both.png")
-# plt.clf()
+catargory_dur({"write by row": "RangeByRow", "write entire file": "RangeWholeFile"},
+              "write pattern", "write duration (ms)", "number of writers",
+              {"1000_1_1": "1", "1000_2_1": "2", "1000_4_1": "4",
+               "1000_4_2": "8", "1000_4_4": "16", "1000_4_8": "32"},
+              y_mul=1000)
+plt.savefig("plots/range_vs_writers_both.svg")
+plt.legend(loc="upper left")
+plt.clf()
 
-# catargory_dur({"write by row": "RangeByRow"},
-#               None, "write duration (ms)", "number of writers",
-#               {"1000_1_1": "1", "1000_2_1": "2", "1000_4_1": "4",
-#                "1000_4_2": "8", "1000_4_4": "16", "1000_4_8": "32"}, y_mul=1000)
-# plt.savefig("plots/range_vs_writers_by_row.png")
-# plt.clf()
-#
-# catargory_dur({"write by row": "RangeByRow", "write entire file": "RangeWholeFile"},
-#               "write pattern", "write duration (ms)", "row length (bytes)",
-#               {"1000_2_3": "1000", "10000_2_3": "10,000", "100000_2_3": "100,000",
-#                "1000000_2_3": "1,000,000"},
-#               violinplot={"bw": 0.01, "linewidth": 0.3, "inner": None,
-#                           "scale": "width", "scale_hue": False}, y_mul=1000)
-# plt.savefig("plots/range_vs_row_len.png")
-# plt.clf()
-#
-# catargory_dur({"batch": "LsBatch", "stride": "LsStride"},
-#               "access pattern", "ls duration (ms)", "number of ministries",
-#               {"1": "1", "2": "2", "3": "3", "4": "4", "5": "5"}, y_mul=1000,
-#               violinplot = {"bw": 0.01, "linewidth": 0.3, "inner": None,
-#                           "scale": "width", "scale_hue": False})
-# plt.legend(loc="upper left")
-# plt.savefig("plots/ls_vs_numb_ministries.png")
-# plt.clf()
-#
-# dur_dist("LsStride", "ls", "proportion ls requests done within", "time (ms)",
-#          xlim=(0, 0.002))
-# plt.savefig("plots/ls_stride.svg")
-# plt.clf()
-#
-# dur_dist("Touch", "create", "proportion of touches done within", "time (ms)")
-# plt.savefig("plots/touch.svg")
-# plt.clf()
-#
-# dur_vs_time("Touch")
-# plt.savefig("plots/touch_vs_time.svg")
-# plt.clf()
+catargory_dur({"write by row": "RangeByRow"},
+              None, "write duration (ms)", "number of writers",
+              {"1000_1_1": "1", "1000_2_1": "2", "1000_4_1": "4",
+               "1000_4_2": "8", "1000_4_4": "16", "1000_4_8": "32"}, y_mul=1000)
+plt.savefig("plots/range_vs_writers_by_row.svg")
+plt.clf()
 
+catargory_dur({"write by row": "RangeByRow", "write entire file": "RangeWholeFile"},
+              "write pattern", "write duration (ms)", "row length (bytes)",
+              {"1000_2_3": "1000", "10000_2_3": "10,000", "100000_2_3": "100,000",
+               "1000000_2_3": "1,000,000"}, y_mul=1000)
+plt.savefig("plots/range_vs_row_len.svg")
+plt.clf()
+
+catargory_dur({"batch": "LsBatch", "stride": "LsStride"},
+              "access pattern", "ls duration (ms)", "number of ministries",
+              {"1": "1", "2": "2", "3": "3", "4": "4", "5": "5"}, y_mul=1000,
+              violinplot={"bw": 0.01, "linewidth": 0.3, "inner": None,
+                          "scale": "width", "scale_hue": False})
+plt.legend(loc="upper left")
+plt.savefig("plots/ls_vs_numb_ministries.svg")
+plt.clf()
+
+dur_dist("LsStride", "ls", "proportion ls requests done", "time (ms)",
+         xlim=(0, 0.002))
+plt.savefig("plots/ls_stride.svg")
+plt.clf()
+
+dur_dist("LsBatch", "ls", "proportion ls requests done", "time (ms)",
+         xlim=(0, 0.002))
+plt.savefig("plots/ls_batch.svg")
+plt.clf()
+
+ax = dur_dist("Touch", "create", "proportion of creates done",
+              "time (ms)")
+sns.move_legend(ax, "lower right", bbox_to_anchor=(0.85, 0.2), ncol=2)
+plt.savefig("plots/touch.svg")
+plt.clf()
+
+dur_vs_time("Touch")
+sns.move_legend(ax, "upper right", ncol=2)
+plt.savefig("plots/touch_vs_time.svg")
+plt.clf()
