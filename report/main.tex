@@ -26,7 +26,7 @@
 \author{David Kleingeld}
 
 % % double spacing
-\linespread{1.5}
+% \linespread{1.5}
 
 \begin{document}
 
@@ -73,6 +73,8 @@
 	\acro{gc}[\textacro{GC}]{Garbage Collection}
 	\acro{tdd}[\textacro{TDD}]{Type Driven Development}
 	\acro{raii}[\textacro{RAII}]{Resource Acquisition Is Initialization}
+	\acro{cdf}[\textacro{CDF}]{cumulative density function}
+	\acro{mby}[\textacro{MB}]{megabyte}
 \end{acronym}
 
 \input{figs/diagrams/styles.tex}
@@ -80,6 +82,7 @@
 \section{Introduction} \label{sec:intro}
 \input{content/intro}
 
+\clearpage
 \section{Background}
 \textbf{TODO write tiny intro, do after introduction has been written}
 \input{content/theory/distributed.tex}
@@ -90,19 +93,24 @@
 
 \acresetall{}
 \acused{api}
+\clearpage
 \section{Design}
 \input{content/design/architecture.tex}
 \input{content/design/operations.tex}
 
+\clearpage
 \section{Implementation}
 \input{content/implementation.tex}
 
+\clearpage
 \section{Results}
 \input{content/results.tex}
 
+\clearpage
 \section{Discussion} \label{sec:discussion}
 \input{content/discussion.tex}
 
+\clearpage
 \section{Future work} \label{sec:fut}
 \input{content/future_work.tex}
 

@@ -1,24 +1,101 @@
-The current implementation, while functional, is far from optimal. There are bottlenecks which restrict performance and the system is unstable. It is not feasible for a master’s thesis to build a system as fast and as performant and stable as \ceph{} or \ac{hdfs}. Here I explored whether an architecture using ministries and ranged based file locking offers an advantage to existing solutions. We can still answer that question. 
+The current implementation, while functional, is far from optimal. There are bottlenecks which restrict performance and the system is unstable. It is not feasible to build a system as fast and as performant and stable as \ceph{} or \ac{hdfs} within the scope of a thesis to. Here I have explored whether an architecture using ministries and ranged based file locking offers an advantage to existing solutions. We can still answer that question given these restrictions. 
 
-Before we can design experiments that work around the limitations we need to be clear on what those are:
+Before we can design experiments that work around the limitations we need to be clear on what the limitations are:
 
 \begin{itemize}
-	\item The \raft{} implementation sends only a single log entry at the time and log entries are sent each heartbeat period instead of whenever data becomes available. Effectively imposing a rate limit on the number of changes made to metadata.
-	\item Load balancing only replaces nodes that went down, it does not do runtime subtree partitioning (see:~\cref{sec:subtree}).
-	\item When making a large amount of requests changing metadata nodes become unresponsive. This means it starts missing heartbeats which triggers re-elections. % NEEDS to be solved
+	\item The \raft{} implementation sends only a single log entry at the time and log entries are sent each heartbeat period instead of whenever data becomes available. Effectively this imposes a rate limit on the number of changes made to metadata.
+	\item Load balancing only replaces nodes that go down, it does not perform subtree partitioning at runtime (see:~\cref{sec:subtree}).
+	\item Sometimes nodes become unresponsive when making many requests that change metadata. They then miss heartbeats which triggers re-elections.
 \end{itemize}
 
-None of these impact range based file locking. We can work around them testing the architecture. To check if the results would change without these limitations I profile the system highlighting any bottlenecks that would impact performance.
+Firs we look at the \textit{ministry architecture} tracking how performance changes when we change the number of ministries. Then we look at \textit{ranged based file locking} by comparing write performance with and without locking. Every benchmark was performed five times and all the results are presented. All nodes where monitored during each run and if an error occurred we repeated the entire run. The raw data is available \href{https://github.com/dvdsk/Thesis}{github.com/dvdsk/Thesis}.
+
+All the benchmarks have been performed using the fifth generation distributed ASCI Supercomputer \cite{das5}. Each node has a Dual eight-core Intel Xeon E5-2630 v3 and 125G of ram. The system is equipped with InfiniBand however we use the normal Ethernet networking as networking delays are a key characteristic of the systems' performance.
 
 \subsection{Ministry Architecture}
-Here we test the impact of varying amount of ministries on performance. If more ministries lead to a significant performance increase then the design is a success. 
+Here we test the impact of varying amount of ministries on performance. We expect to see an almost linear improvement with more ministries given optimal size and shape of the load.
 
-Given the limitation of unimplemented live subtree partitioning we need to manually configure the file system. Without prior data the load balancer will initialize a single ministry responsible for the root directory. For this test we modify it to initialize n ministries one hosting the root the others the directories 0 till n-1 each located in the root.
+Live subtree partitioning is still unimplemented we work around this by implementing static subtree partitioning. The load balancer starts by initializing a single ministry responsible for the root directory. Additional static ministries can be passed through command line parameters. For these test we let it initialize n-1 ministries at paths \textsl{/n}.
 
-If there was no rate limit\footnote{Imposed by the suboptimal \raft{} implementation} then load could increase until the node could no longer keep up. Effectively the node's hardware would impose a (high) rate limit. This assumes that there are no other bottlenecks, possible inherent to the design, in the system. The latter we investigate by profiling the nodes, see:~\cref{sec:profile}.
+\subsubsection{List directory}
+To test performance we send 60 thousand ls requests for various directories from 30 clients concurrently. Each client sends the requests one after another as fast as possible. To keep the overhead from sending back the directory content each directory contains only 10 files. The client processes are spread between 3 physical nodes. 
 
-% TODO actual results
+The 2000 ls requests each client sends are in two different orders: \textit{batch} and \textit{stride}. In \textit{batch} a client performs all the ls requests for a single directory before sending those for the next. When using the \textit{stride} pattern a client sends a request to the first directory and then sends the next request to another directory. The results below hide extreme outliers two standard deviations outside the mean which are requests taking longer then 2ms.
 
+In \cref{fig:ls_vs_ministries} we see a violin plot comparing the two request orders for clusters with various number of directories. On the Y-axis we see the time it took a single request to complete. A wider distribution means more requests where completed within the same time. Note the multimodal distribution, the increasing duration for the slowest requests as the number of ministries increases and the difference in the fastest times between batch and stride.
+
+\Cref{fig:ls_cdf} shows a \ac{cdf} for requests send by clients using \textit{batch} mode. On the Y-axis are the proportion of requests that complete within the time on the X-axis. Note using 1 ministry is always the fastest followed initially by 5 ministries until 80% of te requests complete at which point it becomes the slowest. 
+
+\begin{figure}[htbp]
+	\centering
+	\includesvg{../results/plots/ls_vs_numb_ministries.svg}
+	\caption{}
+	\label{fig:ls_vs_ministries}
+\end{figure}%
+
+\begin{figure}[htbp]
+	\centering
+	\includesvg{../results/plots/ls_batch.svg}
+	\caption{}
+	\label{fig:ls_cdf}
+\end{figure}
+
+\clearpage{}
+\subsubsection{Create file}
+The current implementation effectively imposes a rate limit on the log. To create a file a minister appends a single message to the log, this makes creating files also rate limited. Without this rate limit load could increase until the communication with the clerks or the hardware of the nodes becomes the bottleneck\footnote{That is assuming there are no other bottlenecks. We investigate this by profiling the nodes, see:~\cref{sec:profile}}. 
+
+Therefore, it is interesting to see how the performance scales with the number of ministries as more ministries would  solve future bottlenecks.
+
+Because of the rate limit we send only 90 create requests. They are sent from 9 clients concurrently. These numbers where empirically determined to maximize the load while keeping the cluster stable enough to complete all the tests.
+
+In \cref{fig:touch} we again see a \ac{cdf}. On the Y-axis the proportion of write requests completed and on the X-axis the time in milliseconds. Note the minimal latency creating a request is about 70 milliseconds. Furthermore, the more ministries we use the faster most requests are done. Finally, note the proportion of requests to complete jumps up in discrete for each configuration.
+
+\Cref{fig:touch_vs_time} offers another look at the same data. Here we see the time needed for each request as a function of when the request started. Darker tones are requests from tests with more ministries. On the Y-axis we see the time needed to complete the request in seconds while on the (logarithmic) X-axis we see the time a request was sent. The vertical jumps in the \ac{cdf} (\cref{fig:touch}) show up as horizontal bands here. For example the lowest horizontal band are requests that took 70 ms which matches the first vertical jump. Note that the gap just after the start of the test. It is consistent with requests taking at least 70ms.
+
+\begin{figure}[htbp]
+	\centering
+	\includesvg{../results/plots/touch.svg}
+	\caption{}
+	\label{fig:touch}
+\end{figure}
+
+\begin{figure}[htbp]
+	\centering
+	\includesvg{../results/plots/touch_vs_time.svg}
+	\caption{}
+	\label{fig:touch_vs_time}
+\end{figure}
+
+\clearpage{}
 \subsection{Range based file locking}
+We evaluate the contribution of ranged writes vs writing to the entire file. A good use case of ranged file access is writing out one or more rows in a file that consists of equally sized rows. We can do this by requesting exclusive access to the entire file and writing out all the needed rows or by requesting access to and writing out one row at the time. We expect the second method to be faster when contending with more clients for the same file and with larger files. 
+
+We look at the performance while varying the file size or the number of clients trying to write to the file. The file contains 10 rows. When varying the file size we use 6 concurrent writers. When we vary the number of concurrent writers the row size is fixed at 1000 bytes. Even though they write concurrently all writes will do their writes in the same order. 
+
+Since \name{} has no data plane writing is simulated by sleeping on the client side. We simulate writing at a speed of 200 \ac{mby} per second\footnote{This corresponds to a slow hard drive. That is the best case scenario for writing by row since it increases the ration of time writing versus connecting and locking the file}. When writing 10 rows of 1000 bytes the client spends 0.5 milliseconds writing. For rows of 1 MB this grows to 50 milliseconds
+
+In \cref{fig:rowlen} we see a violin plot showing the distribution of the time it takes to complete a write operation for various row sizes. Note the multimodal distribution and writing the data by row being substantially slower.
+
+
+\begin{figure}[htbp]
+	\centering
+	\includesvg{../results/plots/range_vs_row_len.svg}
+	\caption{}
+	\label{fig:rowlen}
+\end{figure}%
+
+\begin{figure}[htbp]
+	\centering
+	\includesvg{../results/plots/range_vs_writers_both.svg}
+	\caption{}
+	\label{fig:}
+\end{figure}
+
+\begin{figure}[htbp]
+	\centering
+	\includesvg{../results/plots/range_vs_writers_by_row.svg}
+	\caption{}
+	\label{fig:}
+\end{figure}
 
 \subsection{Profiling} \label{sec:profile}
