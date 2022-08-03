@@ -68,34 +68,46 @@ In \Cref{fig:touch} we see \acp{cdf} for creating files with various number of m
 
 \clearpage{}
 \subsection{Range based file locking}
-We evaluate the contribution of ranged writes vs writing to the entire file. A good use case of ranged file access is writing out one or more rows in a file that consists of equally sized rows. We can do this by requesting exclusive access to the entire file and writing out all the needed rows or by requesting access to and writing out one row at the time. We expect the second method to be faster when contending with more clients for the same file and with larger files. 
+We evaluate the contribution of ranged writes vs writing to the entire file. A good use case of ranged file access is writing out one or more rows in a file that consists of equally sized rows. We can do this by requesting exclusive access to the entire file and writing out all the needed rows. Alternatively we can request access to and writing out one row at the time. We expect the second method to be faster when contending with more clients for the same file and with larger files. 
 
-We look at the performance while varying the file size or the number of clients trying to write to the file. The file contains 10 rows. When varying the file size we use 6 concurrent writers. When we vary the number of concurrent writers the row size is fixed at 1000 bytes. Even though they write concurrently all writes will do their writes in the same order. 
+Here we benchmark these different methods using two different. First we look at writing a single row of a file with 10 rows in total from multiple clients simultaneously. Secondly we try writing all rows again from multiple clients simultaneously. When accessing and writing by row each client uses a random order. For the experiments where we write only a single row this means the row is chosen at random.
+
+We see how performance changes when changing the row size or number of concurrent writers. For the results over varying row size 6 concurrent writers where used. When changing the number of writers the row size was kept at %TODO FIXME NUMBER bytes.
 
 Since \name{} has no data plane writing is simulated by sleeping on the client side. We simulate writing at a speed of 200 \ac{mby} per second\footnote{This corresponds to a slow hard drive. That is the best case scenario for writing by row since it increases the ration of time writing versus connecting and locking the file}. When writing 10 rows of 1000 bytes the client spends 0.5 milliseconds writing. For rows of 1 MB this grows to 50 milliseconds
 
-In \Cref{fig:rowlen} we see a violin plot showing the distribution of the time it takes to complete a write operation for various row sizes. Note the multimodal distribution and writing the data by row being substantially slower.
+\subsubsection{Writing a single row}
+In \Cref{fig:single_rowlen} we see 
 
+\begin{figure}[htbp]
+	\centering
+	\includesvg{../results/plots/single_vs_row_len.svg}
+	\caption{writing a single row vs row len}
+	\label{fig:single_rowlen}
+\end{figure}%
+
+\begin{figure}[htbp]
+	\centering
+	\includesvg{../results/plots/single_vs_writers_both.svg}
+	\caption{writing a single row vs writers}
+	\label{fig:single_writers}
+\end{figure}
+
+\subsubsection{Writing the entire file}
+In \Cref{fig:rowlen} we see a violin plot showing the distribution of the time it takes to complete a write operation for various row sizes. Note the multimodal distribution and writing the data by row being substantially slower.
 
 \begin{figure}[htbp]
 	\centering
 	\includesvg{../results/plots/range_vs_row_len.svg}
-	\caption{}
+	\caption{writing the entire file range vs row length}
 	\label{fig:rowlen}
 \end{figure}%
 
 \begin{figure}[htbp]
 	\centering
 	\includesvg{../results/plots/range_vs_writers_both.svg}
-	\caption{}
-	\label{fig:}
-\end{figure}
-
-\begin{figure}[htbp]
-	\centering
-	\includesvg{../results/plots/range_vs_writers_by_row.svg}
-	\caption{}
-	\label{fig:}
+	\caption{writing the entire file range numb writers}
+	\label{fig:writers}
 \end{figure}
 
 \subsection{Profiling} \label{sec:profile}
