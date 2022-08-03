@@ -1,6 +1,6 @@
-use std::{ops::Range, collections::HashSet};
 use std::path::PathBuf;
 use std::time::Duration;
+use std::{collections::HashSet, ops::Range};
 
 use protocol::{DirList, Request};
 
@@ -111,6 +111,22 @@ impl<'a, T: RandomNode> WritableFile<'a, T> {
                 end: buf.len() as u64,
             };
             let lease = Lease::get_write(self.client, &self.path, range)
+                .await
+                .unwrap();
+
+            tokio::select! {
+                _ = lease.hold() => (),
+                _ = mock_write(buf, &mut n_written) => return,
+            }
+        }
+    }
+
+    /// simulates writing to part of a file without using range based locking
+    /// by locking the the entire file
+    pub async fn posix_write(&mut self, buf: &[u8], lock_range: Range<u64>) {
+        let mut n_written = 0;
+        loop {
+            let lease = Lease::get_write(self.client, &self.path, lock_range.clone())
                 .await
                 .unwrap();
 

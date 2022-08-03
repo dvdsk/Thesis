@@ -186,9 +186,9 @@ struct Ports {
 impl Default for Ports {
     fn default() -> Self {
         Self {
-            president: 65000,
-            minister: 65100,
-            client: 65400,
+            president: 35000,
+            minister: 45100,
+            client: 45400,
         }
     }
 }
@@ -258,7 +258,7 @@ async fn bench_touch(mut ports: Ports) {
 async fn bench_range_vs_n_writers(mut ports: Ports) {
     const MAX_PER_NODE: f32 = 4.0;
     let max_duration = Duration::from_secs(420); // 12 minutes
-    let rows_len = 1_000_000;
+    let rows_len = 10_000_000;
     for run_numb in 0..5 {
         for clients in [1, 2, 4, 8, 16, 32] {
             let client_nodes = ((clients as f32) / MAX_PER_NODE).ceil() as usize;
@@ -275,6 +275,18 @@ async fn bench_range_vs_n_writers(mut ports: Ports) {
                 client_nodes,
             };
             bench_until_success(&mut ports, run_numb, command, max_duration).await;
+            let command = bench::Command::DumbRow {
+                rows_len,
+                clients_per_node,
+                client_nodes,
+            };
+            bench_until_success(&mut ports, run_numb, command, max_duration).await;
+            let command = bench::Command::SingleRow {
+                rows_len,
+                clients_per_node,
+                client_nodes,
+            };
+            bench_until_success(&mut ports, run_numb, command, max_duration).await;
             dbg!(run_numb, clients, clients_per_node, client_nodes);
         }
     }
@@ -283,7 +295,16 @@ async fn bench_range_vs_n_writers(mut ports: Ports) {
 async fn bench_range_vs_rowlen(mut ports: Ports) {
     let max_duration = Duration::from_secs(120);
     for run_numb in 0..5 {
-        for rows_len in [1_000, 10_000, 100_000, 1_000_000, 10_000_000, 100_000_000] { //, 1_000_000_000] {
+        for rows_len in [
+            1_000,
+            10_000,
+            100_000,
+            1_000_000,
+            10_000_000,
+            20_000_000,
+            40_000_000,
+            80_000_000,
+        ] {
             let command = bench::Command::RangeByRow {
                 rows_len,
                 clients_per_node: 2,
@@ -293,6 +314,18 @@ async fn bench_range_vs_rowlen(mut ports: Ports) {
             let command = bench::Command::RangeWholeFile {
                 rows_len,
                 clients_per_node: 2,
+                client_nodes: 3,
+            };
+            bench_until_success(&mut ports, run_numb, command, max_duration).await;
+            let command = bench::Command::DumbRow {
+                rows_len,
+                clients_per_node: 10,
+                client_nodes: 3,
+            };
+            bench_until_success(&mut ports, run_numb, command, max_duration).await;
+            let command = bench::Command::SingleRow {
+                rows_len,
+                clients_per_node: 10,
                 client_nodes: 3,
             };
             bench_until_success(&mut ports, run_numb, command, max_duration).await;

@@ -1,23 +1,35 @@
 use client::Client;
 use itertools::{chain, Itertools};
-use std::{
-    ffi::OsString,
-    ops::Range,
-    path::PathBuf,
-    time::Instant,
-};
+use std::{ffi::OsString, ops::Range, path::PathBuf, time::Instant};
 use tracing::instrument;
 
 mod ls;
-mod touch;
 mod range;
+mod touch;
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum Operation {
-    Ls { path: PathBuf },
-    Touch { path: PathBuf },
-    Read { path: PathBuf, range: Range<u64> },
-    Write { path: PathBuf, range: Range<u64> },
+    Ls {
+        path: PathBuf,
+    },
+    Touch {
+        path: PathBuf,
+    },
+    Read {
+        path: PathBuf,
+        range: Range<u64>,
+    },
+    Write {
+        path: PathBuf,
+        range: Range<u64>,
+    },
+    /// locks the entire file to do a write.
+    /// Take care to ensure lock_range takes up the entire file
+    PosixWrite {
+        path: PathBuf,
+        lock_range: Range<u64>,
+        write_range: Range<u64>,
+    },
 }
 
 impl Operation {
@@ -25,8 +37,8 @@ impl Operation {
         match self {
             Operation::Ls { path } => {
                 let res = client.list(path.clone()).await;
-            /* TODO: remove during bench <dvdsk noreply@davidsk.dev> */
-                assert!(res.len() > 0, "no files on path: {path:?}"); 
+                /* TODO: remove during bench <dvdsk noreply@davidsk.dev> */
+                assert!(res.len() > 0, "no files on path: {path:?}");
             }
             Operation::Touch { path } => client.create_file(path).await,
             Operation::Read { path, range } => {
@@ -39,6 +51,16 @@ impl Operation {
                 file.seek(range.start);
                 file.write(&buf[0..(range.end as usize)]).await;
             }
+            Operation::PosixWrite {
+                path,
+                lock_range,
+                write_range,
+            } => {
+                let mut file = client.open_writeable(path).await;
+                file.seek(write_range.start);
+                file.posix_write(&buf[0..(write_range.end as usize)], lock_range)
+                    .await;
+            }
         }
     }
 
@@ -46,8 +68,9 @@ impl Operation {
         match self {
             Operation::Ls { .. } => None,
             Operation::Touch { .. } => None,
-            Operation::Read { path, .. } => Some(path.clone()),
-            Operation::Write { path, .. } => Some(path.clone()),
+            Operation::Read { path, .. }
+            | Operation::Write { path, .. }
+            | Operation::PosixWrite { path, .. } => Some(path.clone()),
         }
     }
 }
@@ -148,16 +171,25 @@ pub enum Command {
         clients_per_node: usize,
         client_nodes: usize,
     },
+    DumbRow {
+        rows_len: usize,
+        clients_per_node: usize,
+        client_nodes: usize,
+    },
+    SingleRow {
+        rows_len: usize,
+        clients_per_node: usize,
+        client_nodes: usize,
+    },
     /// each client creates n files at unique paths
     Touch {
         n_parts: usize,
     },
-    
 }
 
 impl Bench {
     pub fn from(cmd: &Command, id: usize) -> Self {
-        use ls::{stride, batch};
+        use ls::{batch, stride};
         use Command::*;
 
         match *cmd {
@@ -169,10 +201,20 @@ impl Bench {
                 client_nodes,
             } => range::by_row(rows_len, clients_per_node, client_nodes),
             RangeWholeFile {
-                rows_len: rows,
+                rows_len,
                 clients_per_node,
                 client_nodes,
-            } => range::whole_file(rows, clients_per_node, client_nodes),
+            } => range::whole_file(rows_len, clients_per_node, client_nodes),
+            DumbRow {
+                rows_len,
+                clients_per_node,
+                client_nodes,
+            } => range::dumb_row(rows_len, clients_per_node, client_nodes),
+            SingleRow {
+                rows_len,
+                clients_per_node,
+                client_nodes,
+            } => range::single_row(rows_len, clients_per_node, client_nodes),
             Touch { n_parts } => touch::touch(n_parts, id),
         }
     }
@@ -191,9 +233,19 @@ impl Command {
             Command::RangeWholeFile {
                 rows_len,
                 clients_per_node,
-                client_nodes
+                client_nodes,
             } => format!("range-whole-file {rows_len} {clients_per_node} {client_nodes}"),
             Command::Touch { n_parts } => format!("touch {n_parts}"),
+            Command::DumbRow {
+                rows_len,
+                clients_per_node,
+                client_nodes,
+            } => format!("dumb-row {rows_len} {clients_per_node} {client_nodes}"),
+            Command::SingleRow {
+                rows_len,
+                clients_per_node,
+                client_nodes,
+            } => format!("single-row {rows_len} {clients_per_node} {client_nodes}"),
         }
         .into()
     }
@@ -205,7 +257,7 @@ impl Command {
             Command::RangeByRow {
                 rows_len,
                 clients_per_node,
-                client_nodes
+                client_nodes,
             } => format!("RangeByRow/{rows_len}_{clients_per_node}_{client_nodes}"),
             Command::RangeWholeFile {
                 rows_len,
@@ -213,6 +265,16 @@ impl Command {
                 client_nodes,
             } => format!("RangeWholeFile/{rows_len}_{clients_per_node}_{client_nodes}"),
             Command::Touch { n_parts } => format!("Touch/{n_parts}"),
+            Command::DumbRow {
+                rows_len,
+                clients_per_node,
+                client_nodes,
+            } => format!("DumbRow/{rows_len}_{clients_per_node}_{client_nodes}"),
+            Command::SingleRow  {
+                rows_len,
+                clients_per_node,
+                client_nodes,
+            } => format!("SingleRow/{rows_len}_{clients_per_node}_{client_nodes}"),
         };
         PathBuf::from(format!("data/{path}/{node}.csv"))
     }
