@@ -34,7 +34,7 @@ pub async fn bench_task(
 ) -> Vec<(Instant, Instant)> {
     let nodes = client::ChartNodes::<3, 2>::new(8080);
     let mut client = client::Client::new(nodes);
-    let mut buf = vec![0u8; 500_000_000]; // eat/reserve 500 mB of ram
+    let mut buf = vec![0u8; 20_000_000_000]; // eat/reserve 20 GB of ram
     notify.notified().await;
 
     let bench = Bench::from(&bench, id);

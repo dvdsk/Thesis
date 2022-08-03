@@ -282,7 +282,8 @@ plt.clf()
 catargory_dur({"write by row": "RangeByRow", "write entire file": "RangeWholeFile"},
               "write pattern", "write duration (ms)", "row length (bytes)",
               {"1000_2_3": "1000", "10000_2_3": "10,000", "100000_2_3": "100,000",
-               "1000000_2_3": "1,000,000"}, y_mul=1000)
+                  "1000000_2_3": "1,000,000", "10000000_2_3": "10,000,000", 
+                  "100000000_2_3": "100,000,000"}, y_mul=1000)
 plt.savefig("plots/range_vs_row_len.svg")
 plt.clf()
 
