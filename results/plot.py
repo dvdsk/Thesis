@@ -133,7 +133,9 @@ def Remove_Outlier_Indices(df):
 
 def catargory_dur(catagories: Dict[str, str], hue_title: Optional[str],
                   operation: str, x_label: str, x_values: Dict[str, str],
-                  violinplot: Optional[Dict] = None, y_mul: float = 1):
+                  violinplot: Optional[Dict] = None, boxplot=False,
+                  y_mul: float = 1, filter=True, sums_catagory: str = "",
+                  strip=False, x_mul: float = 1):
     data = {
         x_label: list(),
         operation: list(),
@@ -145,7 +147,7 @@ def catargory_dur(catagories: Dict[str, str], hue_title: Optional[str],
 
     for (catarory, dir) in catagories.items():
         for (subdir, label) in x_values.items():
-            if catarory == "write by row":
+            if catarory == sums_catagory:
                 durations = data_from(
                     f"data/{dir}/{subdir}").client_sums() * y_mul
             else:
@@ -160,26 +162,35 @@ def catargory_dur(catagories: Dict[str, str], hue_title: Optional[str],
         data[key] = np.hstack(data[key])
 
     data = pd.DataFrame(data)
-    filterd = remove_outliers(data, operation, 2)
+
+    if filter:
+        data = remove_outliers(data, operation, 2)
 
     sns.set_style("whitegrid")
     plt.plot()
     sns.despine(bottom=True)
-    # plt.yscale("log") # do log when keeping outliers
     if violinplot is None:
-        # sns.boxplot(x=x_label, y=operation,
-        #             hue=hue_title, data=filterd, showfliers=False)
-        # sns.swarmplot(x=x_label, y=operation,
-        #               hue=hue_title, data=filterd)
-        # ax = sns.boxplot(x=x_label, y=operation,
-        #             hue=hue_title, data=filterd, showfliers=False, whis=np.inf, dodge=True)
-        # ax = sns.swarmplot(x=x_label, y=operation, size=3,
-        #               hue=hue_title, data=filterd, ax=ax, dodge=True, color="0.7")
-        ax = sns.swarmplot(x=x_label, y=operation, size=3,
-                           hue=hue_title, data=filterd, dodge=False)
+        if boxplot:
+            ax = sns.boxplot(x=x_label, y=operation,
+                             hue=hue_title, data=data,
+                             showfliers=False)
+            if strip:
+                sns.stripplot(x=x_label, y=operation, size=3,
+                              hue=hue_title, data=data,
+                              dodge=True, color="0.7")
+            else:
+                sns.swarmplot(x=x_label, y=operation, size=5,
+                              hue=hue_title, data=data, ax=ax,
+                              color="0.7")
+        elif strip:
+            sns.stripplot(x=x_label, y=operation, size=3,
+                          hue=hue_title, data=data, dodge=False)
+        else:
+            sns.swarmplot(x=x_label, y=operation, size=3,
+                          hue=hue_title, data=data, dodge=False)
     else:
         sns.violinplot(x=x_label, y=operation,
-                       hue=hue_title, data=filterd, cut=0, **violinplot)
+                       hue=hue_title, data=data, cut=0, **violinplot)
 
 
 def dur_dist(bench: str, operation: str, ylabel: str, xlabel: str,
@@ -264,27 +275,58 @@ def dur_vs_time(bench: str):
 os.makedirs("plots", exist_ok=True)
 
 catargory_dur({"write by row": "RangeByRow", "write entire file": "RangeWholeFile"},
-              "write pattern", "write duration (ms)", "number of writers",
-              {"1000_1_1": "1", "1000_2_1": "2", "1000_4_1": "4",
-               "1000_4_2": "8", "1000_4_4": "16", "1000_4_8": "32"},
-              y_mul=1000)
+              "write pattern", "write duration (ms)", "number of writers", {
+                  "10000000_1_1": "1",
+                  "10000000_2_1": "2",
+                  "10000000_4_1": "4",
+                  "10000000_4_2": "8",
+                  "10000000_4_4": "16",
+                  "10000000_4_8": "32"},
+              sums_catagory="write by row", boxplot=True, strip=True)
 plt.savefig("plots/range_vs_writers_both.svg")
 plt.legend(loc="upper left")
 plt.clf()
 
-catargory_dur({"write by row": "RangeByRow"},
-              None, "write duration (ms)", "number of writers",
-              {"1000_1_1": "1", "1000_2_1": "2", "1000_4_1": "4",
-               "1000_4_2": "8", "1000_4_4": "16", "1000_4_8": "32"}, y_mul=1000)
-plt.savefig("plots/range_vs_writers_by_row.svg")
+catargory_dur({"write by row": "RangeByRow", "write entire file": "RangeWholeFile"},
+              "write pattern", "write duration (ms)", "row length (bytes)", {
+                  "100000_2_3": "0.1 MB",
+                  "1000000_2_3": "1 MB",
+                  "10000000_2_3": "10 MB",
+                  "20000000_2_3": "20 MB",
+                  "40000000_2_3": "40 MB",
+                  "80000000_2_3": "80 MB"}, filter=False,
+              sums_catagory="write by row", strip=True)
+plt.yscale("log")
+plt.savefig("plots/range_vs_row_len.svg")
 plt.clf()
 
-catargory_dur({"write by row": "RangeByRow", "write entire file": "RangeWholeFile"},
-              "write pattern", "write duration (ms)", "row length (bytes)",
-              {"1000_2_3": "1000", "10000_2_3": "10,000", "100000_2_3": "100,000",
-                  "1000000_2_3": "1,000,000", "10000000_2_3": "10,000,000", 
-                  "100000000_2_3": "100,000,000"}, y_mul=1000)
-plt.savefig("plots/range_vs_row_len.svg")
+catargory_dur({"lock row only": "SingleRow", "lock entire file": "DumbRow"},
+              "write pattern", "write duration (ms)", "row length (bytes)", {
+                  "100000_10_3": "0.1 MB",
+                  "1000000_10_3":  "1 MB",
+                  "10000000_10_3": "10 MB",
+                  "20000000_10_3": "20 MB",
+                  "40000000_10_3": "40 MB",
+                  "80000000_10_3": "80 MB"},
+              y_mul=1000,
+              filter=True,
+              boxplot=True, strip=True)
+              # violinplot={"bw": 0.05, "linewidth": 0.3, "inner": None, "scale": "width", "scale_hue": False})
+# plt.yscale("log")
+plt.savefig("plots/single_vs_row_len.svg")
+plt.clf()
+
+catargory_dur({"lock row only": "SingleRow", "lock entire file": "DumbRow"},
+              "write pattern", "write duration (ms)", "number of writers", {
+                  "10000000_1_1": "1",
+                  "10000000_2_1": "2",
+                  "10000000_4_1": "4",
+                  "10000000_4_2": "8",
+                  "10000000_4_4": "16",
+                  "10000000_4_8": "32"},
+              sums_catagory="write by row", boxplot=True, strip=True)
+plt.savefig("plots/single_vs_writers_both.svg")
+plt.legend(loc="upper left")
 plt.clf()
 
 catargory_dur({"batch": "LsBatch", "stride": "LsStride"},
