@@ -3,6 +3,7 @@ use std::net::{IpAddr, Ipv4Addr};
 use std::path::PathBuf;
 use std::time::Duration;
 
+use clap::Parser;
 use color_eyre::eyre::Result;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
@@ -13,6 +14,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::task::{self, JoinHandle};
 
+use node::Partition;
 use node::util;
 use tokio::time::sleep;
 use tracing::log::error;
@@ -99,6 +101,7 @@ async fn perform_command(
 }
 
 async fn manage_cluster(parts: Vec<Partition>) {
+    let _guard = setup_flame_tracing();
     let mut cluster = local_cluster(&parts).await.unwrap();
     let listener = TcpListener::bind("127.0.0.1:4242").await.unwrap();
     loop {
@@ -114,6 +117,9 @@ async fn manage_cluster(parts: Vec<Partition>) {
             }
             socket.read_exact(&mut buf).await.unwrap();
             let [command, id] = buf;
+            if command as char == 's' {
+                return; // do shutdown
+            }
             perform_command(id as u64, command as char, &mut cluster, &parts).await;
         }
     }
@@ -127,6 +133,7 @@ async fn cluster_action(conn: &mut TcpStream, buffer: String) {
 }
 
 async fn control_cluster() -> Result<()> {
+    setup_tracing();
     let nodes = client::ChartNodes::<3, 2>::new(8080);
     let mut client = client::Client::new(nodes);
 
@@ -141,6 +148,7 @@ async fn control_cluster() -> Result<()> {
     loop {
         println!(
             "\nsend a command to the cluster manager
+    s0:    shutdown cluster
     k<id>: kill node with the given id
     r<id>: ressurect the node with id (must be killed first!)
     a<id>: add a new node with id (make sure its a unique id!)
@@ -171,7 +179,6 @@ async fn control_cluster() -> Result<()> {
     }
 }
 
-use node::Partition;
 #[derive(clap::Subcommand, Clone, Debug)]
 enum Commands {
     Remote,
@@ -182,7 +189,6 @@ enum Commands {
     },
 }
 
-use clap::Parser;
 #[derive(Parser, Debug, Clone)]
 #[clap(author, version, about, long_about = None)]
 pub struct Args {
@@ -197,11 +203,6 @@ async fn main() -> Result<()> {
 
     println!("setting up log analyzer/collector (jeager)");
     start_jeager::start_if_not_running(runtime_dir()).await;
-    util::setup_tracing(
-        "testing".to_owned(),
-        Some(IpAddr::V4(Ipv4Addr::LOCALHOST)),
-        10,
-    );
     println!("logging setup completed");
 
     match args.command {
@@ -209,4 +210,52 @@ async fn main() -> Result<()> {
         Commands::Remote => control_cluster().await.unwrap(),
     }
     Ok(())
+}
+
+fn setup_tracing() {
+    use tracing_error::ErrorLayer;
+    use tracing_subscriber::prelude::__tracing_subscriber_SubscriberExt;
+    use tracing_subscriber::util::SubscriberInitExt;
+    use tracing_subscriber::{filter, fmt};
+
+    let additional_filter = "";
+    let base_filter = "info,instance_chart=warn";
+    let filter = filter::EnvFilter::builder()
+        .parse(format!("{base_filter},{additional_filter}"))
+        .unwrap();
+
+    // console_subscriber::init();
+    let fmt = fmt::layer()
+        .pretty()
+        .with_line_number(true)
+        .with_test_writer();
+
+    let _ignore_err = tracing_subscriber::registry()
+        .with(ErrorLayer::default())
+        .with(filter)
+        .with(fmt)
+        .try_init();
+}
+
+fn setup_flame_tracing() -> impl Drop {
+    use tracing_subscriber::prelude::__tracing_subscriber_SubscriberExt;
+    // use tracing_subscriber::fmt;
+    use tracing_flame::FlameLayer;
+    use tracing_subscriber::util::SubscriberInitExt;
+    use tracing_subscriber::{filter, fmt};
+
+    // let fmt_layer = fmt::Layer::default();
+    let (flame_layer, _guard) = FlameLayer::with_file("./tracing.folded").unwrap();
+
+    let filter = filter::EnvFilter::builder()
+        .parse(format!("error,node=trace,instance_chart=trace"))
+        .unwrap();
+
+    let _ignore_err = tracing_subscriber::registry()
+        // .with(fmt_layer)
+        .with(filter)
+        .with(flame_layer)
+        .init();
+
+    return _guard
 }
