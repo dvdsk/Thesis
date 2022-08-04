@@ -3,6 +3,7 @@
 \usepackage[backend=biber]{biblatex}
 \addbibresource{References.bib}
 
+\usepackage{tikz}
 \usepackage{listings}
 \usepackage{listings-rust}
 \usepackage[hidelinks]{hyperref}
@@ -11,7 +12,6 @@
 	\graphicspath{{figs/papers/, figs/plots/}} % set of paths to search for images
 \usepackage{svg}
 	\svgpath{{figs/papers/, figs/plots/}} % not working for some reason
-\usepackage{tikz}
 \usepackage[11pt]{moresize}
 \usepackage{subcaption}
 \usepackage{afterpage}
@@ -19,6 +19,7 @@
 \usepackage{ragged2e}
 \usepackage[nameinlink]{cleveref}
 \usepackage[nolist]{acronym}
+\usepackage{booktabs}
 
 \raggedright
 \colortheme{skdoc}
@@ -102,7 +103,7 @@
 \section{Implementation}
 \input{content/implementation.tex}
 
-\clearpage
+% \clearpage
 \section{Results}
 \input{content/results.tex}
 
