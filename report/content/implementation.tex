@@ -109,7 +109,9 @@ There are a lot of reliable \raft{} implementations. Developing my own took a lo
 	\item \Name{} needs a special version of \raft{}, one where elections are rigged and leaders (minsters) are assigned by a third party (the president). Multiple of these instances (or ministries) must be able to exist simultaneously. The log must stay consistent and clients should see no entries of an old leader after being assigned to another leader. 
 \end{itemize}
 %
-To demonstrate that \name{} scales and can be optimized in future work\footnote{see:~\cref{sec:profile,sec:discussion}} the custom implementation must also scale and be optimizable. If it does not then the design of \name{} could be relying on an implementation detail that fundamentally limits its performance.
+To demonstrate that \name{} scales and can be optimized in future work %
+%\footnote{see:~\cref{sec:profile,sec:discussion}} 
+the custom implementation must also scale and be optimizable. If it does not then the design of \name{} could be relying on an implementation detail that fundamentally limits its performance.
 %
 \subsubsection*{Perishable log entries}
 When a \raft{} message arrives it can cause entries in the log to become committed. At that point they are made available to the system. These could be old entries, long ago committed by other nodes. The message contains the index of the last committed entry or entries which we use to recognize if an entry is old. Newly committed messages can still become outdated if they are applied too slowly. This can happen if the server slows down due to bugs in \name{} or hardware issues. The system notes the time a newly committed entry arrived. The time is combined with the entry into a perishable entry. It is what is made available to \name{} and can be asked whether it is fresh.
