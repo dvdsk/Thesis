@@ -1,0 +1,31 @@
+In the previous section we presented the performance of \name{}. We focussed on its two distinguishing features: its \textit{ministry architecture} and \textit{ranged based file locking}. Another important characteristic of any system is its complexity. For example the main contribution of the \raft{} consensus algorithm is a more understandable solution that is therefore easier to implement. We begin by discussing the complexity of the implementation then we look at the performance tests of the \textit{ministry architecture} before we finish discussing \raft{ranged based file locking}.
+%
+\subsection{Complexity}
+Raft is an understandable consensus algorithm. We extended it with \textit{Group Raft} to provide scalability. The extended algorithm had two problems. These where both solved by re-using the Raft concept of terms. No new variables where added for Group Raft nor did we add new routines. It is therefore still quite simple. 
+
+As \name{} needs to know whether a log entry is new we added Perishable Log entries. As leases did not need to survive system crashes and reboots we did not use Raft but designed our own algorithm to keep them consistent. This made \name{}'s implementation a lot more complex. There are four known problems with the file lease algorithm. While most have solutions solving them comes at the cost of additional complexity.
+%
+\subsection{Ministry architecture}
+\paragraph{List Directory}
+The lowest latency configuration for handling listing directory requests is a single ministry. As soon as we start using multiple latency increases. Adding more ministries increases average performance a bit at the cost of longer mean tail latencies. As we saw in \cref{fig:find_aMDS} clients initially connect to a random node. This result is consistent with the design: given twice as many ministries the chance to connect to the right node on the first try halves. 
+
+As expected \textit{batch} order is faster than \textit{stride}. We would expect there to be a larger difference. We did not expect the difference to get more pronounced as the number of ministries increases. It could be that it takes the client longer to re-establish its connection when the connection has been out longer. This requires further study of the clients' performance which has been left out of the scope of the thesis.
+
+The tail latencies become longer as we increase the number of ministries. This is unexpected. Requests should arrive at the right ministry after at most one redirect. The number of requests that need a redirect should increase as the number of ministries increases however those redirects should take the same amount of time. An explanation could be that the higher number of redirects overloads the redirect system leading to longer response times for those queries.
+%
+\paragraph{Create file} 
+% TODO: redo plot showing results of individual runs 
+%       as different lines with the same color 
+% <08-08-22> 
+Mean file creation time decreases almost linearly with the number of ministries. This should hold true even after the Raft implementation has been improved. Most files complete in a multiple of 75ms. This corresponds to the heartbeat duration used for Raft which rate limits log modifications in this implementation. 
+
+Up to 5\% of writes are completed in less time. At least a heartbeat period must pass before a new log entry can be appended. These times therefore must be the result of a bug in synchronizing the test results or: a bug in the implementation.
+%
+\subsection{Ranged based file locking}
+\paragraph{Writing a single row}
+Locking only the needed data when writing to a file gives a dramatic increase in performance. This is expected as the chance of lock contention decreases. As the time spend writing data increases the difference naturally decreases. There are however some far outliers that only appear when using row locking while the variance of row locking is lower. I have no explanation for this, and it should be studied further by looking at the behavior of the client.
+
+Both methods lock the file once and both locks should succeed in the same time given the files should be unlocked. The only difference is the range of the lock that is acquired. Locking the entire file seems to be much faster even when there is no lock contention because there is only a single writer. Only when using more than four simultaneous writers do we see locking the smaller range becoming faster. With only a single writer both methods should do exactly the same, the only option is that there is a fault in either the test or the lease system.
+%
+\paragraph{Writing the entire file}
+Unfortunately the lower lock contention does not make up for the overhead of extra lock operations. Even when using very large files with 80 \ac{mby} rows locking the entire file is significantly faster though the gap does close. When locking the entire file only one client can write at the time. This results in a uniform distribution between the slowest client which had to wait on all others and fastest client.
