@@ -129,7 +129,7 @@ In \Cref{fig:rowlen} we look at every individual duration measurement for writin
 \begin{figure}[htbp]
 	\centering
 	\includegraphics[height=\textheight]{../results/plots/range_vs_writers_both.png}
-	\caption{The time it takes to write ten rows for varying row sizes. On the logarithmic Y-axis the duration in milliseconds. In blue the duration when only locking the needed row, locking in total ten times to write all rows. In orange the result when locking the entire file and writing all rows at once.}
+	\caption{The time it takes to write ten rows with between one and 32 concurrent writers. On the logarithmic Y-axis the duration in milliseconds. In blue the duration when only locking the needed row, locking in total ten times to write all rows. In orange the result when locking the entire file and writing all rows at once.}
 	\label{fig:writers}
 \end{figure}
 
