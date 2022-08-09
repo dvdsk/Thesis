@@ -1,0 +1,12 @@
+Here we have investigated whether an architecture using ministries and with ranged based file locking offers an advantage over existing distributed file systems. While the architecture stays close to simple the Raft consensus algorithm the algorithm that coordinates file locking is highly complex. The complexity kept us from building a stable and performant implementation. Even with these limitations we could test the impact of the architecture and ranged locking.
+
+When creating files the performance scales almost linearly as we add more ministries. File metadata queries are slower than when using a single ministry with the tail latencies increasing as we add more ministries.
+
+Ranged locking offered substantial improvement with many clients writing nonoperating to 10\% of a file. Performance decreased when we used ranged locking to speedup writing out the entire file concurrently from many clients. 
+
+We found some results that should not be possible given the design. A more reliable implementation is needed to investigate whether these results come from implementation flaws or if the design is flawed. 
+
+% TODO: Check related work for hiearchical raft <09-08-22, dvdsk> 
+To enable the ministries' architecture we invented \textit{Group Raft}. It has proven to be a simple extension with promising scaling characteristics. Ranged file locking enables performance gains in limited circumstances while being easy to implement. Both of these should be studied further. 
+
+To conclude \name{} has promise, whether it is a step in the right direction depends on if it can be optimized to match existing systems.
