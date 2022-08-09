@@ -124,7 +124,7 @@ In \Cref{fig:rowlen} we look at every individual duration measurement for writin
 	\label{fig:rowlen}
 \end{figure}%
 
-\Cref{fig:writers} again shows the duration it takes to write all the rows this time for varying number of writers, comparing locking by row versus locking the entire file. The Y-axis shows the time it takes to write all 10 rows. Note how writing by row takes significantly longer with the gap closing when the number of writers increases.
+\Cref{fig:writers} again shows the duration it takes to write all the rows this time for varying number of writers, comparing locking by row versus locking the entire file. The Y-axis shows the time it takes to write all 10 rows. Note how writing by row takes significantly longer with the gap closing when the number of writers increases. Also note the uniform distribution between the fastest and slowest time when locking the entire file (orange).
 %
 \begin{figure}[htbp]
 	\centering
