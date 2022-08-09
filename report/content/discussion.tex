@@ -9,7 +9,7 @@ As leases did not need to survive system crashes and reboots we did not use Raft
 %
 \subsection{Ministry architecture}
 \paragraph{List Directory}
-We saw the fastest response from a \name{} configuration using only a single ministry. As soon as we start using multiple latency increases. Adding more ministries increases average performance a bit at the cost of longer mean tail latencies. Clients start without knowledge of the configuration, they are designed to initially connect to a random node. It is therefore logical that we see increased latency with more clients: given twice as many ministries the chance to connect to the right node on the first try halves. 
+We saw the fastest response from a \name{} configuration using only a single ministry. As soon as we start using multiple latency increases. Adding more ministries increases average performance. Clients start without knowledge of the configuration, they are designed to initially connect to a random node. It is therefore logical that we see an increased in latency with more ministries: given twice as many ministries the chance to connect to the right node on the first try halves. 
 
 As expected the request order \textit{batch} order is faster than \textit{stride}. We would however expect there to be a larger difference. We did not expect the difference to get more pronounced as the number of ministries increases. It could be that it takes the client longer to re-establish its connection when the connection has been out longer. This requires study of the clients' performance and implementation.
 
