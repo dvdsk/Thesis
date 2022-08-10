@@ -62,7 +62,7 @@ When the groups' minister appends to the groups \ac{praft} log it will notice th
 \subsubsection*{Load balancing} \label{sec:loadb}
 From the point of availability a system that is up but drowning in requests might as well be down. To prevent nodes from getting overloaded we actively balance the load between ministries, add and remove them and expand the read capacity of some. A load report contains CPU utilization for each node in the group and the popularity of each bit of metadata split into read and write. The President checks the balance for each report it receives.
 %
-\subparagraph*{Trade off}
+\subparagraph*{Trade off} \label{sec:tradeoff}
 There is a trade-off here: a larger ministry means more clerks for the minister to communicate changes to, slowing down writes. On the other side as the file system is split into more subtrees the chance increases a client will need to contact not one but multiple ministries. Furthermore, to create another ministry we usually have to shrink existing ministries. Growing a ministry can involve removing one to free up clerks. 
 %
 We can model the read and write capacity of a single group as:
