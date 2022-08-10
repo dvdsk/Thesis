@@ -1,3 +1,72 @@
+@inproceedings{craft,  
+	author={Castiglia, Timothy and Goldberg, Colin and Patterson, Stacy},  
+	booktitle={2020 IEEE 40th International Conference on Distributed Computing Systems (ICDCS)},   
+	title={A Hierarchical Model for Fast Distributed Consensus in Dynamic Networks},   
+	year={2020},  
+	volume={},  
+	number={},  
+	pages={1189-1190},  
+	doi={10.1109/ICDCS47774.2020.00137},
+}
+
+@article{verify,
+	title = {Compositional Model Checking of Consensus Protocols Specified in
+	         TLA+ via Interaction-Preserving Abstraction},
+	author = {Gu, Xiaosong and Cao, Wei and Zhu, Yicong and Song, Xuan and Huang
+	          , Yu and Ma, Xiaoxing},
+	journal = {arXiv preprint arXiv:2202.11385},
+	year = {2022},
+}
+
+@article{tidb,
+	title = {TiDB: a Raft-based HTAP database},
+	author = {Huang, Dongxu and Liu, Qi and Cui, Qiu and Fang, Zhuhe and Ma,
+	          Xiaoyu and Xu, Fei and Shen, Li and Tang, Liu and Zhou, Yuxing and
+	          Huang, Menglong and others},
+	journal = {Proceedings of the VLDB Endowment},
+	volume = {13},
+	number = {12},
+	pages = {3072--3084},
+	year = {2020},
+	publisher = {VLDB Endowment},
+}
+
+@article{polarfs,
+	author = {Cao, Wei and Liu, Zhenjun and Wang, Peng and Chen, Sen and Zhu,
+	          Caifeng and Zheng, Song and Wang, Yuhui and Ma, Guoqing},
+	title = {PolarFS: An Ultra-Low Latency and Failure Resilient Distributed
+	         File System for Shared Storage Cloud Database},
+	year = {2018},
+	issue_date = {August 2018},
+	publisher = {VLDB Endowment},
+	volume = {11},
+	number = {12},
+	issn = {2150-8097},
+	url = {https://doi.org/10.14778/3229863.3229872},
+	doi = {10.14778/3229863.3229872},
+	abstract = {PolarFS is a distributed file system with ultra-low latency and
+	            high availability, designed for the POLARDB database service,
+	            which is now available on the Alibaba Cloud. PolarFS utilizes a
+	            lightweight network stack and I/O stack in user-space, taking
+	            full advantage of the emerging techniques like RDMA, NVMe, and
+	            SPDK. In this way, the end-to-end latency of PolarFS has been
+	            reduced drastically and our experiments show that the write
+	            latency of PolarFS is quite close to that of local file system on
+	            SSD. To keep replica consistency while maximizing I/O throughput
+	            for PolarFS, we develop ParallelRaft, a consensus protocol
+	            derived from Raft, which breaks Raft's strict serialization by
+	            exploiting the out-of-order I/O completion tolerance capability
+	            of databases. ParallelRaft inherits the understand-ability and
+	            easy implementation of Raft while providing much better I/O
+	            scalability for PolarFS. We also describe the shared storage
+	            architecture of PolarFS, which gives a strong support for
+	            POLARDB.},
+	journal = {Proc. VLDB Endow.},
+	month = {aug},
+	pages = {1849–1862},
+	numpages = {14},
+}
+
 @article{das5,
 	author = {Bal, Henri and Epema, Dick and de Laat, Cees and van Nieuwpoort,
 	          Rob and Romein, John and Seinstra, Frank and Snoek, Cees and
