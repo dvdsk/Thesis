@@ -17,7 +17,7 @@ Here we test the impact of varying the number of ministries on performance. We e
 
 As discussed live subtree partitioning is still unimplemented, we work around this by implementing static subtree partitioning. The load balancer starts by initializing a single ministry responsible for the root directory. Additional static ministries can be passed through command line parameters. For these test we let it initialize n-1 extra ministries at paths \textsl{/n}. Including the root ministry (it must always be present) there are now n ministries available for testing.
 
-\subsubsection{List directory}
+\subsubsection*{List directory}
 The first load we try is list directory. We perform 60 thousand list requests spread across all root directories from 30 clients concurrently. Each client sends the requests one after another as fast as possible. To keep the overhead from sending back the directory content small each directory contains only 10 files. The client processes are spread between 3 physical nodes.
 
 The 2000 requests each client sends can be in two different orders: \textit{batch} and \textit{stride}. In \textit{batch} a client performs all the requests for a single directory before sending those for the next. When using the \textit{stride} pattern a client sends a request to the first directory and then sends the next request to another directory. There were a few extreme outliers, these where further out then 4 standard deviations. They are not shown in the plots. % TODO: change test, make batch and stride orders random such that they dont all hit ministry one first... <08-08-22> 
@@ -41,7 +41,7 @@ In \Cref{fig:ls_vs_ministries} we see a violin plot comparing the two request or
 \end{figure}
 
 \clearpage{}
-\subsubsection{Create file}
+\subsubsection{Create file*}
 The second load we try is creating files. To create a file a minister appends a single message to the log making creating files rate limited. Without the rate limit load could increase until the communication with the clerks or the hardware of the nodes becomes the bottleneck.%
 %\footnote{That is assuming there are no other bottlenecks. We investigate this by profiling the nodes, see:~\Cref{sec:profile}} % % TODO: re-enable if we have time/it is possible to present the profiling results <04-08-22> 
 
@@ -95,7 +95,7 @@ In the table below we see the time spend on simulating IO and the average durati
 %
 In the next two subsections we will look at these results in greater depth.
 %
-\subsubsection{Writing a single row}
+\subsubsection*{Writing a single row}
 \Cref{fig:single_rowlen} shows the time it takes to write a single row for different row sizes. The Y-axis shows the duration a single write request takes in seconds. Each dot is a single measurement. We see that locking the entire file is slower than locking only the needed row. Note how increasing the row length shrinks the performance gap between these methods. Note furthermore that there are many outliers when locking by row.
 
 \begin{figure}[htbp]
@@ -114,7 +114,7 @@ In \Cref{fig:single_writers} we see that with more simultaneous writers locking 
 \end{figure}
 
 \clearpage
-\subsubsection{Writing the entire file}
+\subsubsection*{Writing the entire file}
 In \Cref{fig:rowlen} we look at every individual duration measurement for writing all 10 rows given various row lengths. Again we compare locking by row versus locking the entire file. The logarithmic Y-axis shows the duration in seconds. The X-axis shows various sizes for the rows. As expected larger rows result in longer write durations. Furthermore, we see discrete levels in write duration when writing the entire file and not when writing by row.
 %
 \begin{figure}[htbp]
