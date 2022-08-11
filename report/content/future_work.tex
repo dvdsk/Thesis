@@ -1,18 +1,18 @@
-Given the results and conclusions there are three areas that should be explored: dynamic scaling, more efficient Group Raft and better applications of ranged leases.
+Although we did not succeed in building a performant system we found a number of interesting avenues for improvement. These fall into three categories: dynamic scaling, more efficient Group Raft and ranged leases.
 
 \subsection{Dynamic scaling}
-\Name was planned to load balance by shaping its configuration to the load using subtree partitioning. In \cref{sec:tradeoff} we discussed the trade-off between increasing read or write performance. We reduced that to a constrained optimization problem. It would be interesting to have \name{} load balance by solving that optimization problem. The optimization problem can be further expanded by take a variable minimum replication constraint into account. It would allow users to specify to what degree each file should be replicated.
+The \name design includes load balancing through shaping the systems' configuration to the current load. Using subtree partitioning to spread directories across more or less ministries. In \cref{sec:tradeoff} we discussed the trade-off between read or write performance. This trade-off could be transformed into constrained optimization problem. It would be interesting to have \name{} keep an optimal configuration by continuously solving this problem. To allow users to specify to what degree each file should be replicated the replication factor can be added as additional constraint.
 
 \subsection{Consensus}
-The \textit{Group Raft} implementation is very slow mostly because it sends only one log entry at the time. An efficient implementation will make it possible to directly compare \name{} with existing distributed FS. We expect dramatic speedup by batching Raft log messages and sending them on demand. As modifications to different directories can never impact each other we can merge \textit{ParallelRaft}~\cite{polarfs} with \textit{Group Raft}.
+The \textit{Group Raft} implementation is very inefficient because it sends only one log entry at the time at fixed intervals. An efficient implementation will make it possible to directly compare \name{} with existing distributed FS. We expect a dramatic speedup by batching Raft log messages and sending them on demand. Since modifications to different directories can never impact each other we can use a combination of \textit{ParallelRaft}~\cite{polarfs} and \textit{Group Raft}.
 
-Right now all nodes start an election if they miss a heartbeat. Sometimes a minister is promoted to president which causes metadata modifications and writes for that ministry to pause while a clerk is promoted and a new clerk assigned. Elections should be triggered by idle nodes first, then be clerks and only then should a minister organize one. 
+Currently, any node will start an election if it misses a heartbeat. Ministers can, and sometimes are elected as president. The loss of the minister causes its ex-ministry to pause metadata changes and file writes while a clerk is promoted and a replacement clerk assigned. Banning ministers for taking part in elections and preferring idle nodes to clerks will prevent such pauses.
 
-In the current implementation re-elections happen because newly elected presidents can not establish connections to all members and send out a heartbeat fast enough. A candidate should re-use the connections it established asking for votes when it becomes president.
+One reason for re-elections is newly elected presidents taking too long to establishing connections and start emitting heartbeats. A better implementation would re-use the connections a candidate established asking for votes when it becomes president.
 
 \subsection{Leases}
-Every write request triggers a request to all the clerks to stop giving out read leases. This is inefficient when we are constantly writing to a file. Ministers should keep a file locked as long as its experiencing high write load. This would make ranged writes far more efficient when concurrently writing many small non overlapping parts of a file.
+Every write triggers a request to all the clerks to stop giving out read leases. This is inefficient for files experiencing mostly writes or for consecutive small writes. Ministers should keep files locked when the files are experiencing high write load. Ranged writes would then become suitable for concurrently writing a file from multiple clients using small non overlapping chunks.
 
-Ranged locking should enable better performance in workloads with lots of reading and writing. It would be interesting to see this quantified better.
+Ranged locking should enable better performance in workloads with lots of reading and writing. It would be interesting to have this difference quantified.
 
-The locking implementation does not batch lock requests it needs to send to clients. We suspect batching will significantly increase throughput under load. A future implementation or improvements to the current implementation should add batching.
+The locking implementation does not batch requests. We suspect batching will significantly increase throughput under load.
