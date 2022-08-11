@@ -1,14 +1,9 @@
-%
-% problem statement: TODO rewrite consistency vs consensus
-%
-% In distributed storage there is a balance between consensus and scalability.
-%
-% Tight consensus requirs orderd operations limiting parallel work.
-%
-% Existing solutions, such as HadoopFS, limit scalability using a single learder but provide fast tight consensus.
-%
-% Here I will develop a hybrid approach using a dedicated leaders for different file system subtrees.
-%
-% 
-% workloads requiring concurrently writing to the same file, get an opt out of consistency. This moves the task of maintaining consisency to the task task this makes it harder to write. Range write and read solve this
-%
+In the last decade we have seen the rise of big data and the shift of everyday work to the cloud. With it rose the need for a highly available and scaling file system. The problem solved by distributed file systems is how to spread and keep consistent files across multiple machines. There are two approaches: a dedicated node to control where each file is placed\footnote{Introduced by GoogleFs\cite{gfs} and adopted by the widely used Hadoop file-system\cite{hdfs} (HDFS)}, or a distribution function that decide where a file should be located\footnote{Pioneered by Ceph\cite{ceph}}. The distribution function needs only limited shared state.
+
+There are two problems with the first approaches. The dedicated metadata node is single point of failure, and it can not scale out, limiting the amount of files a system can store and maximum load. Recently implementations have started to address the first issue. HDFS for example has added standby nodes \cite{hdfs_ha_nfs, hdfs_ha_q} which can replace the metadata node. However, ensuring data consistency between decreases performance.
+
+% adress why not just drop hadoop arch for ceph (ranged locks?)
+
+Here we investigate whether a file system using groups of metadata nodes can offer better scalability. The system is build upon the Raft\cite{raft} consistency algorithm. We extend Raft to enable number of metadata groups to scale freely.
+
+In \cref{sec:impl} I will detail my implementation, then in \cref{sec:res} we test the system. Finally, I discuss how well this approach works in \cref{sec:conc}. Instructions on how to deploy the system for testing are in \cref{sec:deploy}.
