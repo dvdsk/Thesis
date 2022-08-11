@@ -23,8 +23,8 @@
 
 \raggedright
 \colortheme{skdoc}
-\title{Title to be decided}
-\author{David Kleingeld}
+\title{GovFS, a scalable control plane using groups of metadata nodes}
+\author[opensource@davidsk.dev]{David Kleingeld}
 
 % % double spacing
 % \linespread{1.5}
@@ -50,8 +50,8 @@
 
 % one day I will think of a name for this
 % ideas: range fs?
-\newcommand{\name}{GovFs}
-\newcommand{\Name}{GovFs}
+\newcommand{\name}{GovFS}
+\newcommand{\Name}{GovFS}
 \newcommand{\graft}{Group Raft}
 
 \newcommand{\textacro}[1]{\small{#1}}
@@ -95,21 +95,29 @@
 \acresetall{}
 \acused{api}
 \clearpage
-\section{Design}
+\section{Design} \label{sec:design}
 \input{content/design/architecture.tex}
 \input{content/design/operations.tex}
 
 \clearpage
-\section{Implementation}
+\section{Implementation} \label{sec:impl}
 \input{content/implementation.tex}
 
 % \clearpage
-\section{Results}
+\section{Results} \label{sec:results}
 \input{content/results.tex}
 
 \clearpage
 \section{Discussion} \label{sec:discussion}
 \input{content/discussion.tex}
+
+\clearpage
+\section{Related work} \label{sec:rel}
+\input{content/related.tex}
+
+\clearpage
+\section{Conclusion} \label{sec:conclusion}
+\input{content/conclusion.tex}
 
 \clearpage
 \section{Future work} \label{sec:fut}
@@ -119,6 +127,7 @@
 \appendix
 \section{Introduction to Async} \label{app:async}
 \input{content/async.tex}
+\clearpage
 \printbibliography
 
 \end{document}
