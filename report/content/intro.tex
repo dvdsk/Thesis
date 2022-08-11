@@ -5,7 +5,7 @@ There are two problems with the first approaches. The dedicated metadata node is
 
 % adress why not just drop hadoop arch for \textit{Ceph} (ranged locks?)
 
-Here we investigate whether \name{}: a file system using groups of metadata nodes can offer better scalability. We design and implement the control plane, which is responsible for coordinating the files but does not store data. It is the bottleneck of existing distributed file systems. The system is build upon the Raft\cite{raft} consistency algorithm. We extend Raft to enable number of metadata groups to scale freely. 
+Here we investigate whether \name{}: a file system using groups of metadata nodes can offer better scalability than using a single metadata node. We design and implement the control plane, which is responsible for coordinating the files but does not store data. It is the bottleneck of existing distributed file systems. The system is build upon the Raft\cite{raft} consistency algorithm. We extend Raft to enable number of metadata groups to scale freely. 
 
 In the next section we will go over the challenges in distributed systems, how consensus algorithms solve those, what a file system is and finally discuss the most widely used distributed file systems: \textit{HDFS} and \textit{Ceph}. 
 %

@@ -1,5 +1,6 @@
 \documentclass[lang=en, hanging-titles=true]{skrapport}
 
+\usepackage{geometry}
 \usepackage[backend=biber]{biblatex}
 \addbibresource{References.bib}
 
@@ -33,8 +34,19 @@
 
 \begin{titlepage}
 \maketitle
+
+\begin{abstract}
+With the rise of big data and the move to the cloud the need for highly available and scaling file systems has grown. Building a distributed file system using a dedicated metadata node has two problems. It introduces a single point of failure and can not scale horizontally. Here we design and implement a system using groups of metadata nodes: \textit{GovFS}. We build it on top of \textit{Group Raft} our extension of Raft that enables scaling partitioned consensus. Tests show \textit{GovFS} has great scaling characteristics. Performance is severely limited due to the rough implementation of \textit{Group Raft}.
+\end{abstract}
 \end{titlepage}
+
+\section*{Acknowledgement}
+This endeavor would not have been possible without the frequent advise, guidance and honest feedback of my supervisor: \emph{dr. Alexandru Uta}. 
+I would also like to express my thanks to \emph{Assistant Professor Kristian Rietveld} for showing me how to test the limited implementation in a meaningful way and discuss the results.
+
+\newgeometry{bottom=1cm}
 \tableofcontents
+\restoregeometry
 \clearpage
 
 % constant formatting for names/concepts
@@ -70,7 +82,6 @@
 	\acro{api}[\textacro{API}]{application programming interface}
 	\acro{posix}[\textacro{POSIX}]{portable operation system interface}
 	\acro{hpc}[\textacro{HPC}]{high performance computing}
-	\acro{praft}[\textacro{pRaft}]{Presidential Raft}
 	\acro{gc}[\textacro{GC}]{Garbage Collection}
 	\acro{tdd}[\textacro{TDD}]{Type Driven Development}
 	\acro{raii}[\textacro{RAII}]{Resource Acquisition Is Initialization}
@@ -85,7 +96,6 @@
 
 \clearpage
 \section{Background}
-\textbf{TODO write tiny intro, do after introduction has been written}
 \input{content/theory/distributed.tex}
 \input{content/theory/pitfalls.tex}
 \input{content/theory/solutions.tex}
