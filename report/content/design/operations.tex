@@ -23,7 +23,7 @@ If the client needs read capabilities it sends its requests to a clerk. The cler
 \end{figure}
 %
 \subsection*{Namespace Changes}
-Most changes to the namespace need simple edits within ministries metadata table. The client sends its request to the minister. The change is performed by adding a command to the \ac{praft} log (see: \Cref{sec:praft}). Before committing the change the client gets the log index for the change. If the minister goes down before acknowledging success the client verifies if the change happened using the log index.
+Most changes to the namespace need simple edits within ministries metadata table. The client sends its request to the minister. The change is performed by adding a command to the \textit{Group Raft} log (see: \Cref{sec:praft}). Before committing the change the client gets the log index for the change. If the minister goes down before acknowledging success the client verifies if the change happened using the log index.
 
 Removing a directory spanning one or more load balanced subtrees needs a little more care. One or more ministers will have to delete their entire subtree. This requires coordination across the entire cluster. The clients remove requests is forwarded by the minster to the \textit{president}. It in turn appends \textsl{Subtree Delete} to the cluster wide log. The client receives the log index for the command to verify success even if the \textit{president} goes down. The steps the minister takes are shown in \Cref{fig:rm}. 
 %
@@ -40,17 +40,13 @@ Ensuring file system availability is the responsibility of the \textit{president
 \subsubsection*{A failing minister}
 When the president notices a minister has failed it will try to replace it. It queries the ministries clerks to find the ideal candidate for promotion. If it gets a response from less than half the ministry it can not safely replace the minister. At that point it marks the file subtree as down and may retry in the future. A successful replacement is illustrated in \Cref{fig:appoint}.
 
-% TODO what if there is no free umds and group gets too small?
-% TODO instead wait till load balance check corrects it?
-% what to do with nodes quickly going down?
-% just check load balance often? (is just calc not the data geathering)
 A clerk going down is handled by the president in one of two ways:
 \begin{itemize}
 	\item There is at least one idle node. The president assigns the idle node to the failing nodes group. 
 	\item There are no idle nodes. The president, through raft, commands a clerk in the group with the lowest load to demote itself. Then the president drops the matter. The clerk wait till its read leases expire and unassigns.
 \end{itemize}
 %
-When the groups' minister appends to the groups \ac{praft} log it will notice the replacement misses entries and update it (see \cref{sec:raft}).
+When the groups' minister appends to the \textit{Group Raft} log it will notice the clerk misses entries and update it (see \cref{sec:raft}).
 
 \begin{figure}[htbp]
 	\centering
@@ -88,7 +84,7 @@ From this I draw two conclusions, any spare capacity for writing is at a cost of
 % TODO a load balancing algorithm
 %
 \subparagraph*{Read balancing}
-A ministry experiencing low read load relative to their capacity is shrunk. A ministries read load is low if it could lose a clerk without average clerk CPU utilization rising above 85\%. A ministry has multiple members not only for performance. The members form a \ac{praft} cluster and ensure metadata is stored redundantly. This only works if a ministry has at least three members. To shrink a ministry the President issues a \raft{} message unassigning a clerk. 
+A ministry experiencing low read load relative to their capacity is shrunk. A ministries read load is low if it could lose a clerk without average clerk CPU utilization rising above 85\%. A ministry has multiple members not only for performance. The members form a \textit{Group Raft} cluster and ensure metadata is stored redundantly. This only works if a ministry has at least three members. To shrink a ministry the President issues a \raft{} message unassigning a clerk. 
 
 A group under high relative read load has average clerk CPU utilization passing 95\%. The president then issues a \raft{} message assigning an idle node to the group if one is available. %TODO diff % why
 %
