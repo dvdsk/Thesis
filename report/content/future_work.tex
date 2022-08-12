@@ -10,6 +10,8 @@ Currently, any node will start an election if it misses a heartbeat. Ministers c
 
 One reason for re-elections is newly elected presidents taking too long to establishing connections and start emitting heartbeats. A better implementation would re-use the connections a candidate established asking for votes when it becomes president.
 
+As groups only communicate with their members, clients and the president. Communication with the president does not require low latency nor high throughput. This could make \textit{Group Raft} really useful for geo-distributed systems, that is systems consisting of clusters in different locations. As long as the members of each group are kept to the same location normal performance should not decrease.
+
 \subsection{Leases}
 Every write triggers a request to all the clerks to stop giving out read leases. This is inefficient for files experiencing mostly writes or for consecutive small writes. Ministers should keep files locked when the files are experiencing high write load. Ranged writes would then become suitable for concurrently writing a file from multiple clients using small non overlapping chunks.
 

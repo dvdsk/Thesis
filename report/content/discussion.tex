@@ -8,6 +8,8 @@ Raft is an understandable consensus algorithm. Here we have extended it to get \
 As leases did not need to survive system crashes and reboots we did not use Raft but designed our own algorithm for non-persistent consistency. This enables \name{} to reach higher read and write performance. Even non-persistent consistency is still a hard problem, therefore this algorithm makes \name{}'s implementation significantly more complex. In \cref{sec:impl_leases} we saw there are four known problems with this algorithm. While most have solutions solving these will further increase the now already high degree of complexity.
 %
 \subsection{Ministry architecture}
+\paragraph{Design Faults}
+During testing, I realized there is a fault in the current design. The president is responsible for detecting nodes that go down. However, if the president can reach a clerk and its minister that does not guarantee that the clerk and minister can reach each other. We can address this by nodes inform the president when they can not reach one of their assigned nodes.
 \paragraph{List Directory}
 We saw the fastest response from a \name{} configuration using only a single ministry. As soon as we start using multiple latency increases. Adding more ministries increases average performance. Clients start without knowledge of the configuration, they are designed to initially connect to a random node. It is therefore logical that we see an increased in latency with more ministries: given twice as many ministries the chance to connect to the right node on the first try halves. 
 
