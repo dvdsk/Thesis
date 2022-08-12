@@ -59,16 +59,16 @@ When the groups' minister appends to the \textit{Group Raft} log it will notice 
 From the point of availability a system that is up but drowning in requests might as well be down. To prevent nodes from getting overloaded we actively balance the load between ministries, add and remove them and expand the read capacity of some. A load report contains CPU utilization for each node in the group and the popularity of each bit of metadata split into read and write. The President checks the balance for each report it receives.
 %
 \subparagraph*{Trade off} \label{sec:tradeoff}
-There is a trade-off here: a larger ministry means more clerks for the minister to communicate changes to, slowing down writes. On the other side as the file system is split into more subtrees the chance increases a client will need to contact not one but multiple ministries. Furthermore, to create another ministry we usually have to shrink existing ministries. Growing a ministry can involve removing one to free up clerks. 
+There is a trade-off here: a larger ministry means more clerks for the minister to communicate changes to, slowing down writes. On the other hand as the file system is split into more subtrees the chance increases a client will need to contact not one but multiple ministries. Furthermore, to create another ministry we might have to shrink existing ministries. Growing a ministry can even involve removing another to free up nodes. 
 %
 We can model the read and write capacity of a single group as:
 \begin{align}
 	r =& n_\text{c} \\
 	w =& 1 - \sigma*n_\text{c}
 \end{align}%
-Here $n_\text{c}$ is the number of clerks in the group, and $\sigma$ the communication overhead added by an extra clerk. 
+Here $n_\text{c}$ is the number of clerks in the group, and $\sigma$ the communication overhead added by each clerk. 
 
-Now we can derive the number of clerks needed given a load. Since we want to have some unused capacity $\delta$. I set $\delta$ equal to the capacity with the current load subtracted. This gets us the following system of equations: 
+Now we can derive the number of clerks needed given a load. We want to have some unused capacity $\delta$. I set $\delta$ equal to the capacity with the current load subtracted. This gets us the following system of equations: 
 \begin{align}
 	\delta &= w - W \\
 	\delta &= r - R
@@ -77,9 +77,9 @@ Now solve for $n_\text{c}$, the number of clerks.
 \begin{align}
 	r - R &= w - W \\
 	n_c - R &= \left(1 - \sigma*n_c\right) - W \\
-	n_c &= \frac{R - W + 1}{1 + \sigma}
+	n_c &= \frac{R - W + 1}{1 + \sigma} \label{eq:nc}
 \end{align}
-From this I draw two conclusions, any spare capacity for writing is at a cost of spare reading capacity. The number of clerks roughly the read load.
+From this I draw two conclusions, any spare capacity for writing is at a cost of spare reading capacity. The number of clerks roughly equals the read load.
 %
 % TODO a load balancing algorithm/ rewrite this piece
 %
@@ -89,12 +89,11 @@ A ministry experiencing low read load relative to their capacity is shrunk. A mi
 A group under high relative read load has average clerk CPU utilization passing 95\%. The president then issues a \raft{} message assigning an idle node to the group if one is available. %TODO diff % why
 %
 \subparagraph*{Write balancing}
-When the president decides a group can no longer handle the write-load it will try to split off some work to another group. If no existing group can handle the work the president will try to create a new group. If that is not possible then the 
-
-
-
-% TODO Finish this piece
-
+When the president decides a group can no longer handle the write-load it will try to split off some work to another group. If no existing group can handle the work the president will try to create a new group. This is illustrated in \cref{fig:subtree}.
+%
+\subparagraph*{Constraints}
+If the system is experiencing a high read and write load, and can no longer add nodes the greedy approach described above will no longer work. At this point we will need to carefully balance the number of ministries and their sizes using the available nodes. Using the equations derived above and the load numbers from all the ministries we can define an objective function. Then we can use a constrained optimization method to find the optimal configuration for \name{}.
+%
 \begin{figure}[htbp]
 	\centering
 	\input{figs/diagrams/subtree.tex}

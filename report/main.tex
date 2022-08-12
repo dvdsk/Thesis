@@ -28,7 +28,7 @@
 \author[opensource@davidsk.dev]{David Kleingeld}
 
 % % double spacing
-% \linespread{1.5}
+\linespread{1.5}
 
 \begin{document}
 
@@ -36,13 +36,13 @@
 \maketitle
 
 \begin{abstract}
-With the rise of big data and the move to the cloud the need for highly available and scaling file systems has grown. Building a distributed file system using a dedicated metadata node has two problems. It introduces a single point of failure and can not scale horizontally. Here we design and implement a system using groups of metadata nodes: \textit{GovFS}. We build it on top of \textit{Group Raft} our extension of Raft that enables scaling partitioned consensus. Tests show \textit{GovFS} has great scaling characteristics. Performance is severely limited due to the rough implementation of \textit{Group Raft}.
+With the rise of big data and the move to the cloud the need for highly available and scaling file systems has grown. Distributed file systems address this need. A popular approach is to use a dedicated metadata node. This has two problems: the node becomes a single point of failure, and it limits the metadata capacity of the system. Here we design and implement a system using groups of metadata nodes: \textit{GovFS}. We build it on top of \textit{Group Raft} our extension of Raft that enables scaling partitioned consensus. Tests show \textit{GovFS} has great scaling characteristics. Performance is severely limited however due to a rough implementation of \textit{Group Raft}.
 \end{abstract}
 \end{titlepage}
 
 \section*{Acknowledgement}
 This endeavor would not have been possible without the frequent advise, guidance and honest feedback of my supervisor: \emph{dr. Alexandru Uta}. 
-I would also like to express my thanks to \emph{Assistant Professor Kristian Rietveld} for showing me how to test the limited implementation in a meaningful way and discuss the results.
+I would also like to express my thanks to \emph{Assistant Professor Kristian Rietveld} for showing me how to test the limited implementation in a meaningful way.
 
 \newgeometry{bottom=1cm}
 \tableofcontents
