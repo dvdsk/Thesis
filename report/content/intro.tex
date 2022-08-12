@@ -1,21 +1,21 @@
-In the last decade we have seen the rise of big data and the shift of everyday work to the cloud. With it rose the need for a highly available and scaling file system. This is solved by distributed file systems, they spread files across multiple machines and keep the replicas consistent. There are two approaches: a dedicated node to control where each file is placed\footnote{Introduced by GoogleFs~\cite{GFS,GFS_interview} and adopted by the widely used Hadoop file system (HDFS)~\cite{hdfs}}, or a distribution function that decide where a file should be located\footnote{Pioneered by \textit{Ceph}\cite{ceph}}. The distribution function needs only limited shared state.
+In the last decade we have seen the rise of big data and the shift of everyday work to the cloud. With it rose the need for a highly available and scaling file system. This need is solved by distributed file systems, they spread files across multiple machines and keep those replicas consistent. There are two approaches: a dedicated node to control where each file is placed\footnote{Introduced by GoogleFs~\cite{GFS,GFS_interview} and adopted by the widely used Hadoop file system (HDFS)~\cite{hdfs}.}, or a distribution function that decide where a file should be located\footnote{Pioneered by \textit{Ceph}\cite{ceph}}. The distribution function needs only limited shared state.
 
-There are two problems with the first approaches. The dedicated metadata node is single point of failure, and it can not scale out, limiting the amount of files a system can store and maximum load. Recently implementations have started to address the first issue. \textit{HDFS} for example has added standby nodes \cite{hdfs_ha_nfs, hdfs_ha_q} which can replace the metadata node. However, ensuring consistency between these replicas decreases performance. 
+There are two problems with the first approaches. The dedicated metadata node is single point of failure, and it can not scale out, limiting the amount of files a system can store and the maximum load. Recently implementations have started to address the first issue. \textit{HDFS} for example has added standby nodes \cite{hdfs_ha_nfs, hdfs_ha_q} which can replace the metadata node. However, ensuring consistency between these replicas decreases performance. 
 %While the second approach scales and is failure resistant it gives up some control over where files are placed.
 
 % adress why not just drop hadoop arch for \textit{Ceph} (ranged locks?)
 
-Here we investigate whether \name{}: a file system control plane using groups of metadata nodes can offer better scalability than using a single metadata node. The control plane is responsible for coordinating the files but does not store data. It is the bottleneck of existing distributed file systems. \Name{} is build upon the Raft\cite{raft} consistency algorithm. We extend Raft to enable number of metadata groups to scale freely. 
+Here we investigate whether a file system control plane using groups of metadata nodes can offer better scalability than using a single metadata node. The control plane is responsible for coordinating the files but does not store data. It is the bottleneck of existing distributed file systems. We design and implement \Name{} which we build around the Raft\cite{raft} consistency algorithm. We have extended Raft to enable number of metadata groups to scale without limit. 
 
 In the next section we will go over the challenges in distributed systems, how consensus algorithms solve those, what a file system is and finally discuss the most widely used distributed file systems: \textit{HDFS} and \textit{Ceph}. 
 %
 Then in \cref{sec:design} we present \name{}'s design and explain how it enables scalable distributed storage.
 %
-In \cref{sec:impl} we go over the implementation taking a more detailed look at how we extended Raft and discussing how reading and writing is coordinated.
+In \cref{sec:impl} we go over the implementation, take a more detailed look at how we extended Raft and discussing how reading and writing is coordinated.
 %
 Using the \name{} implementation we performed a number of performance tests. We present the test methodology and show the results in \cref{sec:results}.
 % 
-We discuss the results in \cref{sec:discussion}.
+We then discuss the results in \cref{sec:discussion}.
 %
 Finally, in \cref{sec:conclusion} we conclude whether \name{} approach, using groups of metadata nodes, offers better scalability. 
 %

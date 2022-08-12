@@ -1,7 +1,7 @@
 \subsection{Client requests}
-In this section we go over all the operations of the system, while discussing four in greater detail. I also explain how most operations are simpler forms of these four. This section is split in two parts: client requests and coordination by the president.
+In this section we go over all the operations of the system, discussing four of them in greater detail. I also explain how most operations are simpler forms of these four. This section is split in two parts: client requests and coordination by the president.
 %
-For all requests a client needs to find an official (a minister or clerk) to talk to. If the request modifies the namespace, such as write, create and delete, the client needs to contact the minister. In \Cref{fig:find_aMDS} we see how this works. Since load balancing changes and minister appointments are communicated through \raft{} each cluster member knows which ministry owns a given subtree. A client can not judge whether the node it got directions from has up to date and correct information. In the rare case the directions where incorrect this means an extra jump through an irrelevant ministry before getting correct information.
+For all requests a client needs to find an official (a minister or clerk) to talk to. If the request modifies the namespace, such as write, create and delete, the client needs to contact the minister. In \Cref{fig:find_aMDS} we see how this works. Since load balancing changes and minister appointments are communicated through \raft{} each cluster member knows which ministry owns a given subtree. A client can not judge whether the node it got directions from has up to date and correct information. In the rare case the directions are incorrect. This means an extra jump through an irrelevant ministry before getting correct information.
 %
 \begin{figure}[htbp]
 	\centering
@@ -35,7 +35,7 @@ Removing a directory spanning one or more load balanced subtrees needs a little 
 \end{figure}
 %
 \subsection{Availability}
-Ensuring file system availability is the responsibility of the \textit{president}. This includes replacing nodes that fail and load balancing. All ministers and clerks periodically send heartbeats to the president. In this design I improve scalability by moving tasks from a central authority (the president) to groups of nodes. Continuing this pattern we could let the ministers monitor their clerks. This is more complex than letting these report directly to the \textit{president}. However, even reporting directly to the president is not needed, instead I use the TCP ACK to the \textit{president}'s \raft{} heartbeat. When the \textit{president} fails to send a \raft{} heartbeat to a node it decides the node must be failing.
+Ensuring file system availability is the responsibility of the \textit{president}. This includes replacing nodes that fail and load balancing. To detect nodes that go down we use the TCP ACK of the nodes to the \textit{president}'s \raft{} heartbeat. When the \textit{president} fails to send a \raft{} heartbeat to a node it decides the node must be failing.
 
 \subsubsection*{A failing minister}
 When the president notices a minister has failed it will try to replace it. It queries the ministries clerks to find the ideal candidate for promotion. If it gets a response from less than half the ministry it can not safely replace the minister. At that point it marks the file subtree as down and may retry in the future. A successful replacement is illustrated in \Cref{fig:appoint}.
@@ -79,12 +79,12 @@ Now solve for $n_\text{c}$, the number of clerks.
 	n_c - R &= \left(1 - \sigma*n_c\right) - W \\
 	n_c &= \frac{R - W + 1}{1 + \sigma} \label{eq:nc}
 \end{align}
-From this I draw two conclusions, any spare capacity for writing is at a cost of spare reading capacity. The number of clerks roughly equals the read load.
+From this I draw two conclusions. Any spare capacity for writing is at a cost of spare reading capacity. The number of clerks roughly equals the read load.
 %
 % TODO a load balancing algorithm/ rewrite this piece
 %
 \subparagraph*{Read balancing}
-A ministry experiencing low read load relative to their capacity is shrunk. A ministries read load is low if it could lose a clerk without average clerk CPU utilization rising above 85\%. A ministry has multiple members not only for performance. The members form a \textit{Group Raft} cluster and ensure metadata is stored redundantly. This only works if a ministry has at least three members. To shrink a ministry the President issues a \raft{} message unassigning a clerk. 
+A ministry experiencing low read load relative to their capacity is shrunk. A ministries read load is low if it could lose a clerk without average clerk CPU utilization rising above 85\%. A ministry has multiple members not only for performance. The members form a \textit{Group Raft} cluster and ensure metadata is stored redundantly. This only works if a ministry has at least three members. Therefore, groups can not be made smaller than that. To shrink a ministry the President issues a \raft{} message unassigning a clerk. 
 
 A group under high relative read load has average clerk CPU utilization passing 95\%. The president then issues a \raft{} message assigning an idle node to the group if one is available. %TODO diff % why
 %
@@ -92,7 +92,7 @@ A group under high relative read load has average clerk CPU utilization passing 
 When the president decides a group can no longer handle the write-load it will try to split off some work to another group. If no existing group can handle the work the president will try to create a new group. This is illustrated in \cref{fig:subtree}.
 %
 \subparagraph*{Constraints}
-If the system is experiencing a high read and write load, and can no longer add nodes the greedy approach described above will no longer work. At this point we will need to carefully balance the number of ministries and their sizes using the available nodes. Using the equations derived above and the load numbers from all the ministries we can define an objective function. Then we can use a constrained optimization method to find the optimal configuration for \name{}.
+If the system is experiencing a high read and write load, and can no longer add nodes the greedy approach described above will no longer work. At this point we will need to carefully balance the number of ministries and their sizes using the available nodes. Using the equations derived above we can define an objective function as function of the load reports. Then we can use a constrained optimization method to find the optimal configuration for \name{}.
 %
 \begin{figure}[htbp]
 	\centering
