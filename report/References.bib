@@ -1,3 +1,78 @@
+@article{perf_comp,
+	title = {Cloud Distributed File Systems: A Benchmark of HDFS, Ceph,
+	         GlusterFS, and XtremeFS},
+	author = {Luca Acquaviva and Paolo Bellavista and Antonio Corradi and Luca
+	          Foschini and Leo Gioia and Pasquale Carlo Maiorano Picone},
+	journal = {2018 IEEE Global Communications Conference (GLOBECOM)},
+	year = {2018},
+	pages = {1-6},
+}
+
+@article{mapReduce,
+	author = {Dean, Jeffrey and Ghemawat, Sanjay},
+	title = {MapReduce: Simplified Data Processing on Large Clusters},
+	year = {2008},
+	issue_date = {January 2008},
+	publisher = {Association for Computing Machinery},
+	address = {New York, NY, USA},
+	volume = {51},
+	number = {1},
+	issn = {0001-0782},
+	url = {https://doi.org/10.1145/1327452.1327492},
+	doi = {10.1145/1327452.1327492},
+	abstract = {MapReduce is a programming model and an associated
+	            implementation for processing and generating large datasets that
+	            is amenable to a broad variety of real-world tasks. Users specify
+	            the computation in terms of a map and a reduce function, and the
+	            underlying runtime system automatically parallelizes the
+	            computation across large-scale clusters of machines, handles
+	            machine failures, and schedules inter-machine communication to
+	            make efficient use of the network and disks. Programmers find the
+	            system easy to use: more than ten thousand distinct MapReduce
+	            programs have been implemented internally at Google over the past
+	            four years, and an average of one hundred thousand MapReduce jobs
+	            are executed on Google's clusters every day, processing a total
+	            of more than twenty petabytes of data per day.},
+	journal = {Commun. ACM},
+	month = {jan},
+	pages = {107–113},
+	numpages = {7},
+}
+
+  
+
+@inproceedings{spark,
+	author = {Zaharia, Matei and Chowdhury, Mosharaf and Franklin, Michael J.
+	          and Shenker, Scott and Stoica, Ion},
+	title = {Spark: Cluster Computing with Working Sets},
+	year = {2010},
+	publisher = {USENIX Association},
+	address = {USA},
+	abstract = {MapReduce and its variants have been highly successful in
+	            implementing large-scale data-intensive applications on commodity
+	            clusters. However, most of these systems are built around an
+	            acyclic data flow model that is not suitable for other popular
+	            applications. This paper focuses on one such class of
+	            applications: those that reuse a working set of data across
+	            multiple parallel operations. This includes many iterative
+	            machine learning algorithms, as well as interactive data analysis
+	            tools. We propose a new framework called Spark that supports
+	            these applications while retaining the scalability and fault
+	            tolerance of MapReduce. To achieve these goals, Spark introduces
+	            an abstraction called resilient distributed datasets (RDDs). An
+	            RDD is a read-only collection of objects partitioned across a set
+	            of machines that can be rebuilt if a partition is lost. Spark can
+	            outperform Hadoop by 10x in iterative machine learning jobs, and
+	            can be used to interactively query a 39 GB dataset with
+	            sub-second response time.},
+	booktitle = {Proceedings of the 2nd USENIX Conference on Hot Topics in Cloud
+	             Computing},
+	pages = {10},
+	numpages = {1},
+	location = {Boston, MA},
+	series = {HotCloud'10},
+}
+
 @article{ceph_vs_hdfs,
 	doi = {10.1088/1742-6596/513/4/042014},
 	url = {https://doi.org/10.1088/1742-6596/513/4/042014},

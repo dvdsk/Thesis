@@ -102,7 +102,7 @@ The other work functions similarly select on multiple async tasks. These tasks t
 \clearpage
 
 \subsection{Raft}
-There are a lot of reliable \raft{} implementations. Developing my own took a lot of time and as my implementation has hardly been tested it makes the system less reliable. Building on existing work was no option as \name{} has two unique requirements: 
+There are a lot of reliable \raft{} implementations. Developing my own took a significant amount of time. A new implementation will be less stable as it misses years of testing, this may impact our systems' stability. Building on existing work however was not an option as \name{} has two unique requirements: 
 %
 \begin{itemize}
 	\item \Name{} uses the \raft{} heartbeat to maintain file system consensus (see:~\cref{sec:praft}). It is used for example newly assigned clerks need to know when they are up-to-date\footnote{That is, the clerk has applied all log committed entries, and the last was committed within a \raft{} heartbeat of it being committed.} and can begin serving clients. 
@@ -115,25 +115,6 @@ the custom implementation must also scale and be optimizable. If it does not the
 %
 \subsubsection*{Perishable log entries}
 When a \raft{} message arrives it can cause entries in the log to become committed. At that point they are made available to the system. These could be old entries, long ago committed by other nodes. The message contains the index of the last committed entry or entries which we use to recognize if an entry is old. Newly committed messages can still become outdated if they are applied too slowly. This can happen if the server slows down due to bugs in \name{} or hardware issues. The system notes the time a newly committed entry arrived. The time is combined with the entry into a perishable entry. It is what is made available to \name{} and can be asked whether it is fresh.
-
-\subsubsection*{\graft{}} \label{sec:dictraft}
-In \textit{Group Raft} a third party instructs a node to become the leader. Followers are not informed directly but rather accept the new leader as it has a higher term. When receiving a message the normal \raft{} rules apply therefore messages from the old leader\footnote{The third party replacing the leader usually indicates there is a problem with the current leader, making it doubly important that messages from old leaders are ignored.} are rejected as there term is too low.
-
-Nodes must be able to move between groups with assigned leaders. This present two problems, the first issue becomes apparent looking at the following series of events:
-\begin{itemize}
-	\item Leader B receives message that follower x is assigned to it
-	\item Leader B appends to its log and sends an append request to its followers now including x
-	\item Follower x \emph{accepts} the request as x has a \emph{lower} term then the request
-	\item Follower x \emph{increases} its term to match B
-	\item Leader A receives a message that assigns x back to it
-	\item Leader A appends to its log and sends an append request to its followers which now again includes x
-	\item Follower x \emph{rejects} the request as x now has a \emph{higher} term then the request
-\end{itemize}
-Leader A must initially have a lower term then B and then a higher term then B for the re-assignment to work. The second problem: we need a follower to re-write its log after every move to match that of its new group. 
-
-To solve the first problem we make the third party change the term of the leader when it assigning it a node. Every re-assignment will succeed if it guarantees the new term is the highest of all the groups. It is simple to ensure that using a single third party as we can then atomically increment the term every assignment and re-assignment. 
-
-This coincidentally also solves our second problem. Since the highest number is always unique the correct log for each group now has an increasing sequence of unique terms. If a node receives an append request and its previous log entries term and index do not match that of the leader it rejects the request. The leader then starts sending older log entries\footnote{This is optimized in \name{} by clearing the entire log if a clerk came from another ministry.}. A successful append can only happen on correct (partial) group log given terms are now unique to groups.
 
 \subsection{File leases} \label{sec:impl_leases}
 As discussed in \cref{sec:arch} read and write access is coordinated by a ministry. Before issuing write access a minister must ensure outstanding reads leases are revoked. Similarly, clerks must ensure they do not offer read-leases to files that can be written too. The minister \emph{locks} the needed file on all the ministries clerks before issuing a write-lease. 

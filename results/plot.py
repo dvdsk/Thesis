@@ -268,8 +268,8 @@ def dur_vs_time(bench: str):
     plt.xscale("log")
     sns.scatterplot(data=data, x="start_time", y="duration",
                     hue="number of ministries", alpha=0.5)
-    plt.ylabel("request completed in (seconds)")
-    plt.xlabel("request started after (seconds)")
+    plt.ylabel("completed in (seconds)")
+    plt.xlabel("started after (seconds)")
 
 
 def stats(catagories: List[str], folders: List[str], sums_catagory="", ymul=1):

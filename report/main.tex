@@ -36,7 +36,7 @@
 \maketitle
 
 \begin{abstract}
-With the rise of big data and the move to the cloud the need for highly available and scaling file systems has grown. Distributed file systems address this need. A popular approach is to use a dedicated metadata node. This has two problems: the node becomes a single point of failure, and it limits the metadata capacity of the system. Here we design and implement a system using groups of metadata nodes: \textit{GovFS}. We build it on top of \textit{Group Raft} our extension of Raft that enables scaling partitioned consensus. Tests show \textit{GovFS} has great scaling characteristics. Performance is severely limited however due to a rough implementation of \textit{Group Raft}.
+With the rise of big data and the move to the cloud the need for highly available and scaling file systems has grown. Distributed file systems address this need. A popular approach is to use a dedicated metadata node. This has two problems: the node becomes a single point of failure, and it limits the metadata capacity of the system. Here we design and implement a system using groups of metadata nodes: \textit{GovFS}. We build it on top of \textit{Group Raft} our extension of Raft that enables scaling partitioned consensus. Tests show \textit{GovFS} write performance scales linearly with the number of nodes. Our initial prototype shows promising performance that can be significantly improved in the future.
 \end{abstract}
 \end{titlepage}
 
