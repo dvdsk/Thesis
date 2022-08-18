@@ -3,13 +3,13 @@ In the previous section we presented the performance of \name{}. We focussed on 
 \subsection{Complexity}
 Raft is an understandable consensus algorithm. Here we have extended it to get \textit{Group Raft} which provides greater scalability. This extended algorithm had two problems. These where both solved by re-using the Raft concept of terms. No new variables where added to the algorithm nor did we add new routines. It is still quite simple. 
 
-\Name{} clerks need to know if there log is running behind. For this we added Perishable Log entries to \textit{Group Raft}. These use log entry arrival time, the groups leaders commit index and the heartbeat duration to determine if a log entry is applied on time. Tracking arrival time is a trivial addition. All other variables where already available making perishable a simple addition.
+\Name{} clerks need to know if their log is running behind. For this we added Perishable Log entries to \textit{Group Raft}. These use log entry arrival time, the groups leaders commit index and the heartbeat duration to determine if a log entry is applied on time. Tracking arrival time is a trivial addition. All other variables where already available making perishable a simple addition.
 
 As leases did not need to survive system crashes and reboots we did not use Raft but designed our own algorithm for non-persistent consistency. This enables \name{} to reach higher read and write performance. Even non-persistent consistency is still a hard problem, therefore this algorithm makes \name{}'s implementation significantly more complex. In \cref{sec:impl_leases} we saw there are four known problems with this algorithm. While most have solutions solving these will further increase the now already high degree of complexity.
 %
 \subsection{Ministry architecture}
 \paragraph{Design Faults}
-During testing, I realized there is a fault in the current design. The president is responsible for detecting nodes that go down. However, if the president can reach a clerk and its minister that does not guarantee that the clerk and minister can reach each other. We can address this by nodes inform the president when they can not reach one of their assigned nodes.
+During testing, I realized there is a fault in the current design. The president is responsible for detecting nodes that go down. However, if the president can reach a clerk and its minister that does not guarantee that the clerk and minister can reach each other. We can address this by nodes informing the president when they can not reach one of their assigned nodes.
 \paragraph{List Directory}
 We saw the fastest response from a \name{} configuration using only a single ministry. As soon as we start using multiple latency increases. Adding more ministries increases average performance. Clients start without knowledge of the configuration, they are designed to initially connect to a random node. It is therefore logical that we see an increased in latency with more ministries: given twice as many ministries the chance to connect to the right node on the first try halves. 
 
@@ -20,7 +20,7 @@ The tail latencies become longer as we increase the number of ministries. This i
 \paragraph{Create file} 
 Mean file creation time decreases almost linearly with the number of ministries. This should hold true even after the Raft implementation has been improved. Most file creation complete in a multiple of 75ms. This corresponds to the heartbeat duration used for Raft which imposes a rate limits on log modifications in this implementation. 
 
-Up to 5\% of writes are completed in less time. At least a heartbeat period must pass before a new log entry can be appended. Only after appending the log entry does the minister inform the client the creation is done. These low create durations must therefore be the result of a bug in either the synchronizing of the test results or the file create implementation.
+Up to 5\% of writes are completed in less time. At least a heartbeat period must pass before a new log entry can be appended. Only after appending the log entry does the minister inform the client the creation is done. Further study is required to explain these results.
 %
 \subsection{Ranged based file locking}
 \paragraph{Writing a single row}

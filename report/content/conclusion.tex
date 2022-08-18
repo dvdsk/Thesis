@@ -1,11 +1,11 @@
-We have investigated whether \name{}: a file system using groups of metadata nodes can offer better scalability than using a single metadata node. While the architecture stays close to the simple Raft consensus algorithm coordinates file locking has become highly complex. The complexity kept us from building a stable and performant implementation. We were able to test the impact of the architecture and ranged locking even with these limitations.
+We have investigated whether \name{}, a file system using groups of metadata nodes can offer better scalability than using a single metadata node. The architecture of \name{} and \textit{Group Raft} are relatively. The algorithm coordinates file locking however is highly complex. The complexity kept us from building a highly performant implementation. We were able to test the impact of the architecture and ranged locking even with these limitations.
 
 The speed at which we can create files scales almost linearly with the number of ministries. With multiple ministries' directory metadata queries take longer then when using only a single ministry. Mean query performance recovers slightly however as we add more than two ministries. This comes at the cost of increasing tail latencies.
 
 With many clients writing to non overlapping chunks 10\% of a file ranged locking offered substantial performance improvements. Using ranged locking when writing an entire file concurrently from many clients offered no advantage actually slowing down performance compared to locking the entire file.
 
-We got some results that should not be possible given the design. A more reliable implementation is needed to investigate whether these results come from implementation flaws or if the design is flawed. 
+We found a few surprising results that should not be possible given the design. These are probably caused by the limitations of the current implementation. With more implementation effort these results should be eliminated which would exclude faults in the design.
 
 To enable the ministries' architecture we came up with \textit{Group Raft} which provides scalable partitioned consensus. It has proven to be a simple extension with promising performance characteristics. Ranged file locking enables performance gains in limited circumstances but is easy to implement. Both of these should be studied further. 
 
-We conclude that a distributed file system using multiple small raft clusters offers great scaling characteristics. More research is needed to see if such a system can be made as performant as the current state of the art.
+We conclude that a distributed file system using multiple small raft clusters offers great scaling characteristics. More research and implementation effort is needed to see if such a system can be made as performant as the current state of the art.
