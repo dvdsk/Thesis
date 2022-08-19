@@ -1,11 +1,11 @@
-Here I present \name{}'s design and explain how it enables scalable consistent distributed file storage. First I will discuss the \ac{api} exposed by my system then I will present the architecture, finally I will detail some system behavior using state machine diagrams. 
+Here we present \name{}'s design and explain how it enables scalable consistent distributed file storage. First we will discuss the \ac{api} exposed by our system then I will present the architecture, finally I will detail some system behavior using state machine diagrams. 
 %
 \subsection{API and Capabilities}
 The file system is set up hierarchically: data is stored in files which are kept in folders. Folders can contain other folders. The hierarchy looks like a tree where each level may have 1 to n nodes.
 
-The \ac{posix} has enabled applications to be developed once for all complying file system and my system's \ac{api} is based on it. If we expand beyond \ac{posix} by adding methods that allow for greater performance we exclude existing applications from these gains. This is a trade-off made by \ceph{}~(\cref{sec:ceph}) by implementing part of the \ac{posix} \ac{hpc} IO extensions~\cite{hpc_posix}. \ceph{} also trades in all consistency for files using the \ac{hpc} \ac{api}. 
+The \ac{posix} has enabled applications to be developed once for all complying file system and our system's \ac{api} is based on it. If we expand beyond \ac{posix} by adding methods that allow for greater performance we exclude existing applications from these gains. This is a trade-off made by \ceph{}~(\cref{sec:ceph}) by implementing part of the \ac{posix} \ac{hpc} IO extensions~\cite{hpc_posix}. \ceph{} also trades in all consistency for files using the \ac{hpc} \ac{api}. 
 
-We also expand the file system \ac{api} beyond \ac{posix}. While this makes my system harder to use it does not come at a cost of reducing consistency. Specifically \name{} expands upon \ac{posix} with the addition of \textsl{open region}. A client that \textit{opens} a file \textit{region} can access only a range of data in the file. This \ac{api} enables consistent \emph{limited parallel concurrent} writes on, or combinations of reading and writing in the same file.
+We also expand the file system \ac{api} beyond \ac{posix}. While this makes our system harder to use it does not come at a cost of reducing consistency. Specifically \name{} expands upon \ac{posix} with the addition of \textsl{open region}. A client that \textit{opens} a file \textit{region} can access only a range of data in the file. This \ac{api} enables consistent \emph{limited parallel concurrent} writes on, or combinations of reading and writing in the same file.
 
 Like \ceph{} in \name{} clients gain capabilities when they open files. These capabilities determine what actions a client may perform on a file. There are four capabilities: \nopagebreak
 %
@@ -42,10 +42,10 @@ Metadata changes are coordinated by ministers, they serialize metadata modifying
 
 A ministry's clerks handle metadata queries: issuing read capabilities and providing information about the file system tree. Additionally, each clerk tracks file popularity to provide to the minister. 
 
-It is not a good idea to assign as many clerks to ministries as possible. Each extra clerk is one more machine the minister needs to contact for each change. The cluster might therefore keep some nodes idle. I will get back to this when discussing load balancing in \Cref{sec:loadb}.
+It is not a good idea to assign as many clerks to ministries as possible. Each extra clerk is one more machine the minister needs to contact for each change. The cluster might therefore keep some nodes idle. We will get back to this when discussing load balancing in \Cref{sec:loadb}.
 %
 \subsubsection*{Consensus} \label{sec:concensus} \label{sec:praft}
-Consistent communication has a performance penalty and complicates system design. Not all communication is critical to system or data integrity. I use simpler protocols where possible. 
+Consistent communication has a performance penalty and complicates system design. Not all communication is critical to system or data integrity. We use simpler protocols where possible. 
 
 The president is elected using \raft{}. Its coordination is communicated using \raft{}'s log replication. On failure a new president is elected by all nodes.
 

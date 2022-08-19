@@ -1,5 +1,5 @@
 \subsection{Client requests}
-In this section we go over all the operations of the system, discussing four of them in greater detail. I also explain how most operations are simpler forms of these four. This section is split in two parts: client requests and coordination by the president.
+In this section we go over all the operations of the system, discussing four of them in greater detail. We also explain how most operations are simpler forms of these four. This section is split in two parts: client requests and coordination by the president.
 %
 For all requests a client needs to find an official (a minister or clerk) to talk to. If the request modifies the namespace, such as write, create and delete, the client needs to contact the minister. In \Cref{fig:find_aMDS} we see how this works. Since load balancing changes and minister appointments are communicated through \raft{} each cluster member knows which ministry owns a given subtree. A client can not judge whether the node it got directions from has up to date and correct information. In the rare case the directions are incorrect. This means an extra jump through an irrelevant ministry before getting correct information.
 %
@@ -68,7 +68,7 @@ We can model the read and write capacity of a single group as:
 \end{align}%
 Here $n_\text{c}$ is the number of clerks in the group, and $\sigma$ the communication overhead added by each clerk. 
 
-Now we can derive the number of clerks needed given a load. We want to have some unused capacity $\delta$. I set $\delta$ equal to the capacity with the current load subtracted. This gets us the following system of equations: 
+Now we can derive the number of clerks needed given a load. We want to have some unused capacity $\delta$. We set $\delta$ equal to the capacity with the current load subtracted. This gets us the following system of equations: 
 \begin{align}
 	\delta &= w - W \\
 	\delta &= r - R
@@ -79,7 +79,7 @@ Now solve for $n_\text{c}$, the number of clerks.
 	n_c - R &= \left(1 - \sigma*n_c\right) - W \\
 	n_c &= \frac{R - W + 1}{1 + \sigma} \label{eq:nc}
 \end{align}
-From this I draw two conclusions. Any spare capacity for writing is at a cost of spare reading capacity. The number of clerks roughly equals the read load.
+From this we draw two conclusions. Any spare capacity for writing is at a cost of spare reading capacity. The number of clerks roughly equals the read load.
 %
 % TODO a load balancing algorithm/ rewrite this piece
 %

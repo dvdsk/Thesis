@@ -9,7 +9,7 @@ As leases did not need to survive system crashes and reboots we did not use Raft
 %
 \subsection{Ministry architecture}
 \paragraph{Design Faults}
-During testing, I realized there is a fault in the current design. The president is responsible for detecting nodes that go down. However, if the president can reach a clerk and its minister that does not guarantee that the clerk and minister can reach each other. We can address this by nodes informing the president when they can not reach one of their assigned nodes.
+During testing, we realized there is a fault in the current design. The president is responsible for detecting nodes that go down. However, if the president can reach a clerk and its minister that does not guarantee that the clerk and minister can reach each other. We can address this by nodes informing the president when they can not reach one of their assigned nodes.
 \paragraph{List Directory}
 We saw the fastest response from a \name{} configuration using only a single ministry. As soon as we start using multiple latency increases. Adding more ministries increases average performance. Clients start without knowledge of the configuration, they are designed to initially connect to a random node. It is therefore logical that we see an increased in latency with more ministries: given twice as many ministries the chance to connect to the right node on the first try halves. 
 
@@ -24,7 +24,7 @@ Up to 5\% of writes are completed in less time. At least a heartbeat period must
 %
 \subsection{Ranged based file locking}
 \paragraph{Writing a single row}
-Locking only the needed data when writing to a file gives a dramatic increase in performance. This is in line with our expectations as the chance of lock contention decreases given less overlap in lock regions. Given larger files the difference in performance between the methods decreases as the time spend on (simulated) IO starts to dominate the time spend on locking. There are some far outliers that only appear when using row locking at the same time the variance of row locking is lower. I have no explanation for this, and it should be studied further starting with the behavior of the client.
+Locking only the needed data when writing to a file gives a dramatic increase in performance. This is in line with our expectations as the chance of lock contention decreases given less overlap in lock regions. Given larger files the difference in performance between the methods decreases as the time spend on (simulated) IO starts to dominate the time spend on locking. There are some far outliers that only appear when using row locking at the same time the variance of row locking is lower. We have no explanation for this, and it should be studied further starting with the behavior of the client.
 
 In this experiment both methods lock the file once and both locks should succeed in the same time given the files start unlocked. The only difference is the range of the lock that is acquired. Locking the entire file is however much faster. This even holds with a single writer in which case there can be no contention. With only a single writer both methods should therefore do exactly the same and have the same results. Only when using more than four simultaneous writers do we see locking the smaller range becoming faster. Given these results, especially the results when using a single writer, there is a fault in either the test or the lease system.
 %
