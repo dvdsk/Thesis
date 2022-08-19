@@ -22,9 +22,9 @@ The first workload we try is list directory. We perform 60 thousand list request
 
 The 2000 requests each client sends can be in two different orders: \textit{batch} and \textit{stride}. In \textit{batch} a client performs all the requests for a single directory before sending those for the next. When using the \textit{stride} pattern a client sends a request to the first directory and then sends the next request to another directory. There were a few extreme outliers, these were further out than 4 standard deviations. We consider these outliers therefore they are not shown in the plots. 
 
-In \Cref{fig:ls_vs_ministries} we see a violin plot comparing the two request orders for clusters with various number of ministries. On the Y-axis we see the time it took a single request to complete. A wider distribution means more requests where completed within the same time. Note the multimodal distribution, the increasing duration for the slowest requests as the number of ministries increases and the difference in the fastest times between batch and stride. This shows 
+In \Cref{fig:ls_vs_ministries} we see a violin plot comparing the two request orders for clusters with various number of ministries. On the Y-axis we see the time it took a single request to complete. A wider distribution means more requests where completed within the same time. Note the multimodal distribution, the increasing duration for the slowest requests as the number of ministries increases and the difference in the fastest times between batch and stride. From this we learn that batch mode is always faster than stride and that using more nodes increases tail latencies.
 
-\Cref{fig:ls_cdf} shows \acp{cdf} of clients performing 60 thousand list directory requests in \textit{batch} mode for varying amount of ministries. On the Y-axis are the proportion of requests that complete within the time on the X-axis. Note using \textit{one} ministry is always the fastest followed initially by a configuration using \textit{five} ministries until 80\% of requests complete. Past 80\% the second place it taken by the configuration with \textit{two} ministries.
+\Cref{fig:ls_cdf} shows \acp{cdf} of clients performing 60 thousand list directory requests in \textit{batch} mode for varying amount of ministries. On the Y-axis are the proportion of requests that complete within the time on the X-axis. Note using \textit{one} ministry is always the fastest followed initially by a configuration using \textit{five} ministries until 80\% of requests complete. Past 80\% the second place is taken by the configuration with \textit{two} ministries. This shows us that using more ministries will speed up most list directory requests a small fraction at the cost of significantly longer tail latencies.
 
 % hides page number, only works for this figure for some reason...
 \afterpage{%
@@ -54,9 +54,9 @@ As adding more ministries could alleviate future bottlenecks it is interesting t
 
 Because of this limit imposed by the implementation we send only 90 create requests. They are sent from 9 clients concurrently. These numbers where empirically determined to maximize the load while keeping the cluster stable enough to complete all the tests.
 
-In \Cref{fig:touch} we see \acp{cdf} for the time it takes to create a file on configurations with a various number of ministries. On the Y-axis the proportion of write requests completed, and the X-axis shows the time in milliseconds. Note the first jump upwards is about 75 milliseconds and all the other jumps are around multiples of 75. The more ministries we use the faster most requests are done. Finally, note the proportion of requests completed jumps up in discrete steps.
+In \Cref{fig:touch} we see \acp{cdf} for the time it takes to create a file on configurations with a various number of ministries. On the Y-axis the proportion of write requests completed, and the X-axis shows the time in milliseconds. Note the first jump upwards is about 75 milliseconds and all the other jumps are around multiples of 75. The more ministries we use the faster most requests are done. Finally, note the proportion of requests completed jumps up in discrete steps. Write requests duration is dominated by the time it takes the \textit{Group Raft} log to commit a change.
 
-\Cref{fig:touch_vs_time} offers another look at the same data. Here we see the time needed for each create as a function of when the request started. Darker tones are requests from tests with more ministries. On the Y-axis we see the time needed to complete the request in seconds while on the (logarithmic) X-axis we see the time a create request was sent. The vertical jumps in the \ac{cdf} (\Cref{fig:touch}) show up as horizontal bands here. For example the lowest horizontal band are requests that took 75 ms which matches the first vertical jump. Note that the gap just after the start of the test.
+\Cref{fig:touch_vs_time} offers another look at the same data. Here we see the time needed for each create as a function of when the request started. Darker tones are requests from tests with more ministries. On the Y-axis we see the time needed to complete the request in seconds while on the (logarithmic) X-axis we see the time a create request was sent. The vertical jumps in the \ac{cdf} (\Cref{fig:touch}) show up as horizontal bands here. For example the lowest horizontal band are requests that took 75 ms which matches the first vertical jump. Note that the gap just after the start of the test. When the system has more ministries more Raft logs can be appended to in parallel.
 
 \begin{figure}[htb]
 	\centering
@@ -87,7 +87,7 @@ We run both experiments for various row size and number of concurrent writers. W
 Since \name{} has no data plane implementation writing is simulated by sleeping on the client side. We simulate writing at a speed of 200 \ac{mby} per second\footnote{This corresponds to a slow hard drive which is a good bandwidth target for Hadoop like file systems targeting HDDs. It is also the best case scenario for writing by row since the low speed increases the ratio of time writing versus connecting and locking.}.
 
 In the table below we see the time spend on simulating IO and the average duration for writing one or 10 rows either by locking the whole file or locking by row:
-%
+
 \begin{tabular}{lcccccc} \toprule
 	& \multicolumn{6}{c}{Row Size (\ac{mby})} \\ \cmidrule(r){2-7}
 	                   & 0.1 & 1 & 10 & 20 & 40 & 80 \\ \midrule
@@ -101,11 +101,11 @@ In the table below we see the time spend on simulating IO and the average durati
 	Lock by row & 2.83         & 3.00       & 3.52        & 4.58        & 7.29        & 12.12 \\
 	Lock entire file & 0.57         & 0.82       & 1.51        & 2.65        & 4.90        & 9.60 \\ \bottomrule
 \end{tabular}
-%
+
 In the next two subsections we will look at these results in greater depth.
 %
 \subsubsection*{Writing a single row}
-\Cref{fig:single_rowlen} shows the time it takes to write a single row for different row sizes. The Y-axis shows the duration a single write request takes in seconds. Each dot is a single measurement. We see that locking the entire file is slower than locking only the needed row. Note how increasing the row length shrinks the performance gap between these methods. Note furthermore that there are many outliers when locking by row.
+\Cref{fig:single_rowlen} shows the time it takes to write a single row for different row sizes. The Y-axis shows the duration a single write request takes in seconds. Each dot is a single measurement. We see that locking the entire file is slower than locking only the needed row. Increasing the row length shrinks the performance gap between these methods. Note furthermore that there are many outliers when locking by row. Locking by row is most efficient for small files.
 
 \afterpage{ %
 \clearpage %
@@ -118,7 +118,7 @@ In the next two subsections we will look at these results in greater depth.
 \clearpage %
 } %
 %
-In \Cref{fig:single_writers} we see that with more simultaneous writers locking only a single row becomes faster. The Y-axis shows the duration a single write request takes in milliseconds. Note how locking the entire file is faster up to and including 4 writers. This is strange as both methods lock the file once. The results where therefore ran thrice and triple checked.
+In \Cref{fig:single_writers} we see that with more simultaneous writers locking only a single row becomes faster. The Y-axis shows the duration a single write request takes in milliseconds. Note how locking the entire file is faster up to and including 4 writers. This is strange as both methods lock the file once. The experiment was therefore run thrice and the results carefully checked.
 %
 \afterpage{ %
 \clearpage %
@@ -134,7 +134,7 @@ In \Cref{fig:single_writers} we see that with more simultaneous writers locking 
 
 \clearpage
 \subsubsection*{Writing the entire file}
-In \Cref{fig:rowlen} we look at every individual duration measurement for writing all 10 rows given various row lengths. Again we compare locking by row versus locking the entire file. The logarithmic Y-axis shows the duration in seconds. The X-axis shows various sizes for the rows. As expected larger rows result in longer write durations. Furthermore, we see discrete levels in write duration when writing the entire file and not when writing by row.
+In \Cref{fig:rowlen} we look at every individual duration measurement for writing all 10 rows given various row lengths. Again we compare locking by row versus locking the entire file. The logarithmic Y-axis shows the duration in seconds. The X-axis shows various sizes for the rows. As expected larger rows result in longer write durations. Furthermore, we see discrete levels in write duration when writing the entire file and not when writing by row. Writing a file by writing each row separately is significantly slower than writing out the entire file.
 %
 \afterpage{ %
 \clearpage %
@@ -148,14 +148,14 @@ In \Cref{fig:rowlen} we look at every individual duration measurement for writin
 \clearpage %
 } %
 
-\Cref{fig:writers} again shows the duration it takes to write all the rows this time for varying number of writers, comparing locking by row versus locking the entire file. The Y-axis shows the time it takes to write all 10 rows. Note how writing by row takes significantly longer with the gap closing when the number of writers increases. Also note the uniform distribution between the fastest and slowest time when locking the entire file (orange).
+\Cref{fig:writers} again shows the duration it takes to write all the rows this time for varying number of writers, comparing locking by row versus locking the entire file. Each row is ten \ac{mby}. The Y-axis shows the time it takes to write all 10 rows. Note how writing by row takes significantly longer with the gap closing when the number of writers increases. Also note the uniform distribution between the fastest and slowest time when locking the entire file (orange). The overhead from locking each row individually is not worth the gains from writing in parallel for normal file sizes.
 %
 \afterpage{ %
 \clearpage %
 \begin{figure}[htbp]
 	\centering
 	\includegraphics[height=\textheight]{../results/plots/range_vs_writers_both.png}
-	\caption{The time it takes to write ten rows with between one and 32 concurrent writers. On the logarithmic Y-axis the duration in milliseconds. In blue the duration when only locking the needed row, locking in total ten times to write all rows. In orange the result when locking the entire file and writing all rows at once.}
+	\caption{The time it takes to write ten rows each ten \ac{mby} with between one and 32 concurrent writers. On the logarithmic Y-axis the duration in milliseconds. In blue the duration when only locking the needed row, locking in total ten times to write all rows. In orange the result when locking the entire file and writing all rows at once.}
 	\label{fig:writers}
 \end{figure}
 \thispagestyle{empty}
