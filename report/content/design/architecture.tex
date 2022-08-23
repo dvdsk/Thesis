@@ -1,9 +1,9 @@
-Here we present \name{}'s design and explain how it enables scalable consistent distributed file storage. First we will discuss the \ac{api} exposed by our system then I will present the architecture, finally I will detail some system behavior using state machine diagrams. 
+Here we present \name{}'s design and explain how it enables scalable consistent distributed file storage. First we will discuss the \ac{api} exposed by our system then we will present the architecture, finally we will detail some system behavior using state machine diagrams. 
 %
 \subsection{API and Capabilities}
 The file system is set up hierarchically: data is stored in files which are kept in folders. Folders can contain other folders. The hierarchy looks like a tree where each level may have 1 to n nodes.
 
-The \ac{posix} has enabled applications to be developed once for all complying file system and our system's \ac{api} is based on it. If we expand beyond \ac{posix} by adding methods that allow for greater performance we exclude existing applications from these gains. This is a trade-off made by \ceph{}~(\cref{sec:ceph}) by implementing part of the \ac{posix} \ac{hpc} IO extensions~\cite{hpc_posix}. \ceph{} also trades in all consistency for files using the \ac{hpc} \ac{api}. 
+The \ac{posix} has enabled applications to be developed once for all complying file system and our system's \ac{api} is based on it. If we expand beyond \ac{posix} by adding methods that allow for greater performance we exclude existing applications from these gains. This is a trade-off made by \ceph{}~(\Cref{sec:ceph}) by implementing part of the \ac{posix} \ac{hpc} IO extensions~\cite{hpc_posix}. \ceph{} also trades in all consistency for files using the \ac{hpc} \ac{api}. 
 
 We also expand the file system \ac{api} beyond \ac{posix}. While this makes our system harder to use it does not come at a cost of reducing consistency. Specifically \name{} expands upon \ac{posix} with the addition of \textsl{open region}. A client that \textit{opens} a file \textit{region} can access only a range of data in the file. This \ac{api} enables consistent \emph{limited parallel concurrent} writes on, or combinations of reading and writing in the same file.
 
@@ -34,7 +34,7 @@ A client with write capabilities may also read data. Similar to \ceph{} capabili
 	\caption{An overview of the architecture. There is one president, $n$ \emph{ministers}~\amdsLeg{}, each ministry can have a different number of \emph{clerks}~\cmdsLeg{}. Not all servers in a cluster are always actively used as represented by the \emph{idle} nodes~\umdsLeg{}}
 \end{figure}
 
-\Name{} uses hierarchical leadership, there is one president elected by all servers. The president in turn appoints multiple ministers then assigns each a group of clerks. A minister contacts its group, and promotes each member from idle to clerk, forming a ministry. 
+The overhead of maintaining consensus within a group increases linearly with the number of members. \Name{} uses hierarchical leadership to decouple the overhead from the clusters size for interactions that only need consensus with a subset of the cluster. In \Name{} there is one president elected by all servers. The president in turn appoints multiple ministers then assigns each a group of clerks. A minister contacts its group, and promotes each member from idle to clerk, forming a ministry. 
 
 The president coordinates the cluster: monitoring the population, assigning new ministers on failures, adjusting groups given failures and load balances between all groups. Load balancing is done in two ways: increasing the size of a group and increasing the number of groups. To enable the president to make load balancing decisions each minister periodically sends file popularity.
 

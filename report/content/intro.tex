@@ -1,14 +1,14 @@
-In the last decade we have seen the rise of big data and the shift of everyday work to the cloud. Distributed processing of large datasets has been made accesible thanks to programming models such as MapReduce~\cite{mapReduce}. Distributed computing frameworks such as Apache Hadoop and Spark~\cite{spark} allows computations to scale across thousands of machines. With this rose the need for a highly available and scaling file system. This need is addressed by distributed file systems, they spread files across multiple machines and keep those replicas consistent. 
+In the last decade we have seen the rise of big data and the shift of everyday work to the cloud. Distributed processing of large datasets has been made accesible thanks to programming models such as MapReduce~\cite{mapReduce}. Distributed computing frameworks such as Apache Hadoop and Spark~\cite{spark} allow computations to scale across thousands of machines. In conjunction with this rose a need for a highly available and scaling file system. This need is addressed by distributed file systems, which spread files across multiple machines and keep those replicas consistent. 
 
-Files can get corrupted if multiple users write to them at the same time. Systems therefore not only store file data but also regulate access to the files. These tasks are normally done by two separate parts of the system: the data and control plane. The control plane is the bottleneck in file system performance. For this reason many systems allow client to opt out of access control and directly operate on files. This can be useful in \ac{hpc} where many processes need operate on the same files.
+Files can get corrupted if multiple users write to them at the same time. Systems therefore not only store file data but also regulate access to the files. These tasks are normally done by two separate parts of the system: the data and control plane. The control plane is the bottleneck in file system performance. For this reason many systems allow client to opt out of access control and directly operate on files. This can be useful in \ac{hpc} where many processes need to operate on the same files and can do so in a consistent manner.
 
-There are currently two approaches to distributed file systems: using a dedicated node to control where each file is placed\footnote{Introduced by GoogleFs~\cite{GFS,GFS_interview} and adopted by the widely used Hadoop file system (HDFS)~\cite{hdfs}.}, or a distribution function that decide where a file should be located\footnote{Pioneered by \textit{Ceph}\cite{ceph}}. The distribution function itself needs only limited shared state however the system still need a separate cluster to regulate file access.
+There are currently two approaches to distributed file systems: using a dedicated node to control where each file is placed\footnote{Introduced by GoogleFs~\cite{GFS,GFS_interview} and adopted by the widely used Hadoop file system (HDFS)~\cite{hdfs}.}, or a distribution function that decides where a file should be located\footnote{Pioneered by \textit{Ceph}\cite{ceph}}. The distribution function itself needs only limited shared state however the system still need a separate cluster to regulate file access.
 
-Using a dedicated node has two problems. The node is single point of failure, and it can not scale out. This limits the amount of files a system can store and the maximum workload the system can handle. Recently implementations have started to address the first issue. \textit{HDFS} for example has added standby nodes \cite{hdfs_ha_nfs, hdfs_ha_q} which can replace the metadata node. However, ensuring consistency between the standby nodes comes at the cost of decreases performance.
+Using a dedicated node has two problems. The node is single point of failure, and it can not scale out. This limits the amount of files a system can store and the maximum workload the system can handle. Recently, implementations have started to address the first issue. \textit{HDFS} for example has added standby nodes \cite{hdfs_ha_nfs, hdfs_ha_q} which can replace the metadata node. However, ensuring consistency between the standby nodes comes at the cost of decreased performance.
 
-Here we investigate whether we can make the control plane scale using groups of nodes. We made \textit{Group Raft} an extension on the Raft~\cite{raft} consistency algorithm which enables highly scalable consensus when using groups of nodes that do not share an information. We use \textit{Group Raft} to design and implement \Name{}: file system control plane that uses groups of nodes. 
+In this thesis we investigate whether we can make the control plane scalable using groups of nodes. We made \textit{Group Raft} an extension on the Raft~\cite{raft} consistency algorithm which enables highly scalable consensus when using groups of nodes that do not share information. We use \textit{Group Raft} to design and implement \Name{}: a file system control plane that uses groups of nodes. 
 
-When a hashing function is used to locate file metadata is stored in the data-plane and located through the hash function. A small cluster regulates access to the files. This solves the scaling problem. There are two reasons why we feel it important to explore other approaches:
+When a hashing function is used to locate files the metadata for these files is stored in the data-plane. It is also located through the hash function. A small cluster regulates access to the files. This solves the scaling problem. There are two reasons why we feel it is important to explore other approaches:
 \begin{itemize}
 	\item Using hashing we lose some control over file location, this makes co-locating compute and storage more difficult.
 	\item As the control plane usually forms the bottleneck of the system we might want to optimize it using special hardware~\cite{polarfs}. When metadata is stored in the data-plane it is hard to do so.
@@ -16,14 +16,14 @@ When a hashing function is used to locate file metadata is stored in the data-pl
 
 In the next section we will go over the challenges in distributed systems, how consensus algorithms solve those, what a file system is and finally discuss the most widely used distributed file systems: \textit{HDFS} and \textit{Ceph}. 
 %
-Then in \cref{sec:design} we present \name{}'s design and explain how it enables scalable distributed storage and take a more detailed look at how we extended Raft.
+Then in \Cref{sec:design} we present \name{}'s design and explain how it enables scalable distributed storage and take a more detailed look at how we extended Raft.
 %
-In \cref{sec:impl} we go over the implementation and discuss how reading and writing is coordinated.
+In \Cref{sec:impl} we go over the implementation and discuss how reading and writing is coordinated.
 %
-Using the \name{} implementation we performed a number of performance tests. We present the test methodology and show the results in \cref{sec:results}.
+Using the \name{} implementation we performed a number of performance tests. We present the test methodology and show the results in \Cref{sec:results}.
 % 
-We then discuss the results in \cref{sec:discussion}.
+We then discuss the results in \Cref{sec:discussion}.
 %
-Finally, in \cref{sec:conclusion} we conclude whether \name{} approach, using groups of metadata nodes, offers better scalability. 
+Finally, in \Cref{sec:conclusion} we conclude whether \name{} approach, using groups of metadata nodes, offers better scalability. 
 %
-We finish by listing a number of interesting avenues for further study in \cref{sec:fut}.
+We finish by listing a number of interesting avenues for further study in \Cref{sec:fut}.

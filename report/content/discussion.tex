@@ -5,7 +5,7 @@ Raft is an understandable consensus algorithm. Here we have extended it to get \
 
 \Name{} clerks need to know if their log is running behind. For this we added Perishable Log entries to \textit{Group Raft}. These use log entry arrival time, the groups leaders commit index and the heartbeat duration to determine if a log entry is applied on time. Tracking arrival time is a trivial addition. All other variables where already available making perishable a simple addition.
 
-As leases did not need to survive system crashes and reboots we did not use Raft but designed our own algorithm for non-persistent consistency. This enables \name{} to reach higher read and write performance. Even non-persistent consistency is still a hard problem, therefore this algorithm makes \name{}'s implementation significantly more complex. In \cref{sec:impl_leases} we saw there are four known problems with this algorithm. While most have solutions solving these will further increase the now already high degree of complexity.
+As leases did not need to survive system crashes and reboots we did not use Raft but designed our own algorithm for non-persistent consistency. This enables \name{} to reach higher read and write performance. Even non-persistent consistency is still a hard problem, therefore this algorithm makes \name{}'s implementation significantly more complex. In \Cref{sec:impl_leases} we saw there are four known problems with this algorithm. While most have solutions solving these will further increase the now already high degree of complexity.
 %
 \subsection{Ministry architecture}
 \paragraph{Design Faults}

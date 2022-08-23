@@ -37,13 +37,13 @@
 \maketitle
 
 \begin{abstract}
-With the rise of big data and the move to the cloud the need for highly available and scaling file systems has grown. Distributed file systems address this need. A popular approach is to use a dedicated metadata node. This has two problems: the node becomes a single point of failure, and it limits the metadata capacity of the system. Here we design and implement a system using groups of metadata nodes: \textit{GovFS}. We build it on top of \textit{Group Raft} our extension of Raft that enables scaling partitioned consensus. Tests show \textit{GovFS} write performance scales linearly with the number of nodes. Our initial prototype shows promising performance that can be significantly improved in the future.
+With the rise of big data and the move to the cloud the need for highly available and scaling file systems has grown. Distributed file systems address this need. A popular approach is to use a dedicated metadata node. This has two problems: the node becomes a single point of failure, and it limits the metadata capacity of the system. Here we design and implement a system using groups of metadata nodes: \textit{GovFS}. We build it on top of \textit{Group Raft} our extension of Raft that enables scaling partitioned consensus. Experiments demonstrate \textit{GovFS} write performance scales linearly with the number of nodes, showing that the system offers good scaling characteristics. Our initial prototype shows promising performance that can be significantly improved in the future.
 \end{abstract}
 \end{titlepage}
 
 \section*{Acknowledgement}
 This endeavor would not have been possible without the frequent advise, guidance and honest feedback of my supervisor: \emph{dr. Alexandru Uta}. 
-I would also like to express my thanks to \emph{Assistant Professor Kristian Rietveld} for showing me how to test the limited implementation in a meaningful way.
+I would also like to express my thanks to \emph{dr. Kristian Rietveld} for showing me how to test the limited implementation in a meaningful way.
 
 \newgeometry{bottom=1cm}
 \tableofcontents
@@ -82,7 +82,7 @@ I would also like to express my thanks to \emph{Assistant Professor Kristian Rie
 	\acro{osd}[\textacro{OSD}]{object store device}
 	\acro{api}[\textacro{API}]{application programming interface}
 	\acro{posix}[\textacro{POSIX}]{portable operation system interface}
-	\acro{hpc}[\textacro{HPC}]{high performance computing}
+	\acro{hpc}[\textacro{HPC}]{High Performance Computing}
 	\acro{gc}[\textacro{GC}]{Garbage Collection}
 	\acro{tdd}[\textacro{TDD}]{Type Driven Development}
 	\acro{raii}[\textacro{RAII}]{Resource Acquisition Is Initialization}

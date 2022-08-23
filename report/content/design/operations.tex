@@ -46,7 +46,7 @@ A clerk going down is handled by the president in one of two ways:
 	\item There are no idle nodes. The president, through raft, commands a clerk in the group with the lowest load to demote itself. Then the president drops the matter. The clerk wait till its read leases expire and unassigns.
 \end{itemize}
 %
-When the groups' minister appends to the \textit{Group Raft} log it will notice the clerk misses entries and update it (see \cref{sec:raft}).
+When the groups' minister appends to the \textit{Group Raft} log it will notice the clerk misses entries and update it (see \Cref{sec:raft}).
 
 \begin{figure}[htbp]
 	\centering
@@ -89,7 +89,7 @@ A ministry experiencing low read load relative to their capacity is shrunk. A mi
 A group under high relative read load has average clerk CPU utilization passing 95\%. The president then issues a \raft{} message assigning an idle node to the group if one is available. %TODO diff % why
 %
 \subparagraph*{Write balancing}
-When the president decides a group can no longer handle the write-load it will try to split off some work to another group. If no existing group can handle the work the president will try to create a new group. This is illustrated in \cref{fig:subtree}.
+When the president decides a group can no longer handle the write-load it will try to split off some work to another group. If no existing group can handle the work the president will try to create a new group. This is illustrated in \Cref{fig:subtree}.
 %
 \subparagraph*{Constraints}
 If the system is experiencing a high read and write load, and can no longer add nodes the greedy approach described above will no longer work. At this point we will need to carefully balance the number of ministries and their sizes using the available nodes. Using the equations derived above we can define an objective function as function of the load reports. Then we can use a constrained optimization method to find the optimal configuration for \name{}.
