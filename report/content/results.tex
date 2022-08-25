@@ -8,9 +8,9 @@ To design experiments that work around the limitations we need to be clear on wh
 	\item Sometimes nodes become unresponsive when making many requests that change metadata. They then miss heartbeats which triggers re-elections.
 \end{itemize}
 
-In \Cref{sec:res_arg} we look at the \textit{ministry architecture} tracking how performance changes when we change the number of ministries. Then we look at \textit{ranged based file locking} in \cref{sec:res_range}, we compare write performance with and without locking. In each section we will detail how the experiments work around the limitations, ensuring their outcome would match an implementation without restrictions. Every benchmark was performed five times and all the results are presented. The nodes where monitored during each run and if an error occurred we repeated the entire run. When using multiple clients to create a larger load the nodes where given time to initialize and the test start was synchronized. All raw data is available at \href{https://github.com/dvdsk/Thesis}{github.com/dvdsk/Thesis}.
+In \Cref{sec:res_arg} we look at the \textit{ministry architecture} tracking how performance changes when we change the number of ministries. Then we look at \textit{ranged based file locking} in \cref{sec:res_range}, we compare write performance with and without locking. In each section we will detail how the experiments work around the limitations, ensuring their outcome would match an implementation without restrictions. Every benchmark was performed five times and all the results are presented. The nodes were monitored during each run and if an error occurred we repeated the entire run. When using multiple clients to create a larger load the nodes were given time to initialize and the test start was synchronized. All raw data is available at \href{https://github.com/dvdsk/Thesis}{github.com/dvdsk/Thesis}.
 
-The benchmarks have been performed using the fifth generation distributed ASCI Supercomputer \cite{das5}. Each node has a dual eight-core Intel Xeon E5-2630 v3 cpus and 125G of ram. As networking delays are a key characteristic of the systems' performance we used Ethernet for the communication between nodes even though the hardware is equipped with InfiniBand. The Raft heartbeat duration was set to 75 milliseconds for all tests.
+The benchmarks have been performed using the fifth generation distributed ASCI Supercomputer \cite{das5}. Each node has dual eight-core Intel Xeon E5-2630 v3 CPUs and 128G of ram. As networking delays are a key characteristic of the systems' performance we used Ethernet for the communication between nodes even though the hardware is equipped with InfiniBand. The Raft heartbeat duration was set to 75 milliseconds for all tests.
 
 \subsection{Ministry Architecture} \label{sec:res_arg}
 Here we test the impact of varying the number of ministries on performance. We expect to see an almost linear improvement with more ministries given optimal size and shape of the load.
@@ -18,13 +18,13 @@ Here we test the impact of varying the number of ministries on performance. We e
 We use static subtree partitioning to vary the number of ministries. The load balancer starts by initializing a single ministry responsible for the root directory. Additional static ministries can be passed through command line parameters. For these test we let it initialize n-1 extra ministries at paths \textsl{/n}. Including the root ministry (it must always be present) there are now n ministries available for testing.
 
 \subsubsection*{List directory}
-The first workload we try is list directory. We perform 60 thousand list requests spread across all root directories from 30 clients concurrently. Each client sends the requests one after another as fast as possible. To keep the overhead from sending back the directory content small each directory contains only 10 files. The client processes are spread between 3 physical nodes.
+The first workload we try is list directory. We perform 60 thousand list requests spread across all directories in the root directory. We do this from 30 clients concurrently. Each client sends the requests one after another as fast as possible. To keep the overhead from sending back the directory content small each directory contains only 10 files. The client processes are spread between 3 physical nodes.
 
 The 2000 requests each client sends can be in two different orders: \textit{batch} and \textit{stride}. In \textit{batch} a client performs all the requests for a single directory before sending those for the next. When using the \textit{stride} pattern a client sends a request to the first directory and then sends the next request to another directory. There were a few extreme outliers, these were further out than 4 standard deviations. We consider these outliers therefore they are not shown in the plots. 
 
-In \Cref{fig:ls_vs_ministries} we see a violin plot comparing the two request orders for clusters with various number of ministries. On the Y-axis we see the time it took a single request to complete. A wider distribution means more requests where completed within the same time. Note the multimodal distribution, the increasing duration for the slowest requests as the number of ministries increases and the difference in the fastest times between batch and stride. From this we learn that batch mode is always faster than stride and that using more nodes increases tail latencies.
+In \Cref{fig:ls_vs_ministries} we see a violin plot comparing the two request orders for clusters with various number of ministries. On the Y-axis we see the time it took a single request to complete. A wider distribution means more requests were completed within the same time. Note the multimodal distribution, the increasing duration for the slowest requests as the number of ministries increases and the difference in the fastest times between batch and stride. From this we learn that batch mode is always faster than stride and that using more nodes increases tail latencies.
 
-\Cref{fig:ls_cdf} shows \acp{cdf} of clients performing 60 thousand list directory requests in \textit{batch} mode for varying amount of ministries. On the Y-axis are the proportion of requests that complete within the time on the X-axis. Note using \textit{one} ministry is always the fastest followed initially by a configuration using \textit{five} ministries until 80\% of requests complete. Past 80\% the second place is taken by the configuration with \textit{two} ministries. This shows us that using more ministries will speed up most list directory requests a small fraction at the cost of significantly longer tail latencies.
+\Cref{fig:ls_cdf} shows \acp{cdf} of clients performing 60 thousand list directory requests in \textit{batch} mode for varying amount of ministries. On the Y-axis are the proportion of requests that complete within the time on the X-axis. Note using \textit{one} ministry is always the fastest followed initially by a configuration using \textit{five} ministries until 80\% of requests complete. Past 80\% the second place is taken by the configuration with \textit{two} ministries. This shows us that when using more than 2 ministries more ministries will speed up most list directory requests a small fraction at the cost of significantly longer tail latencies.
 
 % hides page number, only works for this figure for some reason...
 \afterpage{%
@@ -32,7 +32,7 @@ In \Cref{fig:ls_vs_ministries} we see a violin plot comparing the two request or
 \begin{figure}[p]
 	\centering
 	\includegraphics[height=\textheight]{../results/plots/ls_vs_numb_ministries.png}
-	\caption{Distribution of list directory duration vs number of ministries for two different request orders. On the Y-axis the time it takes a single request to complete. The X-axis shows the number of ministries the file system is using. The orange distributions are results from runs where $30$ clients ordered their request such that the ministries where accessed one after the other, a stride pattern. The blue distributions show results from runs where $30$ clients used a batch pattern: they first perform all requests for one ministry and then for the next. Outliers further out then $4\sigma$ are not shown.}
+	\caption{Distribution of list directory duration vs number of ministries for two different request orders. On the Y-axis the time it takes a single request to complete. The X-axis shows the number of ministries the file system is using. The orange distributions are results from runs where $30$ clients ordered their requests such that the ministries were accessed one after the other, a stride pattern. The blue distributions show results from runs where $30$ clients used a batch pattern: they first perform all requests for one ministry and then for the next. Outliers further out than $4\sigma$ are not shown.}
 	\label{fig:ls_vs_ministries}
 \end{figure}
 \clearpage
@@ -47,16 +47,16 @@ In \Cref{fig:ls_vs_ministries} we see a violin plot comparing the two request or
 
 \clearpage
 \subsubsection*{Create file}
-The second workload we try is creating files. To create a file a minister appends a single message to the log making creating files rate limited. Without the rate limit load could increase until the communication with the clerks or the hardware of the nodes becomes the bottleneck.%
+The second workload we try is file creation. To create a file a minister appends a single message to the log making creating files rate limited. Without the rate limit, load could increase until the communication with the clerks or the hardware of the nodes becomes the bottleneck.%
 %\footnote{That is assuming there are no other bottlenecks. We investigate this by profiling the nodes, see:~\Cref{sec:profile}} % % TODO: re-enable if we have time/it is possible to present the profiling results <04-08-22> 
 
 As adding more ministries could alleviate future bottlenecks it is interesting to see how file create performance scales with the number of ministries even given with the rate limits.
 
-Because of this limit imposed by the implementation we send only 90 create requests. They are sent from 9 clients concurrently. These numbers where empirically determined to maximize the load while keeping the cluster stable enough to complete all the tests.
+Because of this limit imposed by the implementation we send only 90 create requests. They are sent from 9 clients concurrently. These numbers were empirically determined to maximize the load while keeping the cluster stable enough to complete all the tests.
 
 In \Cref{fig:touch} we see \acp{cdf} for the time it takes to create a file on configurations with a various number of ministries. On the Y-axis the proportion of write requests completed, and the X-axis shows the time in milliseconds. Note the first jump upwards is about 75 milliseconds and all the other jumps are around multiples of 75. The more ministries we use the faster most requests are done. Finally, note the proportion of requests completed jumps up in discrete steps. Write requests duration is dominated by the time it takes the \textit{Group Raft} log to commit a change.
 
-\Cref{fig:touch_vs_time} offers another look at the same data. Here we see the time needed for each create as a function of when the request started. Darker tones are requests from tests with more ministries. On the Y-axis we see the time needed to complete the request in seconds while on the (logarithmic) X-axis we see the time a create request was sent. The vertical jumps in the \ac{cdf} (\Cref{fig:touch}) show up as horizontal bands here. For example the lowest horizontal band are requests that took 75 ms which matches the first vertical jump. Note that the gap just after the start of the test. When the system has more ministries more Raft logs can be appended to in parallel.
+\Cref{fig:touch_vs_time} offers another look at the same data. Here we see the time needed for each create as a function of when the request started. Darker tones are requests from tests with more ministries. On the Y-axis we see the time needed to complete the request in seconds while on the (logarithmic) X-axis we see the time a create request was sent. The vertical jumps in the \ac{cdf} (\Cref{fig:touch}) show up as horizontal bands here. For example the lowest horizontal band are requests that took 75 ms which matches the first vertical jump. Note the gap just after the start of the test. When the system has more ministries more Raft logs can be appended to in parallel. Creating files therefore scales linearly with the number of ministries.
 
 \begin{figure}[htb]
 	\centering
@@ -78,21 +78,21 @@ In \Cref{fig:touch} we see \acp{cdf} for the time it takes to create a file on c
 } %
 
 \subsection{Range based file locking} \label{sec:res_range}
-Now we evaluate the contribution of ranged writes compared to writing the entire file. A good use case of ranged file access is writing out one or more rows in a file. In other systems we request exclusive access to the entire file and writing out all the needed rows. Here we can request access to and writ out one row at the time. We expect this second method to be faster when contending with more clients for the same file and with larger files.
+Now we evaluate the contribution of ranged writes compared to writing the entire file. A good use case of ranged file access is writing out one or more rows in a file. In other systems we request exclusive access to the entire file and writing out all the needed rows. Here we can request access to and write out one row at the time. We expect this second method to be faster when contending with more clients for the same file and with larger files.
 
-Here we compare these methods using two different experiments. In the first experiment we write a single row of a file with 10 rows from multiple clients simultaneously. Each client picks a row at random. In the second experiment we write all rows. Each client uses a random order when writing by row.
+Here we compare these methods using two different experiments. In the first experiment we write a single row of a file with 10 rows from multiple clients simultaneously. Each client picks a row at random. In the second experiment each client writes all rows. Each client uses a random order when writing by row.
 
 We run both experiments for various row size and number of concurrent writers. When varying the row size the number of concurrent writers was fixed at six. While changing the number of writers the row size was kept at 10 \ac{mby}.
 
 Since \name{} has no data plane implementation writing is simulated by sleeping on the client side. We simulate writing at a speed of 200 \ac{mby} per second\footnote{This corresponds to a slow hard drive which is a good bandwidth target for Hadoop like file systems targeting HDDs. It is also the best case scenario for writing by row since the low speed increases the ratio of time writing versus connecting and locking.}.
 
-In the table below we see the time spend on simulating IO and the average duration for writing one or 10 rows either by locking the whole file or locking by row:
+In the table below we see the time spent on simulating IO and the average duration for writing one or 10 rows either by locking the whole file or locking by row:
 
 \begin{tabular}{lcccccc} \toprule
 	& \multicolumn{6}{c}{Row Size (\ac{mby})} \\ \cmidrule(r){2-7}
 	                   & 0.1 & 1 & 10 & 20 & 40 & 80 \\ \midrule
-	Writing a single row  \\ \cmidrule(r){1-1}
-	IO simulation (ms) & 0.5          & 5          & 50          & 100         & 200         & 400 \\
+	Writing a single row (ms) \\ \cmidrule(r){1-1}
+	IO simulation  & 0.5          & 5          & 50          & 100         & 200         & 400 \\
 	Lock by row & 411 & 370 & 366 & 444 & 636 & 971\\
 	Lock entire file & 62 & 114 & 298 & 618 & 975 & 1644 \\
 \smallskip \\

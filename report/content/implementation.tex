@@ -3,7 +3,7 @@ Here we go over the implementation of the design, which is written in \textit{Ru
 \subsection{Language}
 Distributed systems are notoriously hard to build with many opportunities for subtle bugs to slip in. Therefore, it is important to choose a language with features that aid our work and make it harder to introduce bugs. Let's discuss one of the key features that can help us and one that could become problematic.
 
-A strongly typed language with algebraic data types enables us to express properties of the design in the type system. An example: \textit{Clerks} are listing for messages from the \textit{President} or their \textit{Minister}, we keep these separate by listening on different ports. Normally a port is expressed as an integer. If we make the type of the President's port different from the Ministers the compiler will prevent us from switching these around. This practise is known as \ac{tdd}.
+A strongly typed language with algebraic data types enables us to express properties of the design in the type system. An example: \textit{Clerks} are listening for messages from the \textit{President} or their \textit{Minister}, we keep these separate by listening on different ports. Normally a port is expressed as an integer. If we make the type of the President's port different from the Ministers the compiler will prevent us from switching these around. This practise is known as \ac{tdd}.
 
 Timing is critical for the design, if the president does not send heartbeats in time elections might start. Languages using \ac{gc} pause program execution once every while to clean up memory. This can cause timing problems, also known as the \textit{stop the world problem}. It is possible but hard to mitigate this by carefully tweaking the \ac{gc} to keep its pauses short. If possible we should use a language without \ac{gc}.
 
@@ -11,17 +11,17 @@ Only the \textit{Rust} language has such a type system without using \ac{gc}. Fu
 
 \subsection{Concurrency}
 When sending and receiving data over the network most time is spent waiting. Blocking while waiting is not at all efficient. We can use this valuable time to start and or finish sending and receiving other data concurrently. Usually this is solved by spawning a thread for each connection. Another way of doing this is using \textit{non-blocking IO}, however organizing a single thread of execution to use non-blocking-IO for a diverse set of concurrent operations becomes highly complex. 
-Maintaining file leases~(see:~\Cref{sec:lease}) requires us to hold many concurrent connections. On the other hand one thread for each connection could limit the number of connections as we run out of threads. To get around the problematic complexity of non-blocking-IO we use: \textit{Async/await}\footnote{See \cref{app:async} for an introduction to Async/await.}. It is a language feature which allows us to construct and combine non-blocking functions as if they were normal functions. \textit{Rust} has native support for the needed syntax but requires a third party framework to provide the actual IO implementation, here we use the \textit{Tokio} project~\cite{tokio}.
+Maintaining file leases~(see:~\Cref{sec:lease}) requires us to hold many concurrent connections. On the other hand one thread for each connection could limit the number of connections as we run out of threads. To get around the problematic complexity of non-blocking-IO we use: \textit{Async/await}\footnote{See \Cref{app:async} for an introduction to Async/await.}. It is a language feature which allows us to construct and combine non-blocking functions as if they were normal functions. \textit{Rust} has native support for the needed syntax but requires a third party framework to provide the actual IO implementation, here we use the \textit{Tokio} project~\cite{tokio}.
 
 There is a trend in distributed systems to take scalability as the holy grail of performance~\cite{scaling}. While the design of the system focuses on scalability our implementation tries to use the underlying hardware optimally. 
-While \textit{Moor'se~Law} might not apply any more single machine performance will keep scaling horizontally~\cite{moore}. In recent years we see this scaling in the form of increasing core counts\footnote{Enabled by CPU chiplets: multiple smaller dies that are combined into a single multicore CPU.}. This means the implementation should proof the design future-proof by taking full advantage of available task parallelism. Fortunately the above-mentioned framework \textit{Tokio} provides tasks which combine organized non-blocking-IO with parallel execution. These tasks are divided into groups where each group runs concurrently on a single OS-thread. Creating and destroying tasks is fast compared to OS threads.
+\textit{Moor'se~Law} still holds its ever-increasing transistor count however no longer results in significantly increased single core performance. Instead, the increased transistor budget goes towards horizontally scaling~\cite{moore}. In recent years we see this scaling in the form of increasing core counts\footnote{Enabled by CPU chiplets: multiple smaller dies that are combined into a single multicore CPU.}. The implementation should proof the design is future-proof by taking full advantage of available task parallelism. Fortunately the above-mentioned framework \textit{Tokio} provides tasks which combine organized non-blocking-IO with parallel execution. These tasks are divided into groups where each group runs concurrently on a single OS-thread. Creating and destroying tasks is fast compared to OS threads.
 
 Sharing state concurrently is with few exceptions achieved by passing messages between tasks. Where needed these include a method to signal back completion. Some shared state is used to keep track of the Raft lock, it is contained to the \textsl{raft} module. By mostly using message passing less time is spent waiting on locks and deadlocking bugs are contained to sections using shared state\footnote{Most of the message passing does not block, instead has a small buffer and returns an error if the buffer is full.} 
 
 \subsubsection*{Cancelling tasks}
 In \name's design we frequently need to abort a concurrently running task. Clerks for example handle client requests in a concurrently running task. When a clerk becomes president it needs to stop handling those requests. If we were using threads we would do this by changing a shared variable. The task would be written such that it frequently checks if the variable is changed and when it is the task returns. 
 
-Whenever an \textit{async} function has to await IO it returns control to the scheduler. When IO is ready the scheduler can choose to continue the function. We can ask it not to effectively cancelling the task. Since Rust enforces \acf{raii}~\cite[p.~389]{raii}~\footnote{A programming idiom where acquiring a resource is done when creating an object. When the object is destroyed code runs that release or cleans up the object.} the framework drops all the objects in the scope of canceled tasks. 
+Whenever an \textit{async} function has to await IO it returns control to the scheduler. When IO is ready the scheduler can choose to continue the function. We can ask it not to, this effectively cancels the task. Since Rust enforces \acf{raii}~\cite[p.~389]{raii}~\footnote{A programming idiom where acquiring a resource is done when creating an object. When the object is destroyed code runs that release or cleans up the object.} the framework drops all the objects in the scope of canceled tasks. 
 
 Task handles instruct the framework to cancel their task when they are dropped. A group of tasks can be canceled by dropping the data structure that contains their task handles. We organize concurrent tasks as a tree, cancelling and cleaning up an entire branch is as easy as dropping the task handle for the root of that branch. Concretely if we abort the \textsl{president} task we automatically end any tasks it created.
 
@@ -58,13 +58,13 @@ Let us take a look at the president work function in~\Cref{lst:pres}. We enter i
 	\item \textsl{load\_balancing}: issues orders assigning nodes and file subtrees to ministries using the \rust{LogWriter}, re-assigns based on events such as: nodes going down, coming back online, new being added and ministry load.
 	\item \textsl{instruct\_subjects}: performs the leader part of the \raft{} algorithm. Shares log entries with all other nodes and tracks which can be committed.
 	\item \textsl{handle\_incoming}: handle requests, redirecting clients to ministries.
-	\item \textsl{recieve\_own\_order}: apply committed orders from the \raft{} Log queue to the programs state.
+	\item \textsl{receive\_own\_order}: apply committed orders from the \raft{} Log queue to the programs state.
 \end{itemize}
 %
-These tasks are selected on, making them run concurrently until one of them finishes. Here this means they run until \textsl{recieve\_own\_order} returns. This happens when the \raft{} background task inserts a \rust{ResignPres} order indicating a higher termed president was noticed. After the select the president work function finishes returning the next role: Idle.
+These tasks are selected on, making them run concurrently until one of them finishes. Here this means they run until \textsl{recieve\_own\_order} returns. This happens when the \raft{} background task inserts a \rust{ResignPres} order indicating a higher termed president was noticed. After the select call finishes the president work function ends and returns the next role: Idle.
 
 %
-\begin{lstlisting}[float,language=rust,style=boxed,tabsize=2,caption={The president work function, it performs all the tasks of the president. In this code snippet brackets and parenthesis containing whitespace mean the corrosponding structs and functions have there arguments hidden for brevity},label=lst:pres]
+\begin{lstlisting}[float,language=rust,style=boxed,tabsize=2,caption={The president work function, it performs all the tasks of the president. In this code snippet brackets and parenthesis containing whitespace mean the structs and functions there have their arguments hidden for brevity},label=lst:pres]
 pub(super) async fn work( ) -> crate::Role {
 	let Log { orders, state, .. } = pres_orders;
 	let (broadcast, _) = broadcast::channel(16);
@@ -82,7 +82,7 @@ pub(super) async fn work( ) -> crate::Role {
 		() = msgs::handle_incoming(client_lstnr, log_writer) => {
 			unreachable!(),
 		}
-		res = recieve_own_order(orders, load_notifier) => {
+		res = receive_own_order(orders, load_notifier) => {
 			Role::Idle
 		}
 	}
@@ -96,7 +96,7 @@ The other work functions similarly select on multiple async tasks. These tasks t
 \begin{figure}[htbp]
 	\centering
 	\input{figs/diagrams/structure.tex}
-	\caption{Diagram of all concurrently running functions in a node. A dashed line between items means only of those items can be running at the time. For example a node in the Idle role can not concurrently be a Minister. Functions in red~\taskLeg{} are single tasks while purple~\tasksLeg{} indicates there are between zero and $n$ instances of the function running. Functions in gray~\futureLeg{} are futures: they are running concurrently, however share a thread with any parent and or child futures.}
+	\caption{Diagram of all concurrently running functions in a node. A dashed line between items means only one of those items can be running at the time. For example a node in the Idle role can not concurrently be a Minister. Functions in red~\taskLeg{} are single tasks while purple~\tasksLeg{} indicates there are between zero and $n$ instances of the function running. Functions in gray~\futureLeg{} are futures: they are running concurrently, however share a thread with any parent and or child futures.}
 	\label{fig:tree}
 \end{figure}
 \clearpage
@@ -105,7 +105,7 @@ The other work functions similarly select on multiple async tasks. These tasks t
 There are a lot of reliable \raft{} implementations. Developing our own took a significant amount of time. A new implementation will be less stable as it misses years of testing, this may impact our systems' stability. Building on existing work however was not an option as \name{} has two unique requirements: 
 %
 \begin{itemize}
-	\item \Name{} uses the \raft{} heartbeat to maintain file system consensus (see:~\Cref{sec:praft}). It is used for example newly assigned clerks need to know when they are up-to-date\footnote{That is, the clerk has applied all log committed entries, and the last was committed within a \raft{} heartbeat of it being committed.} and can begin serving clients. 
+	\item \Name{} uses the \raft{} heartbeat to maintain file system consensus (see:~\Cref{sec:praft}). Newly assigned clerks for example use the heartbeat duration to know determine if their state is up-to-date\footnote{That is, the clerk has applied all log committed entries, and the last was committed within a \raft{} heartbeat of it being committed.} and can begin serving clients. 
 	\item \Name{} needs a special version of \raft{}, one where elections are rigged and leaders (minsters) are assigned by a third party (the president). Multiple of these instances (or ministries) must be able to exist simultaneously. The log must stay consistent and clients should see no entries of an old leader after being assigned to another leader. 
 \end{itemize}
 %
@@ -117,11 +117,12 @@ the custom implementation must also scale and be optimizable. If it does not the
 When a \raft{} message arrives it can cause entries in the log to become committed. At that point they are made available to the system. These could be old entries, long ago committed by other nodes. The message contains the index of the last committed entry or entries which we use to recognize if an entry is old. Newly committed messages can still become outdated if they are applied too slowly. This can happen if the server slows down due to bugs in \name{} or hardware issues. The system notes the time a newly committed entry arrived. The time is combined with the entry into a perishable entry. It is what is made available to \name{} and can be asked whether it is fresh.
 
 \subsection{File leases} \label{sec:impl_leases}
-As discussed in \Cref{sec:arch} read and write access is coordinated by a ministry. Before issuing write access a minister must ensure outstanding reads leases are revoked. Similarly, clerks must ensure they do not offer read-leases to files that can be written too. The minister \emph{locks} the needed file on all the ministries clerks before issuing a write-lease. 
+As discussed in \Cref{sec:arch} read and write access is coordinated by a ministry. Before issuing write access a minister must ensure outstanding read leases are revoked. Similarly, clerks must ensure they do not offer read-leases to files that can be written to. The minister \emph{locks} the needed file on all the ministries clerks before issuing a write-lease. 
 
 Managing these read locks is the responsibility of the \textit{lock manager} which runs concurrent to the ministers other tasks (see~\Cref{fig:tree}). When the client connection handler \straightTasksLeg{} receives a write request it enters a \rust{write_lease} function. This checks if it has already given out a write-lease, returning an error if it has. Then the \textit{lock manager} is requested to lock the file. A lease-guard is constructed once the file has been locked on the clerks. The guard unlocks the file if the handler leaves the \rust{write_lease} function. This guarantees the file is unlocked even if the function is aborted due to an error. Then the client is returned the lease together with a time before which it needs to be renewed. For as long as the client keeps sending \rust{RefreshLease} on time the handler stays in the \rust{write_lease} function.
 
-Leases are not flushed to stable storage (hard drives) they are volatile. When a clerk goes down all leases issued by it are lost and clients need to reacquire them. A minister going down means loss of all the write-leases the clerks however can keep issuing leases. The new minister unlocks all files when it comes online. These rules allow \name{} to use simple TCP messaging instead of relying on \raft{} for everything. Assuming files access is more common than file creation and removal optimizing lease management will speed up \name{} significantly.
+Leases are not flushed to stable storage (hard drives) and as such they are volatile. When a clerk goes down all leases issued by it are lost and clients need to reacquire them. A minister going down means loss of all the write-leases,
+the clerks, however, can keep issuing leases. The new minister unlocks all files when it comes online. These rules allow \name{} to use simple TCP messaging instead of relying on \raft{} for everything. Assuming files access is more common than file creation and removal optimizing lease management will speed up \name{} significantly.
 %
 \subsubsection*{Locking Rules}
 The \textit{lock manager} times its lock requests to ensure consistency and correctness. It is easiest to explain this at the hand of an example. Here a clerk gets partitioned off from the rest of the cluster at the worst possible time:
@@ -141,12 +142,12 @@ The \textit{lock manager} times its lock requests to ensure consistency and corr
 We see that $2H$ after the lock manager started trying to lock the file it can assume the file locked. A clerk going offline increases file write access by $2H$. If the manager keeps trying to reach it we keep this $2H$ overhead. Instead, the manager removes the clerk before handling another request. Without any failure file write access time should be dominated by the latency of the TCP roundtrips.
 %
 \subsubsection*{Performance}
-The lock manager has been written to handle many simultaneous requests. It is therefore lockless and open TCP connection to its clerks. The minister communicates with the manager through message passing. When clerk gets assigned by the president the lock manager receives a message. It then opens a connection in a new concurrent task dedicated to this new clerk. 
+The lock manager has been written to handle many simultaneous requests. It is therefore lockless and keeps an open TCP connection to its clerks. Keeping the connection open eliminates the overhead of opening one for each lock request. The minister communicates with the manager through message passing. When clerk gets assigned by the president the lock manager receives a message. It then opens a connection in a new concurrent task dedicated to this new clerk. 
 
 The decisions the lock manager makes directly impact the rest of the cluster. Each lock placed on a clerk potentially blocks read-leases which potentially slows down read performance. Therefore, it is important to unlock as soon as possible. The lock manager thus prioritizes unlock above lock requests.
 %
 \subsubsection*{Known problems}
-The current implementation has four known problems. Three of these have simple solutions however third requires changes to the design. First, an imposter or failing node can still send unlock requests. Including the current minister term in the request and checking if its valid would solve this\footnote{Similar to \graft{}, see~\Cref{sec:dictraft}.}. 
+The current implementation has four known problems. Three of these have simple solutions however fourth requires changes to the design. First, an imposter or failing node can still send unlock requests. Including the current minister term in the request and checking if its valid would solve this\footnote{Similar to \graft{}, see~\Cref{sec:dictraft}.}. 
 
 Second, a newly assigned clerk can serve clients before it has processed all the existing locks. Clerks get their ministerial \raft{} log up-to-date before they start serving requests. The same should be done for lock requests. 
 

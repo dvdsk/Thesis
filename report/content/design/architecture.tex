@@ -54,20 +54,20 @@ Communication from the minister to its ministries clerks uses log replication si
 Load reports to the president are sent over TCP, which will almost always ensure the reports arrive in order. A minister that froze, was replaced and starts working again can still send outdated reports. By including the term of the sending minister the president detects outdated reports and discards them.
 %
 \subsubsection*{\graft{}} \label{sec:dictraft}
-In \textit{Group Raft} a third party instructs a node to become the leader. Followers are not informed directly but rather accept the new leader as it has a higher term. When receiving a message the normal \raft{} rules apply therefore messages from the old leader\footnote{The third party replacing the leader usually indicates there is a problem with the current leader, making it doubly important that messages from old leaders are ignored.} are rejected as there term is too low.
+In \textit{Group Raft} a third party instructs a node to become the leader. Followers are not informed directly but rather accept the new leader as it has a higher term. When receiving a message the normal \raft{} rules apply, therefore messages from the old leader\footnote{The third party replacing the leader usually indicates there is a problem with the current leader, making it doubly important that messages from old leaders are ignored.} are rejected as their term is too low.
 
-Nodes must be able to move between groups with assigned leaders. This present two problems, the first issue becomes apparent looking at the following series of events:
+In \name{} nodes must be able to move between groups with assigned leaders. This present two problems, the first issue becomes apparent looking at the following series of events:
 \begin{itemize}
 	\item Leader B receives message that follower x is assigned to it
 	\item Leader B appends to its log and sends an append request to its followers now including x
-	\item Follower x \emph{accepts} the request as x has a \emph{lower} term then the request
+	\item Follower x \emph{accepts} the request as x has a \emph{lower} term than the request
 	\item Follower x \emph{increases} its term to match B
 	\item Leader A receives a message that assigns x back to it
 	\item Leader A appends to its log and sends an append request to its followers which now again includes x
 	\item Follower x \emph{rejects} the request as x now has a \emph{higher} term then the request
 \end{itemize}
-Leader A must initially have a lower term then B and then a higher term then B for the re-assignment to work. The second problem: we need a follower to re-write its log after every move to match that of its new group. 
+Leader A must initially have a lower term then B and than a higher term than B for the re-assignment to work. The second problem: we need a follower to re-write its log after every move to match that of its new group. 
 
-To solve the first problem we make the third party change the term of the leader when it assigning it a node. Every re-assignment will succeed if it guarantees the new term is the highest of all the groups. It is simple to ensure that using a single third party as we can then atomically increment the term every assignment and re-assignment. 
+To solve the first problem we make the third party change the term of the leader when assigning it a node. Every re-assignment will succeed if it guarantees the new term is the highest of all the groups. It is trivial to ensure that by using a single third party. This third party can atomically increment the term every assignment and re-assignment. 
 
-This coincidentally also solves our second problem. Since the highest number is always unique the correct log for each group now has an increasing sequence of unique terms. If a node receives an append request and its previous log entries term and index do not match that of the leader it rejects the request. The leader then starts sending older log entries\footnote{This is optimized in \name{} by clearing the entire log if a clerk came from another ministry.}. A successful append can only happen on correct (partial) group log given terms are now unique to groups.
+This coincidentally also solves our second problem. Since the highest number is always unique, the correct log for each group now has an increasing sequence of unique terms. If a node receives an append request and its previous log entries, term and index do not match that of the leader it rejects the request. The leader then starts sending older log entries\footnote{This is optimized in \name{} by clearing the entire log if a clerk came from another ministry.}. A successful append can only happen on correct (partial) group log given terms are now unique to groups.

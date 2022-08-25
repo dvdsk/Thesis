@@ -25,12 +25,12 @@ If the client needs read capabilities it sends its requests to a clerk. The cler
 \subsection*{Namespace Changes}
 Most changes to the namespace need simple edits within ministries metadata table. The client sends its request to the minister. The change is performed by adding a command to the \textit{Group Raft} log (see: \Cref{sec:praft}). Before committing the change the client gets the log index for the change. If the minister goes down before acknowledging success the client verifies if the change happened using the log index.
 
-Removing a directory spanning one or more load balanced subtrees needs a little more care. One or more ministers will have to delete their entire subtree. This requires coordination across the entire cluster. The clients remove requests is forwarded by the minster to the \textit{president}. It in turn appends \textsl{Subtree Delete} to the cluster wide log. The client receives the log index for the command to verify success even if the \textit{president} goes down. The steps the minister takes are shown in \Cref{fig:rm}. 
+Removing a directory spanning one or more load balanced subtrees needs a little more care. One or more ministers will have to delete their entire subtree. This requires coordination across the entire cluster. The client's remove request is forwarded by the minster to the \textit{president}. It in turn appends \textsl{Subtree Delete} to the cluster wide log. The client receives the log index for the command to verify success even if the \textit{president} goes down. The steps the minister takes are shown in \Cref{fig:rm}. 
 %
 \begin{figure}[htbp]
 	\centering
 	\input{figs/diagrams/del_dir.tex}
-	\caption{A minister~\amdsLeg{}, here $\text{Minister}_j$, removes a directory (tree) that is load balanced between multiple ministries. The president~\presidentLeg{} coordinates the removal by appending a command to the log. Once it is committed the ministers hosting subtrees of the directory demote themselves to idle and $\text{Ministry}_j$ drops the directory from its db}
+	\caption{A minister~\amdsLeg{}, here $\text{Minister}_j$, removes a directory (tree) that is load balanced between multiple ministries. The president~\presidentLeg{} coordinates the removal by appending a command to the log. Once it is committed the ministers hosting subtrees of the directory demote themselves to idle and $\text{Ministry}_j$ drops the directory from its database}
 	\label{fig:rm}
 \end{figure}
 %
@@ -51,7 +51,7 @@ When the groups' minister appends to the \textit{Group Raft} log it will notice 
 \begin{figure}[htbp]
 	\centering
 	\input{figs/diagrams/apoint.tex}
-	\caption{A minister~\amdsLeg{} fails and does not send a heartbeat on time (1). The president~\presidentLeg{} requests the latest commit index (2). Node $\text{Clerk}_1$~\cmdsLeg{} has commit index $k$ which is the highest (3). The president has promoted $\text{Clerk}_1$ to minister, it has started sending heartbeats (4). Note the heartbeats send by the clerks are not shown.}
+	\caption{A minister~\amdsLeg{} fails and does not send a heartbeat on time (1). The president~\presidentLeg{} requests the latest commit index (2). Node $\text{Clerk}_1$~\cmdsLeg{} has commit index $k$ which is the highest (3). The president has promoted $\text{Clerk}_1$ to minister, it has started sending heartbeats (4). Note the heartbeats sent by the clerks are not shown.}
 	\label{fig:appoint}
 \end{figure}
 %
