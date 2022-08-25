@@ -1,6 +1,6 @@
-The current implementation has room for improvement. There are bottlenecks which restrict performance. It is not feasible to build a system as fast and as performant and stable as \ceph{} or \ac{hdfs} within the scope of a thesis. Experimenting around these limitations we can still answer the question we posed in the introduction: whether a file system using groups of metadata nodes can offer better performance and scalability than one using a single node.
+We now describe a number of experiments to investigate whether a file system using groups of metadata nodes can offer better performance and scalability then using a single node. 
 
-To design experiments that work around the limitations we need to be clear on what the limitations are:
+Our prototype implementation has a number of limitations. The construction of a full system based on this technology is left as future work. The limitations are:
 
 \begin{itemize}
 	\item The \raft{} implementation sends only a single log entry at the time and log entries are sent each heartbeat period instead of whenever data becomes available. Effectively this imposes a rate limit on changing the systems metadata.
