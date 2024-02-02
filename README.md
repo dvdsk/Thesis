@@ -1,5 +1,3 @@
-Notice: Work in Progress
-
 Below is an excerpt of the design section of my thesis automatically converted to markdown. I recommend you instead go to the Design section in my [thesis](https://github.com/dvdsk/Thesis/blob/main/report/main.pdf)
 
 
